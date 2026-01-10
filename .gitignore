@@ -1,0 +1,17 @@
+# Ignore all node_modules in all subfolders
+node_modules/
+
+# Environment files
+.env
+.env.*
+**/.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+coverage/

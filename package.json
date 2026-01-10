@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.6",
+    "@mui/material": "^7.3.6",
+    "crypto-js": "^4.2.0",
+    "date-fns": "^4.1.0",
+    "notistack": "^3.0.2"
+  }
+}
