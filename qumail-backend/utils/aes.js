@@ -1,21 +1,31 @@
 import crypto from "crypto";
 
-const ALGORITHM = "aes-256-cbc";
+const ALGO = "aes-256-cbc";
 
-// MUST be hex strings
-const KEY = Buffer.from(process.env.AES_KEY, "hex");
-const IV = Buffer.from(process.env.AES_IV, "hex");
+export function generateAESKey() {
+  return crypto.randomBytes(32).toString("hex"); // ✅ STRING
+}
 
-export function encryptAES(text) {
-  const cipher = crypto.createCipheriv(ALGORITHM, KEY, IV);
-  let encrypted = cipher.update(text, "utf8", "hex");
+export function generateAESIV() {
+  return crypto.randomBytes(16).toString("hex"); // ✅ STRING
+}
+
+export function encryptAES(plainText, keyHex, ivHex) {
+  const key = Buffer.from(keyHex, "hex");
+  const iv = Buffer.from(ivHex, "hex");
+
+  const cipher = crypto.createCipheriv(ALGO, key, iv);
+  let encrypted = cipher.update(plainText, "utf8", "hex");
   encrypted += cipher.final("hex");
   return encrypted;
 }
 
-export function decryptAES(encryptedText) {
-  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, IV);
-  let decrypted = decipher.update(encryptedText, "hex", "utf8");
+export function decryptAES(encryptedHex, keyHex, ivHex) {
+  const key = Buffer.from(keyHex, "hex");
+  const iv = Buffer.from(ivHex, "hex");
+
+  const decipher = crypto.createDecipheriv(ALGO, key, iv);
+  let decrypted = decipher.update(encryptedHex, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
 }

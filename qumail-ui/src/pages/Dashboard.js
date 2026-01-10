@@ -130,22 +130,22 @@ const NOTIFICATION_TYPES = {
   QUANTUM_SECURITY_ACTIVATED: 'quantum_security_activated'
 };
 
-// Notification Icons
+// Notification Icons - FIXED: Return icon names/components, not JSX directly
 const NOTIFICATION_ICONS = {
-  [NOTIFICATION_TYPES.NEW_EMAIL]: <Mail />,
-  [NOTIFICATION_TYPES.ENCRYPTION_SUCCESS]: <Lock />,
-  [NOTIFICATION_TYPES.SECURITY_ALERT]: <Warning />,
-  [NOTIFICATION_TYPES.SYSTEM_UPDATE]: <Public />,
-  [NOTIFICATION_TYPES.ACCOUNT_ACTIVITY]: <Person />,
-  [NOTIFICATION_TYPES.EMAIL_READ]: <MarkEmailRead />,
-  [NOTIFICATION_TYPES.EMAIL_STARRED]: <CheckCircle />,
-  [NOTIFICATION_TYPES.EMAIL_MOVED]: <Schedule />,
-  [NOTIFICATION_TYPES.EMAIL_DELETED]: <Delete />,
-  [NOTIFICATION_TYPES.DRAFT_SAVED]: <Mail />,
-  [NOTIFICATION_TYPES.LOGIN_ATTEMPT]: <Security />,
-  [NOTIFICATION_TYPES.PASSWORD_CHANGED]: <Lock />,
-  [NOTIFICATION_TYPES.ENCRYPTION_KEY_GENERATED]: <Lock />,
-  [NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED]: <Security />
+  [NOTIFICATION_TYPES.NEW_EMAIL]: 'Mail',
+  [NOTIFICATION_TYPES.ENCRYPTION_SUCCESS]: 'Lock',
+  [NOTIFICATION_TYPES.SECURITY_ALERT]: 'Warning',
+  [NOTIFICATION_TYPES.SYSTEM_UPDATE]: 'Public',
+  [NOTIFICATION_TYPES.ACCOUNT_ACTIVITY]: 'Person',
+  [NOTIFICATION_TYPES.EMAIL_READ]: 'MarkEmailRead',
+  [NOTIFICATION_TYPES.EMAIL_STARRED]: 'CheckCircle',
+  [NOTIFICATION_TYPES.EMAIL_MOVED]: 'Schedule',
+  [NOTIFICATION_TYPES.EMAIL_DELETED]: 'Delete',
+  [NOTIFICATION_TYPES.DRAFT_SAVED]: 'Mail',
+  [NOTIFICATION_TYPES.LOGIN_ATTEMPT]: 'Security',
+  [NOTIFICATION_TYPES.PASSWORD_CHANGED]: 'Lock',
+  [NOTIFICATION_TYPES.ENCRYPTION_KEY_GENERATED]: 'Lock',
+  [NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED]: 'Security'
 };
 
 // Notification Colors
@@ -164,6 +164,27 @@ const NOTIFICATION_COLORS = {
   [NOTIFICATION_TYPES.PASSWORD_CHANGED]: 'success',
   [NOTIFICATION_TYPES.ENCRYPTION_KEY_GENERATED]: 'success',
   [NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED]: 'success'
+};
+
+// Helper function to get icon component
+const getIconComponent = (iconName) => {
+  const iconMap = {
+    'Mail': Mail,
+    'Lock': Lock,
+    'Warning': Warning,
+    'Public': Public,
+    'Person': Person,
+    'MarkEmailRead': MarkEmailRead,
+    'CheckCircle': CheckCircle,
+    'Schedule': Schedule,
+    'Delete': Delete,
+    'Security': Security,
+    'Info': Info,
+    'Error': Error
+  };
+  
+  const IconComponent = iconMap[iconName] || Info;
+  return <IconComponent />;
 };
 
 export default function Dashboard({
@@ -187,8 +208,27 @@ export default function Dashboard({
   onToggleTheme,
   darkMode,
   determineSecurityLevel = () => "none",
-  generatePreview = (body) => body ? body.substring(0, 100) : "",
-  formatDate = (date) => date ? new Date(date).toLocaleDateString() : "",
+  generatePreview = (body) => {
+    try {
+      if (!body) return "";
+      return typeof body === 'string' ? body.substring(0, 100) : "";
+    } catch {
+      return "";
+    }
+  },
+  formatDate = (date) => {
+    try {
+      if (!date) return "Unknown";
+      if (typeof date === 'string' || date instanceof Date) {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return "Unknown";
+        return d.toLocaleDateString();
+      }
+      return "Unknown";
+    } catch {
+      return "Unknown";
+    }
+  },
   onLoadMoreEmails
 }) {
   const [openCompose, setOpenCompose] = useState(false);
@@ -223,165 +263,212 @@ export default function Dashboard({
 
   // Load notifications from localStorage on mount
   useEffect(() => {
-    const savedNotifications = JSON.parse(localStorage.getItem('qumail_notifications') || '[]');
-    const savedStarred = JSON.parse(localStorage.getItem('qumail_starred') || '[]');
-    const savedImportant = JSON.parse(localStorage.getItem('qumail_important') || '[]');
-    const savedSnoozed = JSON.parse(localStorage.getItem('qumail_snoozed') || '[]');
-    
-    setNotifications(savedNotifications);
-    setStarredEmails(savedStarred);
-    setImportantEmails(savedImportant);
-    setSnoozedEmails(savedSnoozed);
-    
-    // Calculate initial unread count
-    updateUnreadCount(savedNotifications);
+    try {
+      const savedNotifications = JSON.parse(localStorage.getItem('qumail_notifications') || '[]');
+      const savedStarred = JSON.parse(localStorage.getItem('qumail_starred') || '[]');
+      const savedImportant = JSON.parse(localStorage.getItem('qumail_important') || '[]');
+      const savedSnoozed = JSON.parse(localStorage.getItem('qumail_snoozed') || '[]');
+      
+      setNotifications(savedNotifications);
+      setStarredEmails(savedStarred);
+      setImportantEmails(savedImportant);
+      setSnoozedEmails(savedSnoozed);
+      
+      // Calculate initial unread count
+      updateUnreadCount(savedNotifications);
+    } catch (error) {
+      console.error('Error loading from localStorage:', error);
+      // Initialize with empty arrays
+      setNotifications([]);
+      setStarredEmails([]);
+      setImportantEmails([]);
+      setSnoozedEmails([]);
+    }
   }, []);
 
   // Save notifications to localStorage
   useEffect(() => {
-    localStorage.setItem('qumail_notifications', JSON.stringify(notifications));
-    localStorage.setItem('qumail_starred', JSON.stringify(starredEmails));
-    localStorage.setItem('qumail_important', JSON.stringify(importantEmails));
-    localStorage.setItem('qumail_snoozed', JSON.stringify(snoozedEmails));
+    try {
+      localStorage.setItem('qumail_notifications', JSON.stringify(notifications));
+      localStorage.setItem('qumail_starred', JSON.stringify(starredEmails));
+      localStorage.setItem('qumail_important', JSON.stringify(importantEmails));
+      localStorage.setItem('qumail_snoozed', JSON.stringify(snoozedEmails));
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
   }, [notifications, starredEmails, importantEmails, snoozedEmails]);
 
   // Update unread notifications count
   const updateUnreadCount = (notificationList = notifications) => {
-    const unreadCount = notificationList.filter(n => !n.read).length;
-    setUnreadNotifications(unreadCount);
+    try {
+      const unreadCount = notificationList.filter(n => n && !n.read).length;
+      setUnreadNotifications(unreadCount);
+    } catch (error) {
+      setUnreadNotifications(0);
+    }
   };
 
   // Function to add a new notification
   const addNotification = (notification) => {
-    const newNotification = {
-      id: Date.now(),
-      type: notification.type || NOTIFICATION_TYPES.SYSTEM_UPDATE,
-      title: notification.title || 'Notification',
-      message: notification.message || '',
-      timestamp: new Date().toISOString(),
-      read: false,
-      action: notification.action || null,
-      priority: notification.priority || 'medium',
-      icon: notification.icon || NOTIFICATION_ICONS[notification.type] || <Info />,
-      color: notification.color || NOTIFICATION_COLORS[notification.type] || 'info'
-    };
+    try {
+      const iconName = notification.icon || NOTIFICATION_ICONS[notification.type] || 'Info';
+      
+      const newNotification = {
+        id: Date.now(),
+        type: notification.type || NOTIFICATION_TYPES.SYSTEM_UPDATE,
+        title: notification.title || 'Notification',
+        message: notification.message || '',
+        timestamp: new Date().toISOString(),
+        read: false,
+        action: notification.action || null,
+        priority: notification.priority || 'medium',
+        icon: iconName, // Store icon name, not JSX
+        color: notification.color || NOTIFICATION_COLORS[notification.type] || 'info'
+      };
 
-    setNotifications(prev => [newNotification, ...prev].slice(0, 100)); // Keep last 100 notifications
-    updateUnreadCount([newNotification, ...notifications]);
-    
-    // Show snackbar for important notifications
-    if (notification.priority === 'high') {
-      showSnackbar(`${notification.title}: ${notification.message}`, 'info');
+      setNotifications(prev => [newNotification, ...prev].slice(0, 100)); // Keep last 100 notifications
+      updateUnreadCount([newNotification, ...notifications]);
+      
+      // Show snackbar for important notifications
+      if (notification.priority === 'high') {
+        showSnackbar(`${notification.title}: ${notification.message}`, 'info');
+      }
+    } catch (error) {
+      console.error('Error adding notification:', error);
     }
   };
 
   // Function to mark notification as read
   const markNotificationAsRead = (notificationId) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === notificationId 
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
-    updateUnreadCount();
+    try {
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification && notification.id === notificationId 
+            ? { ...notification, read: true }
+            : notification
+        )
+      );
+      updateUnreadCount();
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
   // Function to mark all notifications as read
   const markAllNotificationsAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    setUnreadNotifications(0);
+    try {
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+      setUnreadNotifications(0);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
   // Function to delete notification
   const deleteNotification = (notificationId) => {
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    updateUnreadCount();
+    try {
+      setNotifications(prev => prev.filter(n => n && n.id !== notificationId));
+      updateUnreadCount();
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
   };
 
   // Function to delete all notifications
   const deleteAllNotifications = () => {
-    setNotifications([]);
-    setUnreadNotifications(0);
+    try {
+      setNotifications([]);
+      setUnreadNotifications(0);
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+    }
   };
 
   // Function to create specific notification types
   const createEmailNotification = (email, action) => {
-    let notificationType, title, message;
-    
-    switch(action) {
-      case 'received':
-        notificationType = NOTIFICATION_TYPES.NEW_EMAIL;
-        title = 'New Email Received';
-        message = `From: ${email.from}`;
-        break;
-      case 'sent':
-        notificationType = NOTIFICATION_TYPES.NEW_EMAIL;
-        title = 'Email Sent Successfully';
-        message = `To: ${email.to}`;
-        break;
-      case 'encrypted':
-        notificationType = NOTIFICATION_TYPES.ENCRYPTION_SUCCESS;
-        title = 'Email Encrypted Securely';
-        message = `Sent with ${email.encryptionLevel || 'AES-256'} encryption`;
-        break;
-      case 'starred':
-        notificationType = NOTIFICATION_TYPES.EMAIL_STARRED;
-        title = 'Email Starred';
-        message = `Subject: ${email.subject || 'No Subject'}`;
-        break;
-      default:
-        notificationType = NOTIFICATION_TYPES.SYSTEM_UPDATE;
-        title = 'Email Action';
-        message = `Action performed on email`;
-    }
-
-    addNotification({
-      type: notificationType,
-      title,
-      message,
-      priority: action === 'received' ? 'high' : 'medium',
-      action: {
-        type: 'view_email',
-        emailId: email.id
+    try {
+      let notificationType, title, message;
+      
+      switch(action) {
+        case 'received':
+          notificationType = NOTIFICATION_TYPES.NEW_EMAIL;
+          title = 'New Email Received';
+          message = `From: ${email.from || 'Unknown'}`;
+          break;
+        case 'sent':
+          notificationType = NOTIFICATION_TYPES.NEW_EMAIL;
+          title = 'Email Sent Successfully';
+          message = `To: ${email.to || 'Unknown'}`;
+          break;
+        case 'encrypted':
+          notificationType = NOTIFICATION_TYPES.ENCRYPTION_SUCCESS;
+          title = 'Email Encrypted Securely';
+          message = `Sent with ${email.encryptionLevel || 'AES-256'} encryption`;
+          break;
+        case 'starred':
+          notificationType = NOTIFICATION_TYPES.EMAIL_STARRED;
+          title = 'Email Starred';
+          message = `Subject: ${email.subject || 'No Subject'}`;
+          break;
+        default:
+          notificationType = NOTIFICATION_TYPES.SYSTEM_UPDATE;
+          title = 'Email Action';
+          message = `Action performed on email`;
       }
-    });
+
+      addNotification({
+        type: notificationType,
+        title,
+        message,
+        priority: action === 'received' ? 'high' : 'medium',
+        action: {
+          type: 'view_email',
+          emailId: email.id || ''
+        }
+      });
+    } catch (error) {
+      console.error('Error creating email notification:', error);
+    }
   };
 
   // Function to create security notification
   const createSecurityNotification = (action, details = {}) => {
-    let title, message, notificationType;
-    
-    switch(action) {
-      case 'login':
-        notificationType = NOTIFICATION_TYPES.LOGIN_ATTEMPT;
-        title = 'New Login Detected';
-        message = `Logged in from ${details.location || 'unknown location'}`;
-        break;
-      case 'encryption_key_generated':
-        notificationType = NOTIFICATION_TYPES.ENCRYPTION_KEY_GENERATED;
-        title = 'New Encryption Key Generated';
-        message = `Quantum ${details.algorithm || 'AES-256'} key created`;
-        break;
-      case 'quantum_security_activated':
-        notificationType = NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED;
-        title = 'Quantum Security Activated';
-        message = 'Your emails are now quantum-resistant';
-        break;
-      default:
-        notificationType = NOTIFICATION_TYPES.SECURITY_ALERT;
-        title = 'Security Event';
-        message = details.message || 'Security-related activity detected';
-    }
+    try {
+      let title, message, notificationType;
+      
+      switch(action) {
+        case 'login':
+          notificationType = NOTIFICATION_TYPES.LOGIN_ATTEMPT;
+          title = 'New Login Detected';
+          message = `Logged in from ${details.location || 'unknown location'}`;
+          break;
+        case 'encryption_key_generated':
+          notificationType = NOTIFICATION_TYPES.ENCRYPTION_KEY_GENERATED;
+          title = 'New Encryption Key Generated';
+          message = `Quantum ${details.algorithm || 'AES-256'} key created`;
+          break;
+        case 'quantum_security_activated':
+          notificationType = NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED;
+          title = 'Quantum Security Activated';
+          message = 'Your emails are now quantum-resistant';
+          break;
+        default:
+          notificationType = NOTIFICATION_TYPES.SECURITY_ALERT;
+          title = 'Security Event';
+          message = details.message || 'Security-related activity detected';
+      }
 
-    addNotification({
-      type: notificationType,
-      title,
-      message,
-      priority: 'high'
-    });
+      addNotification({
+        type: notificationType,
+        title,
+        message,
+        priority: 'high'
+      });
+    } catch (error) {
+      console.error('Error creating security notification:', error);
+    }
   };
 
   // CALCULATE REAL FOLDER COUNTS
@@ -504,19 +591,26 @@ export default function Dashboard({
     // Apply search filter if search query exists
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
-      filtered = filtered.filter(email => 
-        (email.subject || '').toLowerCase().includes(searchLower) ||
-        (email.from || '').toLowerCase().includes(searchLower) ||
-        (email.body || '').toLowerCase().includes(searchLower) ||
-        (email.preview || '').toLowerCase().includes(searchLower)
-      );
+      filtered = filtered.filter(email => {
+        if (!email) return false;
+        return (
+          (email.subject || '').toLowerCase().includes(searchLower) ||
+          (email.from || '').toLowerCase().includes(searchLower) ||
+          (email.body || '').toString().toLowerCase().includes(searchLower) ||
+          (email.preview || '').toString().toLowerCase().includes(searchLower)
+        );
+      });
     }
     
     // Sort by date (newest first)
     filtered.sort((a, b) => {
-      const dateA = new Date(a.date || 0);
-      const dateB = new Date(b.date || 0);
-      return dateB - dateA;
+      try {
+        const dateA = new Date(a.date || a.timestamp || 0);
+        const dateB = new Date(b.date || b.timestamp || 0);
+        return dateB.getTime() - dateA.getTime();
+      } catch {
+        return 0;
+      }
     });
     
     // Calculate pagination
@@ -555,17 +649,22 @@ export default function Dashboard({
 
   const handleRefresh = async () => {
     if (onRefresh) {
-      await onRefresh();
-      showSnackbar("Inbox refreshed", "success");
-      setCurrentPage(1);
-      
-      // Add notification for refresh
-      addNotification({
-        type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
-        title: 'Inbox Refreshed',
-        message: 'Your emails have been synced',
-        priority: 'low'
-      });
+      try {
+        await onRefresh();
+        showSnackbar("Inbox refreshed", "success");
+        setCurrentPage(1);
+        
+        // Add notification for refresh
+        addNotification({
+          type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
+          title: 'Inbox Refreshed',
+          message: 'Your emails have been synced',
+          priority: 'low'
+        });
+      } catch (error) {
+        console.error('Error refreshing inbox:', error);
+        showSnackbar("Failed to refresh inbox", "error");
+      }
     }
   };
 
@@ -595,141 +694,157 @@ export default function Dashboard({
 
   // Handle email actions with notifications
   const handleUpdateEmail = (emailId, field, value) => {
-    const email = currentEmails.find(e => e.uid === emailId);
-    
-    // Update local state
-    switch (field) {
-      case 'star':
-        setStarredEmails(prev => 
-          value 
-            ? [...prev, emailId]
-            : prev.filter(id => id !== emailId)
-        );
-        if (email) {
-          createEmailNotification(email, 'starred');
-        }
-        break;
-      case 'important':
-        setImportantEmails(prev => 
-          value 
-            ? [...prev, emailId]
-            : prev.filter(id => id !== emailId)
-        );
-        addNotification({
-          type: NOTIFICATION_TYPES.EMAIL_STARRED,
-          title: 'Email Marked as Important',
-          message: email ? `Subject: ${email.subject || 'No Subject'}` : 'Email marked',
-          priority: 'medium'
-        });
-        break;
-      case 'snooze':
-        setSnoozedEmails(prev => 
-          value 
-            ? [...prev, emailId]
-            : prev.filter(id => id !== emailId)
-        );
-        break;
-      default:
-        break;
-    }
-    
-    // Call parent handler if provided
-    if (onUpdateEmail) {
-      onUpdateEmail(emailId, field, value);
+    try {
+      const email = currentEmails.find(e => e && e.uid === emailId);
+      
+      // Update local state
+      switch (field) {
+        case 'star':
+          setStarredEmails(prev => 
+            value 
+              ? [...prev, emailId]
+              : prev.filter(id => id !== emailId)
+          );
+          if (email) {
+            createEmailNotification(email, 'starred');
+          }
+          break;
+        case 'important':
+          setImportantEmails(prev => 
+            value 
+              ? [...prev, emailId]
+              : prev.filter(id => id !== emailId)
+          );
+          addNotification({
+            type: NOTIFICATION_TYPES.EMAIL_STARRED,
+            title: 'Email Marked as Important',
+            message: email ? `Subject: ${email.subject || 'No Subject'}` : 'Email marked',
+            priority: 'medium'
+          });
+          break;
+        case 'snooze':
+          setSnoozedEmails(prev => 
+            value 
+              ? [...prev, emailId]
+              : prev.filter(id => id !== emailId)
+          );
+          break;
+        default:
+          break;
+      }
+      
+      // Call parent handler if provided
+      if (onUpdateEmail) {
+        onUpdateEmail(emailId, field, value);
+      }
+    } catch (error) {
+      console.error('Error updating email:', error);
     }
   };
 
   const handleBulkActionWrapper = (emailIds, action, value) => {
-    // Update local state for starred/important/snoozed
-    if (action === 'star' || action === 'important' || action === 'snooze') {
-      emailIds.forEach(emailId => {
-        const email = currentEmails.find(e => e.uid === emailId);
-        switch (action) {
-          case 'star':
-            setStarredEmails(prev => 
-              value 
-                ? [...prev, emailId]
-                : prev.filter(id => id !== emailId)
-            );
-            if (email && value) {
-              createEmailNotification(email, 'starred');
-            }
-            break;
-          case 'important':
-            setImportantEmails(prev => 
-              value 
-                ? [...prev, emailId]
-                : prev.filter(id => id !== emailId)
-            );
-            break;
-          case 'snooze':
-            setSnoozedEmails(prev => 
-              value 
-                ? [...prev, emailId]
-                : prev.filter(id => id !== emailId)
-            );
-            break;
-        }
+    try {
+      // Update local state for starred/important/snoozed
+      if (action === 'star' || action === 'important' || action === 'snooze') {
+        emailIds.forEach(emailId => {
+          const email = currentEmails.find(e => e && e.uid === emailId);
+          switch (action) {
+            case 'star':
+              setStarredEmails(prev => 
+                value 
+                  ? [...prev, emailId]
+                  : prev.filter(id => id !== emailId)
+              );
+              if (email && value) {
+                createEmailNotification(email, 'starred');
+              }
+              break;
+            case 'important':
+              setImportantEmails(prev => 
+                value 
+                  ? [...prev, emailId]
+                  : prev.filter(id => id !== emailId)
+              );
+              break;
+            case 'snooze':
+              setSnoozedEmails(prev => 
+                value 
+                  ? [...prev, emailId]
+                  : prev.filter(id => id !== emailId)
+              );
+              break;
+          }
+        });
+      }
+      
+      // Call parent handler
+      if (onBulkAction) {
+        onBulkAction(emailIds, action, value);
+      }
+      
+      // Add notification for bulk action
+      addNotification({
+        type: NOTIFICATION_TYPES.EMAIL_MOVED,
+        title: 'Bulk Action Completed',
+        message: `${emailIds.length} emails ${action}ed`,
+        priority: 'medium'
       });
+    } catch (error) {
+      console.error('Error in bulk action:', error);
     }
-    
-    // Call parent handler
-    if (onBulkAction) {
-      onBulkAction(emailIds, action, value);
-    }
-    
-    // Add notification for bulk action
-    addNotification({
-      type: NOTIFICATION_TYPES.EMAIL_MOVED,
-      title: 'Bulk Action Completed',
-      message: `${emailIds.length} emails ${action}ed`,
-      priority: 'medium'
-    });
   };
 
   const handleMoveEmails = (emailIds, folder) => {
-    // If moving to trash, remove from starred/important/snoozed
-    if (folder === 'trash') {
-      setStarredEmails(prev => prev.filter(id => !emailIds.includes(id)));
-      setImportantEmails(prev => prev.filter(id => !emailIds.includes(id)));
-      setSnoozedEmails(prev => prev.filter(id => !emailIds.includes(id)));
+    try {
+      // If moving to trash, remove from starred/important/snoozed
+      if (folder === 'trash') {
+        setStarredEmails(prev => prev.filter(id => !emailIds.includes(id)));
+        setImportantEmails(prev => prev.filter(id => !emailIds.includes(id)));
+        setSnoozedEmails(prev => prev.filter(id => !emailIds.includes(id)));
+        
+        // Add notification for deletion
+        addNotification({
+          type: NOTIFICATION_TYPES.EMAIL_DELETED,
+          title: 'Emails Moved to Trash',
+          message: `${emailIds.length} emails moved to trash`,
+          priority: 'medium'
+        });
+      } else {
+        // Add notification for moving emails
+        addNotification({
+          type: NOTIFICATION_TYPES.EMAIL_MOVED,
+          title: 'Emails Moved',
+          message: `${emailIds.length} emails moved to ${folder}`,
+          priority: 'medium'
+        });
+      }
       
-      // Add notification for deletion
-      addNotification({
-        type: NOTIFICATION_TYPES.EMAIL_DELETED,
-        title: 'Emails Moved to Trash',
-        message: `${emailIds.length} emails moved to trash`,
-        priority: 'medium'
-      });
-    } else {
-      // Add notification for moving emails
-      addNotification({
-        type: NOTIFICATION_TYPES.EMAIL_MOVED,
-        title: 'Emails Moved',
-        message: `${emailIds.length} emails moved to ${folder}`,
-        priority: 'medium'
-      });
-    }
-    
-    // Call parent handler
-    if (onMoveEmails) {
-      onMoveEmails(emailIds, folder);
+      // Call parent handler
+      if (onMoveEmails) {
+        onMoveEmails(emailIds, folder);
+      }
+    } catch (error) {
+      console.error('Error moving emails:', error);
     }
   };
 
   // Safe handleFolderChange
   const handleFolderChange = (folder) => {
-    setActiveSection(folder);
-    setActivePage("inbox");
-    setCurrentPage(1);
-    setSearchQuery("");
-    
-    if (isMobile) {
-      setMobileOpen(false);
-    }
-    
-    if (onFolderChange && typeof onFolderChange === 'function') {
-      onFolderChange(folder);
+    try {
+      setActiveSection(folder);
+      setActivePage("inbox");
+      setCurrentPage(1);
+      setSearchQuery("");
+      
+      if (isMobile) {
+        setMobileOpen(false);
+      }
+      
+      if (onFolderChange && typeof onFolderChange === 'function') {
+        onFolderChange(folder);
+      }
+    } catch (error) {
+      console.error('Error changing folder:', error);
     }
   };
 
@@ -773,53 +888,66 @@ export default function Dashboard({
 
   // Handle notification action
   const handleNotificationAction = (notification) => {
-    if (notification.action) {
-      switch (notification.action.type) {
-        case 'view_email':
-          // Navigate to email view
-          showSnackbar(`Opening email ${notification.action.emailId}`, 'info');
-          break;
-        case 'view_security':
-          setActivePage("security");
-          break;
-        case 'view_account':
-          setActivePage("account");
-          break;
-        default:
-          break;
+    try {
+      if (notification && notification.action) {
+        switch (notification.action.type) {
+          case 'view_email':
+            // Navigate to email view
+            showSnackbar(`Opening email ${notification.action.emailId}`, 'info');
+            break;
+          case 'view_security':
+            setActivePage("security");
+            break;
+          case 'view_account':
+            setActivePage("account");
+            break;
+          default:
+            break;
+        }
       }
+      markNotificationAsRead(notification.id);
+      handleNotificationsMenuClose();
+    } catch (error) {
+      console.error('Error handling notification action:', error);
     }
-    markNotificationAsRead(notification.id);
-    handleNotificationsMenuClose();
   };
 
   // Format time ago
   const formatTimeAgo = (timestamp) => {
-    const now = new Date();
-    const past = new Date(timestamp);
-    const diffMs = now - past;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    try {
+      if (!timestamp) return 'Just now';
+      const now = new Date();
+      const past = new Date(timestamp);
+      const diffMs = now - past;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return past.toLocaleDateString();
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return past.toLocaleDateString();
+    } catch {
+      return 'Just now';
+    }
   };
 
   // Filter notifications by tab
   const getFilteredNotifications = () => {
-    switch (activeNotificationTab) {
-      case 0: // All
-        return notifications;
-      case 1: // Unread
-        return notifications.filter(n => !n.read);
-      case 2: // Important
-        return notifications.filter(n => n.priority === 'high');
-      default:
-        return notifications;
+    try {
+      switch (activeNotificationTab) {
+        case 0: // All
+          return notifications.filter(n => n);
+        case 1: // Unread
+          return notifications.filter(n => n && !n.read);
+        case 2: // Important
+          return notifications.filter(n => n && n.priority === 'high');
+        default:
+          return notifications.filter(n => n);
+      }
+    } catch {
+      return [];
     }
   };
 
@@ -885,61 +1013,63 @@ export default function Dashboard({
           {hasNotifications ? (
             <List dense>
               {filteredNotifications.slice(0, 10).map((notification) => (
-                <ListItem
-                  key={notification.id}
-                  sx={{
-                    bgcolor: notification.read ? 'transparent' : 'action.hover',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    '&:hover': { bgcolor: 'action.hover' }
-                  }}
-                  button
-                  onClick={() => handleNotificationAction(notification)}
-                >
-                  <ListItemIcon sx={{ minWidth: 40 }}>
-                    <Avatar 
-                      sx={{ 
-                        width: 32, 
-                        height: 32, 
-                        bgcolor: `${notification.color}.main`,
-                        color: `${notification.color}.contrastText`
-                      }}
-                    >
-                      {notification.icon}
-                    </Avatar>
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
-                        {notification.title}
-                      </Typography>
-                    }
-                    secondary={
-                      <>
-                        <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
-                          {notification.message}
+                notification && (
+                  <ListItem
+                    key={notification.id}
+                    sx={{
+                      bgcolor: notification.read ? 'transparent' : 'action.hover',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'action.hover' }
+                    }}
+                    button
+                    onClick={() => handleNotificationAction(notification)}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      <Avatar 
+                        sx={{ 
+                          width: 32, 
+                          height: 32, 
+                          bgcolor: `${notification.color}.main`,
+                          color: `${notification.color}.contrastText`
+                        }}
+                      >
+                        {getIconComponent(notification.icon)}
+                      </Avatar>
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
+                          {notification.title}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          {formatTimeAgo(notification.timestamp)}
-                        </Typography>
-                      </>
-                    }
-                    sx={{ ml: 1 }}
-                  />
-                  <ListItemSecondaryAction>
-                    <MuiIconButton 
-                      size="small" 
-                      edge="end"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteNotification(notification.id);
-                      }}
-                      sx={{ color: 'text.secondary' }}
-                    >
-                      <Close fontSize="small" />
-                    </MuiIconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
+                      }
+                      secondary={
+                        <>
+                          <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
+                            {notification.message}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {formatTimeAgo(notification.timestamp)}
+                          </Typography>
+                        </>
+                      }
+                      sx={{ ml: 1 }}
+                    />
+                    <ListItemSecondaryAction>
+                      <MuiIconButton 
+                        size="small" 
+                        edge="end"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification(notification.id);
+                        }}
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        <Close fontSize="small" />
+                      </MuiIconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                )
               ))}
             </List>
           ) : (
@@ -1051,61 +1181,63 @@ export default function Dashboard({
         {getFilteredNotifications().length > 0 ? (
           <List>
             {getFilteredNotifications().map((notification) => (
-              <ListItem
-                key={notification.id}
-                sx={{
-                  bgcolor: notification.read ? 'transparent' : 'action.hover',
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'action.hover' }
-                }}
-                button
-                onClick={() => handleNotificationAction(notification)}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Avatar 
-                    sx={{ 
-                      width: 32, 
-                      height: 32, 
-                      bgcolor: `${notification.color}.main`,
-                      color: `${notification.color}.contrastText`
-                    }}
-                  >
-                    {notification.icon}
-                  </Avatar>
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
-                        {notification.title}
-                      </Typography>
+              notification && (
+                <ListItem
+                  key={notification.id}
+                  sx={{
+                    bgcolor: notification.read ? 'transparent' : 'action.hover',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  button
+                  onClick={() => handleNotificationAction(notification)}
+                >
+                  <ListItemIcon sx={{ minWidth: 40 }}>
+                    <Avatar 
+                      sx={{ 
+                        width: 32, 
+                        height: 32, 
+                        bgcolor: `${notification.color}.main`,
+                        color: `${notification.color}.contrastText`
+                      }}
+                    >
+                      {getIconComponent(notification.icon)}
+                    </Avatar>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
+                          {notification.title}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {formatTimeAgo(notification.timestamp)}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {formatTimeAgo(notification.timestamp)}
+                        {notification.message}
                       </Typography>
-                    </Box>
-                  }
-                  secondary={
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      {notification.message}
-                    </Typography>
-                  }
-                  sx={{ ml: 1 }}
-                />
-                <ListItemSecondaryAction>
-                  <MuiIconButton 
-                    size="small" 
-                    edge="end"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteNotification(notification.id);
-                    }}
-                    sx={{ color: 'text.secondary' }}
-                  >
-                    <Close fontSize="small" />
-                  </MuiIconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
+                    }
+                    sx={{ ml: 1 }}
+                  />
+                  <ListItemSecondaryAction>
+                    <MuiIconButton 
+                      size="small" 
+                      edge="end"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteNotification(notification.id);
+                      }}
+                      sx={{ color: 'text.secondary' }}
+                    >
+                      <Close fontSize="small" />
+                    </MuiIconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              )
             ))}
           </List>
         ) : (
@@ -1400,7 +1532,6 @@ export default function Dashboard({
                 activeFolder={activeSection}
                 onFolderChange={handleFolderChange}
                 userEmail={userEmail}
-                userPassword={userPassword}
                 onCompose={() => setOpenCompose(true)}
                 onRefresh={handleRefresh}
                 onUpdateEmail={handleUpdateEmail}

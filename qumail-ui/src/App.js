@@ -6,8 +6,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import { SnackbarProvider, useSnackbar } from "notistack";
-import { cacheKey, getUnusedValidKey, clearKeyCache } from "./utils/keyStore";
-import { otpEncrypt } from "./utils/otp";
+import { cacheKey, getValidKey, clearKeyCache } from "./utils/keyStore";
+import { otpEncrypt, otpDecrypt, generateOTPKey } from "./utils/otp";
 
 const theme = createTheme({
   palette: {
@@ -71,15 +71,6 @@ const formatDate = (dateString) => {
   } catch (error) {
     return "Unknown";
   }
-};
-
-const generateOTPKey = (length = 32) => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let key = '';
-  for (let i = 0; i < length; i++) {
-    key += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return key;
 };
 
 // QuMail API Service
@@ -211,7 +202,7 @@ const QuMailService = {
     }
   },
 
-  // Fetch emails from folder
+  // ✅ FIXED: Fetch emails from folder using correct API endpoint
   fetchEmails: async (folder = 'inbox', limit = 50) => {
     try {
       const token = localStorage.getItem('qumail_token');
@@ -221,24 +212,90 @@ const QuMailService = {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/emails`, {
-        method: 'POST',
+      // ✅ FIX 5: Using the correct API endpoint with POST method
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      let apiEndpoint = '';
+      
+      // Map folder to correct API endpoint
+      switch(folder) {
+        case 'inbox':
+          apiEndpoint = '/api/mail/inbox';
+          break;
+        case 'sent':
+          apiEndpoint = '/api/mail/sent';
+          break;
+        case 'drafts':
+          apiEndpoint = '/api/mail/drafts';
+          break;
+        case 'trash':
+          apiEndpoint = '/api/mail/trash';
+          break;
+        case 'spam':
+          apiEndpoint = '/api/mail/spam';
+          break;
+        default:
+          apiEndpoint = '/api/mail/inbox';
+      }
+
+      console.log(`📥 Fetching emails from: ${folder}, endpoint: ${apiEndpoint}`);
+      
+      const response = await fetch(`${API_URL}${apiEndpoint}`, {
+        method: "POST",
         headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ 
-          email,
-          folder, 
-          limit 
+          email: email,
+          limit: limit || 50
         })
       });
       
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
       const data = await response.json();
-      return data.success ? data.emails : [];
+      console.log(`✅ Received ${Array.isArray(data) ? data.length : 0} emails from ${folder}`);
+      
+      // Handle different response formats
+      if (Array.isArray(data)) {
+        return data;
+      } else if (data && Array.isArray(data.emails)) {
+        return data.emails;
+      } else if (data && data.success && Array.isArray(data.emails)) {
+        return data.emails;
+      } else {
+        console.warn('Unexpected response format:', data);
+        return [];
+      }
     } catch (error) {
       console.error('Fetch emails error:', error);
-      return [];
+      // Fallback to old endpoint if new one fails
+      try {
+        console.log('Trying fallback endpoint...');
+        const token = localStorage.getItem('qumail_token');
+        const email = localStorage.getItem('qumail_email');
+        
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/emails`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ 
+            email,
+            folder, 
+            limit 
+          })
+        });
+        
+        const data = await response.json();
+        return data.success ? data.emails : [];
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+        return [];
+      }
     }
   },
 
@@ -246,45 +303,90 @@ const QuMailService = {
   getEmail: async (emailId) => {
     try {
       const token = localStorage.getItem('qumail_token');
-      const userEmail = localStorage.getItem('qumail_email');
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/email`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ 
-          email: userEmail,
-          emailId 
-        })
-      });
-      
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/mail/${emailId}`,
+        {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        }
+      );
+
       const data = await response.json();
-      return data.success ? data.email : null;
+      return data.success ? data.mail : null;
     } catch (error) {
       console.error('Get email error:', error);
       return null;
     }
   },
 
-  // Send email to another QuMail user
-  sendEmail: async (to, subject, body) => {
+  // ✅ FIXED: Send email to another QuMail user with proper validation
+  sendEmail: async (to, subject, body, type = "NORMAL") => {
     try {
       const token = localStorage.getItem('qumail_token');
       const from = localStorage.getItem('qumail_email');
       
       if (!token || !from) {
-        throw new Error('Not authenticated');
+        return { 
+          success: false, 
+          message: 'Not authenticated. Please login again.' 
+        };
+      }
+
+      // ✅ CRITICAL: Validate all required fields
+      if (!to || !to.trim()) {
+        return { 
+          success: false, 
+          message: 'Recipient email is required' 
+        };
+      }
+      
+      if (!body || !body.trim()) {
+        return { 
+          success: false, 
+          message: 'Message body is required' 
+        };
       }
 
       // Validate recipient is @qumail.com
-      if (!to.toLowerCase().endsWith('@qumail.com')) {
+      const recipientEmail = to.toLowerCase().trim();
+      if (!recipientEmail.endsWith('@qumail.com')) {
         return { 
           success: false, 
           message: 'Can only send to @qumail.com addresses' 
         };
       }
+
+      // Validate sender is @qumail.com
+      const senderEmail = from.toLowerCase().trim();
+      if (!senderEmail.endsWith('@qumail.com')) {
+        return { 
+          success: false, 
+          message: 'Invalid sender email' 
+        };
+      }
+
+      // ✅ CRITICAL: Ensure subject is not null/undefined
+      const emailSubject = subject || '(No Subject)';
+
+      // ✅ CRITICAL: Proper request body
+      const requestBody = {
+        from: senderEmail,
+        to: recipientEmail,
+        subject: emailSubject,
+        message: body,  // Keep as 'message' to match backend
+        type: type || "NORMAL"
+      };
+
+      console.log('📤 Sending email with data:', {
+        from: senderEmail,
+        to: recipientEmail,
+        subject: emailSubject,
+        type: type,
+        bodyLength: body.length
+      });
 
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/send`, {
         method: 'POST',
@@ -292,18 +394,29 @@ const QuMailService = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          from,
-          to,
-          subject,
-          body
-        })
+        body: JSON.stringify(requestBody)
       });
       
-      return await response.json();
+      // Handle HTTP errors
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Send email HTTP error:', response.status, errorText);
+        return { 
+          success: false, 
+          message: `Server error: ${response.status} - ${errorText || 'Unknown error'}` 
+        };
+      }
+      
+      const data = await response.json();
+      console.log('📤 Send email response:', data);
+      
+      return data;
     } catch (error) {
-      console.error('Send email error:', error);
-      return { success: false, message: 'Network error' };
+      console.error('Send email network error:', error);
+      return { 
+        success: false, 
+        message: `Network error: ${error.message || 'Please check your connection'}` 
+      };
     }
   },
 
@@ -529,7 +642,7 @@ const AppContent = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [activeFolder, setActiveFolder] = useState("inbox");
   const [folders, setFolders] = useState([]);
-  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, message: "" });
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 100, message: "" });
   const { enqueueSnackbar } = useSnackbar();
 
   // Handle splash screen finish
@@ -610,22 +723,29 @@ const AppContent = () => {
     }
   };
 
-  // Load emails
+  // Load emails - FIXED VERSION
   const loadEmails = async (folder = 'inbox') => {
     try {
       console.log(`📥 Loading ${folder} emails for: ${userEmail}`);
       
       const emails = await QuMailService.fetchEmails(folder, 50);
-      console.log(`✅ Received ${emails.length} emails`);
+      console.log(`✅ Received ${Array.isArray(emails) ? emails.length : 0} emails`);
+      
+      if (!Array.isArray(emails)) {
+        console.error('Invalid email data received:', emails);
+        enqueueSnackbar('Received invalid email data', { variant: 'error' });
+        setAllEmails([]);
+        return;
+      }
       
       const processedEmails = emails.map(email => ({
         ...email,
-        uid: email.id,
-        id: email.id,
-        preview: generatePreview(email.body || email.snippet || ''),
-        date: formatDate(email.timestamp || email.createdAt),
-        originalDate: email.timestamp || email.createdAt,
-        security: determineSecurityLevel(email.body || ''),
+        uid: email.id || email._id || `email_${Date.now()}_${Math.random()}`,
+        id: email.id || email._id,
+        preview: generatePreview(email.body || email.snippet || email.message || ''),
+        date: formatDate(email.timestamp || email.createdAt || email.date),
+        originalDate: email.timestamp || email.createdAt || email.date,
+        security: determineSecurityLevel(email.body || email.message || ''),
         read: email.read !== false,
         starred: email.starred || false,
         important: email.important || false,
@@ -634,7 +754,11 @@ const AppContent = () => {
         trash: email.trash || false,
         spam: email.spam || false,
         archived: email.archived || false,
-        folder: email.folder || folder
+        folder: (email.folder || folder).toLowerCase(),
+        from: email.from || userEmail,
+        to: email.to || '',
+        subject: email.subject || '(No Subject)',
+        body: email.body || email.message || ''
       }));
       
       setAllEmails(processedEmails);
@@ -644,11 +768,16 @@ const AppContent = () => {
           variant: 'success',
           autoHideDuration: 3000 
         });
+      } else {
+        enqueueSnackbar(`No emails in ${folder}`, { 
+          variant: 'info',
+          autoHideDuration: 2000 
+        });
       }
       
     } catch (error) {
       console.error('Error loading emails:', error);
-      enqueueSnackbar('Failed to load emails', { variant: 'error' });
+      enqueueSnackbar(`Failed to load emails: ${error.message}`, { variant: 'error' });
       setAllEmails([]);
     }
   };
@@ -1006,16 +1135,32 @@ const AppContent = () => {
     }
   };
 
-  // Send email to another QuMail user
+  // ✅ FIXED: Send email with proper validation
   const handleSendEmail = async (to, subject, body, level, draftId = null) => {
-    if (!to.trim() || !body.trim()) {
-      enqueueSnackbar("Please fill in recipient and message", { variant: "warning" });
+    // ✅ CRITICAL: Frontend validation
+    if (!to || !to.trim()) {
+      enqueueSnackbar("Please enter recipient email", { variant: "warning" });
+      return;
+    }
+    
+    if (!body || !body.trim()) {
+      enqueueSnackbar("Please enter message content", { variant: "warning" });
       return;
     }
 
     // Validate recipient is @qumail.com
-    if (!to.toLowerCase().endsWith('@qumail.com')) {
+    const recipientEmail = to.toLowerCase().trim();
+    if (!recipientEmail.endsWith('@qumail.com')) {
       enqueueSnackbar("Can only send to @qumail.com addresses", { 
+        variant: "error",
+        autoHideDuration: 5000 
+      });
+      return;
+    }
+
+    // Validate sender is @qumail.com
+    if (!userEmail.toLowerCase().endsWith('@qumail.com')) {
+      enqueueSnackbar("Invalid sender email", { 
         variant: "error",
         autoHideDuration: 5000 
       });
@@ -1026,24 +1171,42 @@ const AppContent = () => {
     
     try {
       let emailBody = body;
-      let key = "none";
+      let sendLevel = "none";
+      let backendType = "NORMAL"; // Default type for backend
 
-      // Handle encryption
-      if (level !== "none") {
-        key = getUnusedValidKey(userEmail, level) || generateOTPKey(32);
-        
-        if (level === "otp") {
-          emailBody = otpEncrypt(body, key);
-        }
-        
-        cacheKey(userEmail, level, key);
-        
-        // Format encrypted body
-        emailBody = `[${level}|${key}]:${emailBody}`;
+      // ✅ PROPER ENCRYPTION SEPARATION:
+      if (level === "otp") {
+        // FRONTEND OTP ENCRYPTION
+        const key = generateOTPKey(32); // HEX key
+        const encrypted = otpEncrypt(body, key);
+        emailBody = `[otp|${key}]:${encrypted}`;
+        cacheKey(userEmail, key);
+        sendLevel = "otp";
+        backendType = "OTP"; // Tell backend it's OTP
+        console.log("✅ OTP encrypted in UI. Key cached.");
+      }
+      else if (level === "aes") {
+        // ✅ BACKEND AES ENCRYPTION - DO NOT ENCRYPT IN UI
+        // Just mark it as AES - backend will encrypt it
+        sendLevel = "aes";
+        backendType = "AES"; // ✅ CRITICAL: Tell backend to encrypt with AES
+        console.log("📤 AES encryption delegated to backend with type: AES");
+      }
+      else {
+        // Standard email
+        sendLevel = "none";
+        backendType = "NORMAL";
       }
 
-      // Send via QuMail API
-      const result = await QuMailService.sendEmail(to, subject || '(No Subject)', emailBody);
+      // ✅ FIXED: Send with encryption type to backend
+      const result = await QuMailService.sendEmail(
+        recipientEmail, 
+        subject || '(No Subject)', 
+        emailBody,
+        backendType  // Send encryption type to backend
+      );
+      
+      console.log('📤 Send result:', result);
       
       if (result.success) {
         // If this was a draft being sent, delete the draft
@@ -1057,7 +1220,7 @@ const AppContent = () => {
           uid: result.messageId || `sent_${Date.now()}`,
           id: result.messageId || `sent_${Date.now()}`,
           from: userEmail,
-          to,
+          to: recipientEmail,
           subject: subject || '(No Subject)',
           body: emailBody,
           sent: true,
@@ -1065,7 +1228,7 @@ const AppContent = () => {
           date: new Date().toISOString(),
           originalDate: new Date().toISOString(),
           preview: generatePreview(body),
-          security: level,
+          security: sendLevel,
           read: true,
           starred: false,
           important: false,
@@ -1078,7 +1241,7 @@ const AppContent = () => {
         
         setAllEmails(prev => [...prev, sentEmail]);
         
-        enqueueSnackbar("Email sent securely via QuMail!", { variant: "success" });
+        enqueueSnackbar("Email sent successfully!", { variant: "success" });
         
         const summaries = {
           otp: { title: "Quantum OTP Encrypted", icon: "🔒" },
@@ -1087,16 +1250,31 @@ const AppContent = () => {
         };
         
         enqueueSnackbar(
-          `${summaries[level].icon} ${summaries[level].title}`,
+          `${summaries[sendLevel].icon} ${summaries[sendLevel].title}`,
           { variant: "info", autoHideDuration: 3000 }
         );
+        
+        // Load sent folder to show the sent email
+        setTimeout(() => {
+          loadEmails('sent');
+        }, 1000);
+        
       } else {
-        throw new Error(result.message || "Failed to send email");
+        // Show specific error message from backend
+        const errorMessage = result.message || "Failed to send email";
+        console.error('Send email failed:', errorMessage);
+        enqueueSnackbar(`Failed: ${errorMessage}`, { 
+          variant: "error",
+          autoHideDuration: 5000 
+        });
       }
 
     } catch (err) {
       console.error("Send email error:", err);
-      enqueueSnackbar(err.message || "Error sending email", { variant: "error" });
+      enqueueSnackbar(`Network error: ${err.message}`, { 
+        variant: "error",
+        autoHideDuration: 5000 
+      });
     } finally {
       setLoading(false);
     }
@@ -1126,20 +1304,21 @@ const AppContent = () => {
     return '';
   };
 
-  // Decrypt email
-  const handleDecryptEmail = async (encryptedBody, level, key) => {
+  // Decrypt email - FIXED VERSION
+  const handleDecryptEmail = async (encryptedBody, level) => {
     if (level === "none") return encryptedBody;
     
-    try {
-      if (level === "otp") {
-        const { otpDecrypt } = await import('./utils/otp');
-        const result = otpDecrypt(encryptedBody, key);
-        return result || 'Decryption failed';
-      }
-      return 'AES decryption not implemented';
-    } catch (error) {
-      return `Error decrypting: ${error.message}`;
+    if (level === "otp") {
+      const key = getValidKey(userEmail);
+      if (!key) return "❌ OTP expired or key not available";
+      return otpDecrypt(encryptedBody, key);
     }
+    
+    if (level === "aes") {
+      return "🔐 AES encrypted - Decryption handled by backend";
+    }
+    
+    return encryptedBody;
   };
 
   // Handle logout
@@ -1157,7 +1336,7 @@ const AppContent = () => {
     setUserName("");
     setActiveFolder("inbox");
     setFolders([]);
-    clearKeyCache(userEmail);
+    clearKeyCache();
     
     enqueueSnackbar("Logged out from QuMail", { variant: "info" });
   };

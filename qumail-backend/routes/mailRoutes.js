@@ -1,106 +1,123 @@
 import express from "express";
-import { encryptAES, decryptAES } from "../utils/aesUtil.js";
 import crypto from "crypto";
+import Mail from "../models/Mail.js";
+import {
+  encryptAES,
+  decryptAES,
+  generateAESKey,
+  generateAESIV
+} from "../utils/aesUtil.js";
 
 const router = express.Router();
 
 /**
- * In-memory mail store
- * (Later you can move this to MongoDB)
+ * 📤 SEND MAIL
+ * body: { from, to, subject, message, type }
+ * type = "AES" | "OTP" | "NORMAL"
  */
-const mails = new Map();
-
-/**
- * 📤 SEND MAIL (AES / NORMAL)
- * body: { to, subject, message, type }
- * type = "AES" | "NORMAL"
- */
-router.post("/send", (req, res) => {
+router.post("/send", async (req, res) => {
   try {
-    const { to, subject, message, type } = req.body;
+    const { from, to, subject, message, type } = req.body;
 
-    if (!to || !subject || !message) {
+    if (!from || !to || !subject || !message) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     let body = message;
-    let encrypted = false;
+    let encryption = "NONE";
+    let aesKey = null;
+    let aesIV = null;
 
+    // 🔐 AES (backend encryption)
     if (type === "AES") {
-      body = encryptAES(message);
-      encrypted = true;
+      encryption = "AES";
+      aesKey = generateAESKey(); // ✅ STRING
+      aesIV = generateAESIV();   // ✅ STRING
+      body = encryptAES(message, aesKey, aesIV);
     }
 
-    const mailId = crypto.randomUUID();
+    // 🔑 OTP (already encrypted in frontend)
+    if (type === "OTP") {
+      encryption = "OTP";
+    }
 
-    mails.set(mailId, {
-      id: mailId,
+    // 📤 SENT
+    await Mail.create({
+      mailId: crypto.randomUUID(),
+      from,
       to,
       subject,
-      body,          // stored as encrypted if AES
-      encrypted,
-      createdAt: new Date()
+      body,
+      encryption,
+      aesKey,
+      aesIV,
+      folder: "SENT",
+      owner: from
     });
 
-    res.json({
-      success: true,
-      message: "Mail sent successfully",
-      mailId
+    // 📥 INBOX
+    await Mail.create({
+      mailId: crypto.randomUUID(),
+      from,
+      to,
+      subject,
+      body,
+      encryption,
+      aesKey,
+      aesIV,
+      folder: "INBOX",
+      owner: to
     });
+
+    res.json({ success: true, message: "Mail sent successfully" });
+
   } catch (err) {
-    console.error("Send mail error:", err);
-    res.status(500).json({ error: "Failed to send mail" });
+    console.error("❌ Send mail error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 /**
- * 📥 GET MAIL BY ID
- * If AES encrypted → decrypt BEFORE returning
- * (do NOT modify stored mail)
+ * 📥 GET INBOX (persisted)
  */
-router.get("/:id", (req, res) => {
+router.post("/inbox", async (req, res) => {
   try {
-    const mail = mails.get(req.params.id);
+    const { email } = req.body;
 
-    if (!mail) {
-      return res.status(404).json({ error: "Mail not found" });
-    }
+    const mails = await Mail.find({
+      owner: email,
+      folder: "INBOX"
+    })
+      .select("-aesKey -aesIV")
+      .sort({ createdAt: -1 });
 
-    // ✅ create a safe copy
-    let responseMail = { ...mail };
-
-    if (responseMail.encrypted === true) {
-      try {
-        responseMail.body = decryptAES(responseMail.body);
-      } catch (decryptErr) {
-        console.error("AES decrypt failed:", decryptErr);
-        return res.status(500).json({
-          error: "Failed to decrypt AES email"
-        });
-      }
-    }
-
-    res.json(responseMail);
+    res.json({ success: true, mails });
   } catch (err) {
-    console.error("Read mail error:", err);
-    res.status(500).json({ error: "Failed to read mail" });
+    res.status(500).json({ error: "Failed to fetch inbox" });
   }
 });
 
 /**
- * 📬 GET ALL MAILS
- * (Do NOT decrypt here, only metadata)
+ * 📄 READ MAIL (decrypt safely)
  */
-router.get("/", (req, res) => {
-  const list = Array.from(mails.values()).map(mail => ({
-    id: mail.id,
-    to: mail.to,
-    subject: mail.subject,
-    encrypted: mail.encrypted,
-    createdAt: mail.createdAt
-  }));
+router.get("/:mailId", async (req, res) => {
+  const mail = await Mail.findOne({ mailId: req.params.mailId });
+  if (!mail) return res.status(404).json({ error: "Mail not found" });
 
-  res.json(list);
+  const response = { ...mail._doc };
+
+  if (response.encryption === "AES") {
+    response.body = decryptAES(
+      response.body,
+      response.aesKey,
+      response.aesIV
+    );
+  }
+
+  delete response.aesKey;
+  delete response.aesIV;
+
+  res.json({ success: true, mail: response });
 });
 
 export default router;
