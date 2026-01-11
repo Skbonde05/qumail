@@ -1,11 +1,36 @@
 import mongoose from "mongoose";
 
 const MailSchema = new mongoose.Schema({
-  mailId: { type: String, required: true, unique: true },
-  from: { type: String, required: true },
-  to: { type: String, required: true },
-  subject: { type: String, required: true },
-  body: { type: String, required: true },
+  mailId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+
+  from: {
+    type: String,
+    required: true,
+    lowercase: true,
+    trim: true
+  },
+
+  to: {
+    type: String,
+    required: true,
+    lowercase: true,
+    trim: true
+  },
+
+  subject: {
+    type: String,
+    required: true,
+    default: "(No Subject)"
+  },
+
+  body: {
+    type: String,
+    required: true
+  },
 
   encryption: {
     type: String,
@@ -13,8 +38,16 @@ const MailSchema = new mongoose.Schema({
     default: "NONE"
   },
 
-  aesKey: String,
-  aesIV: String,
+  // 🔐 AES (backend-only)
+  aesKey: {
+    type: String,
+    default: null
+  },
+
+  aesIV: {
+    type: String,
+    default: null
+  },
 
   folder: {
     type: String,
@@ -24,7 +57,9 @@ const MailSchema = new mongoose.Schema({
 
   owner: {
     type: String,
-    required: true
+    required: true,
+    lowercase: true,
+    trim: true
   },
 
   createdAt: {
@@ -32,6 +67,5 @@ const MailSchema = new mongoose.Schema({
     default: Date.now
   }
 });
-
 
 export default mongoose.model("Mail", MailSchema);

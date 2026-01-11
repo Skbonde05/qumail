@@ -322,7 +322,7 @@ const QuMailService = {
     }
   },
 
-  // ✅ FIXED: Send email to another QuMail user with proper validation
+  // ✅ ✅ ✅ FIXED: Send email with CORRECT endpoint and payload
   sendEmail: async (to, subject, body, type = "NORMAL") => {
     try {
       const token = localStorage.getItem('qumail_token');
@@ -371,24 +371,27 @@ const QuMailService = {
       // ✅ CRITICAL: Ensure subject is not null/undefined
       const emailSubject = subject || '(No Subject)';
 
-      // ✅ CRITICAL: Proper request body
+      // ✅ ✅ ✅ CRITICAL: Correct request body matching backend contract
       const requestBody = {
-        from: senderEmail,
         to: recipientEmail,
         subject: emailSubject,
-        message: body,  // Keep as 'message' to match backend
-        type: type || "NORMAL"
+        body: body,  // ✅ MUST be "body", not "message"
+        encryptionLevel:  // ✅ MUST be "encryptionLevel", not "type"
+          type === "AES" ? "aes256" :
+          type === "OTP" ? "otp" :
+          "none"
       };
 
-      console.log('📤 Sending email with data:', {
-        from: senderEmail,
+      console.log('📤 Sending email with CORRECT payload:', {
         to: recipientEmail,
         subject: emailSubject,
-        type: type,
+        encryptionLevel: requestBody.encryptionLevel,
         bodyLength: body.length
       });
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/send`, {
+      // ✅ ✅ ✅ CRITICAL: Correct API endpoint
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/send`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -1135,7 +1138,7 @@ const AppContent = () => {
     }
   };
 
-  // ✅ FIXED: Send email with proper validation
+  // ✅ ✅ ✅ FIXED: Send email with CORRECT backend contract
   const handleSendEmail = async (to, subject, body, level, draftId = null) => {
     // ✅ CRITICAL: Frontend validation
     if (!to || !to.trim()) {
@@ -1198,12 +1201,12 @@ const AppContent = () => {
         backendType = "NORMAL";
       }
 
-      // ✅ FIXED: Send with encryption type to backend
+      // ✅ ✅ ✅ FIXED: Send with CORRECT encryption type mapping
       const result = await QuMailService.sendEmail(
         recipientEmail, 
         subject || '(No Subject)', 
         emailBody,
-        backendType  // Send encryption type to backend
+        backendType  // This will be mapped to "encryptionLevel" in sendEmail function
       );
       
       console.log('📤 Send result:', result);

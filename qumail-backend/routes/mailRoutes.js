@@ -1,5 +1,6 @@
 import express from "express";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import Mail from "../models/Mail.js";
 import {
   encryptAES,
@@ -16,12 +17,23 @@ const router = express.Router();
  * type = "AES" | "OTP" | "NORMAL"
  */
 router.post("/send", async (req, res) => {
-  try {
-    const { from, to, subject, message, type } = req.body;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    if (!from || !to || !subject || !message) {
+  try {
+    let { from, to, subject, message, type } = req.body;
+
+    // ✅ HARD VALIDATION
+    if (!from || !to || !message) {
+      await session.abortTransaction();
       return res.status(400).json({ error: "Missing required fields" });
     }
+
+    // ✅ NORMALIZE INPUT
+    from = from.trim().toLowerCase();
+    to = to.trim().toLowerCase();
+    subject = subject?.trim() || "(No Subject)";
+    message = message.trim();
 
     let body = message;
     let encryption = "NONE";
@@ -31,8 +43,8 @@ router.post("/send", async (req, res) => {
     // 🔐 AES (backend encryption)
     if (type === "AES") {
       encryption = "AES";
-      aesKey = generateAESKey(); // ✅ STRING
-      aesIV = generateAESIV();   // ✅ STRING
+      aesKey = generateAESKey(); // hex string
+      aesIV = generateAESIV();   // hex string
       body = encryptAES(message, aesKey, aesIV);
     }
 
@@ -41,51 +53,61 @@ router.post("/send", async (req, res) => {
       encryption = "OTP";
     }
 
-    // 📤 SENT
-    await Mail.create({
-      mailId: crypto.randomUUID(),
+    const baseData = {
       from,
       to,
       subject,
       body,
       encryption,
       aesKey,
-      aesIV,
+      aesIV
+    };
+
+    // 📤 SENT MAIL
+    await Mail.create([{
+      ...baseData,
+      mailId: crypto.randomUUID(),
       folder: "SENT",
       owner: from
-    });
+    }], { session });
 
-    // 📥 INBOX
-    await Mail.create({
+    // 📥 INBOX MAIL
+    await Mail.create([{
+      ...baseData,
       mailId: crypto.randomUUID(),
-      from,
-      to,
-      subject,
-      body,
-      encryption,
-      aesKey,
-      aesIV,
       folder: "INBOX",
       owner: to
+    }], { session });
+
+    await session.commitTransaction();
+
+    res.json({
+      success: true,
+      message: "Mail sent successfully"
     });
 
-    res.json({ success: true, message: "Mail sent successfully" });
-
   } catch (err) {
+    await session.abortTransaction();
     console.error("❌ Send mail error:", err);
-    res.status(500).json({ error: err.message });
+
+    res.status(500).json({
+      error: "Mail validation failed",
+      details: err.message
+    });
+  } finally {
+    session.endSession();
   }
 });
 
 /**
- * 📥 GET INBOX (persisted)
+ * 📥 GET INBOX
  */
 router.post("/inbox", async (req, res) => {
   try {
     const { email } = req.body;
 
     const mails = await Mail.find({
-      owner: email,
+      owner: email.toLowerCase(),
       folder: "INBOX"
     })
       .select("-aesKey -aesIV")
@@ -101,23 +123,27 @@ router.post("/inbox", async (req, res) => {
  * 📄 READ MAIL (decrypt safely)
  */
 router.get("/:mailId", async (req, res) => {
-  const mail = await Mail.findOne({ mailId: req.params.mailId });
-  if (!mail) return res.status(404).json({ error: "Mail not found" });
+  try {
+    const mail = await Mail.findOne({ mailId: req.params.mailId });
+    if (!mail) return res.status(404).json({ error: "Mail not found" });
 
-  const response = { ...mail._doc };
+    const response = { ...mail._doc };
 
-  if (response.encryption === "AES") {
-    response.body = decryptAES(
-      response.body,
-      response.aesKey,
-      response.aesIV
-    );
+    if (response.encryption === "AES") {
+      response.body = decryptAES(
+        response.body,
+        response.aesKey,
+        response.aesIV
+      );
+    }
+
+    delete response.aesKey;
+    delete response.aesIV;
+
+    res.json({ success: true, mail: response });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read mail" });
   }
-
-  delete response.aesKey;
-  delete response.aesIV;
-
-  res.json({ success: true, mail: response });
 });
 
 export default router;
