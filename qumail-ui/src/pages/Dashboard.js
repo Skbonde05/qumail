@@ -259,8 +259,9 @@ export default function Dashboard({
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const [activeNotificationTab, setActiveNotificationTab] = useState(0);
   
-  // Settings pages state
+  // Settings pages state - FIXED: Changed "app" to handle settings dialog
   const [activePage, setActivePage] = useState("inbox");
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false); // NEW: Control AppSettings dialog
   
   const ITEMS_PER_PAGE = 50;
 
@@ -1443,7 +1444,7 @@ export default function Dashboard({
     );
   };
 
-  // Handle opening settings pages
+  // Handle opening settings pages - FIXED: AppSettings is now a dialog
   const handleOpenAccountSettings = () => {
     handleMenuClose();
     setActivePage("account");
@@ -1460,12 +1461,12 @@ export default function Dashboard({
 
   const handleOpenAppSettings = () => {
     handleMenuClose();
-    setActivePage("app");
+    setAppSettingsOpen(true); // NEW: Open AppSettings dialog
     if (isMobile) setMobileOpen(false);
   };
 
-  // Render the current page
-  const renderCurrentPage = () => {
+  // FIXED: Render settings pages properly
+  const renderSettingsPage = () => {
     switch (activePage) {
       case "account":
         return (
@@ -1503,167 +1504,163 @@ export default function Dashboard({
             onBack={() => setActivePage("inbox")}
           />
         );
-      case "app":
-        return (
-          <AppSettings
-            darkMode={darkMode}
-            onToggleTheme={() => {
-              onToggleTheme();
-              addNotification({
-                type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
-                title: 'Theme Changed',
-                message: `Switched to ${darkMode ? 'light' : 'dark'} mode`,
-                priority: 'low'
-              });
-            }}
-            userEmail={userEmail}
-            onBack={() => setActivePage("inbox")}
-          />
-        );
-      case "inbox":
       default:
-        return selectedEmail ? (
-          <EmailViewer
-            email={selectedEmail}
-            onBack={() => setSelectedEmail(null)}
-            onStarToggle={(emailId, starred) => handleUpdateEmail(emailId, 'star', starred)}
-            onImportantToggle={(emailId, important) => handleUpdateEmail(emailId, 'important', important)}
-            onDelete={handleDeleteEmail}
-            onReply={(email) => {
-              setOpenCompose(true);
-              showSnackbar('Reply functionality coming soon', 'info');
-            }}
-            onForward={(email) => {
-              setOpenCompose(true);
-              showSnackbar('Forward functionality coming soon', 'info');
-            }}
-            onDecryptEmail={handleOpenDecryptModal}
-            isLoading={loading}
-          />
-        ) : (
-          <>
-            {/* Search Bar - Mobile */}
-            {isMobile && (
-              <Box sx={{ 
-                p: 2, 
-                borderBottom: '1px solid',
+        return null;
+    }
+  };
+
+  // Render inbox content
+  const renderInboxContent = () => {
+    return selectedEmail ? (
+      <EmailViewer
+        email={selectedEmail}
+        onBack={() => setSelectedEmail(null)}
+        onStarToggle={(emailId, starred) => handleUpdateEmail(emailId, 'star', starred)}
+        onImportantToggle={(emailId, important) => handleUpdateEmail(emailId, 'important', important)}
+        onDelete={handleDeleteEmail}
+        onReply={(email) => {
+          setOpenCompose(true);
+          showSnackbar('Reply functionality coming soon', 'info');
+        }}
+        onForward={(email) => {
+          setOpenCompose(true);
+          showSnackbar('Forward functionality coming soon', 'info');
+        }}
+        onDecryptEmail={handleOpenDecryptModal}
+        isLoading={loading}
+      />
+    ) : (
+      <>
+        {/* Search Bar - Mobile */}
+        {isMobile && (
+          <Box sx={{ 
+            p: 2, 
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.paper'
+          }}>
+            <StyledInputBase
+              placeholder="Search emails..."
+              value={searchQuery}
+              onChange={handleSearch}
+              fullWidth
+            />
+          </Box>
+        )}
+
+        {/* Stats Bar */}
+        <Box sx={{ 
+          p: 2, 
+          bgcolor: 'background.paper',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Showing
+              </Typography>
+              <Typography variant="h6" fontWeight="600" sx={{ color: 'text.primary' }}>
+                {currentEmails.length} of {folderCounts[activeSection] || 0}
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Unread
+              </Typography>
+              <Typography variant="h6" fontWeight="600" sx={{ color: 'primary.main' }}>
+                {currentEmails.filter(email => email && !email.read).length}
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Page
+              </Typography>
+              <Typography variant="h6" fontWeight="600" sx={{ color: 'success.main' }}>
+                {currentPage} / {totalPages || 1}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Quick Actions */}
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Refresh />}
+              onClick={handleRefresh}
+              disabled={loading}
+              sx={{ 
+                color: 'primary.main',
                 borderColor: 'divider',
-                bgcolor: 'background.paper'
-              }}>
-                <StyledInputBase
-                  placeholder="Search emails..."
-                  value={searchQuery}
-                  onChange={handleSearch}
-                  fullWidth
-                />
-              </Box>
-            )}
+                '&:hover': {
+                  borderColor: 'primary.main'
+                }
+              }}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => setOpenCompose(true)}
+              sx={{ 
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                '&:hover': {
+                  bgcolor: 'primary.dark'
+                }
+              }}
+            >
+              Compose
+            </Button>
+          </Box>
+        </Box>
 
-            {/* Stats Bar */}
-            <Box sx={{ 
-              p: 2, 
-              bgcolor: 'background.paper',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 2
-            }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Showing
-                  </Typography>
-                  <Typography variant="h6" fontWeight="600" sx={{ color: 'text.primary' }}>
-                    {currentEmails.length} of {folderCounts[activeSection] || 0}
-                  </Typography>
-                </Box>
-                
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Unread
-                  </Typography>
-                  <Typography variant="h6" fontWeight="600" sx={{ color: 'primary.main' }}>
-                    {currentEmails.filter(email => email && !email.read).length}
-                  </Typography>
-                </Box>
-                
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Page
-                  </Typography>
-                  <Typography variant="h6" fontWeight="600" sx={{ color: 'success.main' }}>
-                    {currentPage} / {totalPages || 1}
-                  </Typography>
-                </Box>
-              </Box>
+        {/* Inbox Component */}
+        <Box sx={{ flex: 1, overflow: 'hidden' }}>
+          <Inbox
+            emails={currentEmails}
+            activeFolder={activeSection}
+            onFolderChange={handleFolderChange}
+            userEmail={userEmail}
+            onCompose={() => setOpenCompose(true)}
+            onRefresh={handleRefresh}
+            onUpdateEmail={handleUpdateEmail}
+            onBulkAction={handleBulkActionWrapper}
+            onMoveEmails={handleMoveEmails}
+            loading={loading}
+            onGetEmailBody={onGetEmailBody}
+            onDecryptEmail={handleOpenDecryptModal}
+            determineSecurityLevel={determineSecurityLevel}
+            generatePreview={generatePreview}
+            formatDate={formatDate}
+            onSaveDraft={onSaveDraft}
+            onDeleteDraft={onDeleteDraft}
+            onSelectEmail={setSelectedEmail}
+            emailRowComponent={EmailRow}
+          />
+        </Box>
 
-              {/* Quick Actions */}
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<Refresh />}
-                  onClick={handleRefresh}
-                  disabled={loading}
-                  sx={{ 
-                    color: 'primary.main',
-                    borderColor: 'divider',
-                    '&:hover': {
-                      borderColor: 'primary.main'
-                    }
-                  }}
-                >
-                  Refresh
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => setOpenCompose(true)}
-                  sx={{ 
-                    bgcolor: 'primary.main',
-                    color: 'primary.contrastText',
-                    '&:hover': {
-                      bgcolor: 'primary.dark'
-                    }
-                  }}
-                >
-                  Compose
-                </Button>
-              </Box>
-            </Box>
+        {/* Pagination Controls */}
+        {renderPagination()}
+      </>
+    );
+  };
 
-            {/* Inbox Component */}
-            <Box sx={{ flex: 1, overflow: 'hidden' }}>
-              <Inbox
-                emails={currentEmails}
-                activeFolder={activeSection}
-                onFolderChange={handleFolderChange}
-                userEmail={userEmail}
-                onCompose={() => setOpenCompose(true)}
-                onRefresh={handleRefresh}
-                onUpdateEmail={handleUpdateEmail}
-                onBulkAction={handleBulkActionWrapper}
-                onMoveEmails={handleMoveEmails}
-                loading={loading}
-                onGetEmailBody={onGetEmailBody}
-                onDecryptEmail={handleOpenDecryptModal}
-                determineSecurityLevel={determineSecurityLevel}
-                generatePreview={generatePreview}
-                formatDate={formatDate}
-                onSaveDraft={onSaveDraft}
-                onDeleteDraft={onDeleteDraft}
-                onSelectEmail={setSelectedEmail}
-                emailRowComponent={EmailRow}
-              />
-            </Box>
-
-            {/* Pagination Controls */}
-            {renderPagination()}
-          </>
-        );
+  // Render the current page
+  const renderCurrentPage = () => {
+    if (activePage === "inbox") {
+      return renderInboxContent();
+    } else {
+      return renderSettingsPage();
     }
   };
 
@@ -1673,14 +1670,12 @@ export default function Dashboard({
     
     const pageTitles = {
       "account": "Account Settings",
-      "security": "Security Settings", 
-      "app": "App Settings"
+      "security": "Security Settings"
     };
     
     const pageIcons = {
       "account": <Person />,
-      "security": <Security />,
-      "app": <Settings />
+      "security": <Security />
     };
     
     return (
@@ -2044,16 +2039,33 @@ export default function Dashboard({
         darkMode={darkMode}
       />
 
-      {/* Decrypt Modal - FIXED: Changed onSubmit to onDecrypt */}
+      {/* Decrypt Modal */}
       <DecryptModal
         open={decryptModalOpen}
         onClose={() => {
           setDecryptModalOpen(false);
           setEmailToDecrypt(null);
         }}
-        onDecrypt={handleDecryptModalSubmit} // Changed from onSubmit to onDecrypt
+        onDecrypt={handleDecryptModalSubmit}
         email={emailToDecrypt}
         loading={loading}
+      />
+
+      {/* App Settings Dialog - NEW: Added proper AppSettings dialog */}
+      <AppSettings
+        open={appSettingsOpen}
+        onClose={() => setAppSettingsOpen(false)}
+        darkMode={darkMode}
+        onToggleTheme={() => {
+          onToggleTheme();
+          addNotification({
+            type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
+            title: 'Theme Changed',
+            message: `Switched to ${darkMode ? 'light' : 'dark'} mode`,
+            priority: 'low'
+          });
+        }}
+        userEmail={userEmail}
       />
 
       {/* All Notifications Dialog */}

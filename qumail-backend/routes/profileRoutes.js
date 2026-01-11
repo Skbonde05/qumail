@@ -23,8 +23,8 @@ router.get("/", authMiddleware, async (req, res) => {
         lastLogin: user.lastLogin,
         role: "user",
         isVerified: true,
-        storageUsed: user.storageUsed || 0,
-        storageLimit: user.storageLimit || 15 * 1024 * 1024 * 1024,
+        storageUsed: user.storageUsed,
+        storageLimit: user.storageLimit,
         settings: user.settings || {
           emailNotifications: true,
           autoSaveDrafts: true,
