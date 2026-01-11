@@ -2,6 +2,7 @@
 
 // Load environment variables from .env file
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
@@ -12,6 +13,7 @@ const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const multer = require('multer');
 
 const app = express();
 
@@ -23,17 +25,21 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// =============== CRITICAL: INCREASE PAYLOAD LIMIT ===============
+app.use(express.json({ limit: '10mb' }));  // Increase from default 100kb to 10MB
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// ================================================================
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'qumail-quantum-secure-key-2024';
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
 // Validate environment variables
 console.log('🔧 Environment Configuration:');
 console.log(`   PORT: ${PORT}`);
 console.log(`   JWT_SECRET: ${JWT_SECRET ? '✓ Set' : '✗ Using default (insecure for production!)'}`);
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`   BASE_URL: ${BASE_URL}`);
 
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
   console.error('⚠️  WARNING: JWT_SECRET not set in production environment!');
@@ -43,7 +49,10 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
 // ================== MONGODB CONNECTION ==================
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/qumail';
 
-mongoose.connect(MONGODB_URI)
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
   .then(() => {
     console.log('✅ MongoDB connected successfully');
   })
@@ -73,9 +82,60 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  avatar: {
+    type: String,
+    default: ''
+  },
+  settings: {
+    emailNotifications: {
+      type: Boolean,
+      default: true
+    },
+    autoSaveDrafts: {
+      type: Boolean,
+      default: true
+    },
+    signature: {
+      type: String,
+      default: ''
+    },
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false
+    },
+    language: {
+      type: String,
+      default: 'en'
+    },
+    timezone: {
+      type: String,
+      default: 'UTC'
+    }
+  },
   encryptionKeys: {
     otp: { type: String, default: null },
     aes256: { type: String, default: null }
+  },
+  storageUsed: {
+    type: Number,
+    default: 0
+  },
+  storageLimit: {
+    type: Number,
+    default: 10 * 1024 * 1024 * 1024 // 10GB
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'moderator'],
+    default: 'user'
+  },
+  lastLogin: {
+    type: Date,
+    default: null
   },
   createdAt: {
     type: Date,
@@ -94,7 +154,7 @@ userSchema.pre('save', function(next) {
 
 const User = mongoose.model('User', userSchema);
 
-// Mail Schema (from your Mail.js - updated to match)
+// Mail Schema
 const mailSchema = new mongoose.Schema({
   mailId: {
     type: String,
@@ -178,11 +238,13 @@ const validateQumailEmail = (email) => {
 };
 
 // Generate JWT token
-const generateToken = (email, name) => {
+const generateToken = (user) => {
   return jwt.sign(
     { 
-      email: email,
-      name: name,
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
       timestamp: Date.now(),
       type: 'qumail'
     },
@@ -374,10 +436,69 @@ const decryptAES = (encryptedText, key, iv) => {
   }
 };
 
+// ================== FILE UPLOAD CONFIGURATION ==================
+const createUploadsDirectory = () => {
+  const uploadsDir = path.join(__dirname, 'uploads');
+  const avatarsDir = path.join(__dirname, 'uploads/avatars');
+  
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log(`📁 Created uploads directory: ${uploadsDir}`);
+  }
+  
+  if (!fs.existsSync(avatarsDir)) {
+    fs.mkdirSync(avatarsDir, { recursive: true });
+    console.log(`📁 Created avatars directory: ${avatarsDir}`);
+  }
+};
+
+createUploadsDirectory();
+
+// Configure multer for avatar uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, 'uploads/avatars');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const safeEmail = req.user.email.replace(/[@.]/g, '-').toLowerCase();
+    const extension = path.extname(file.originalname).toLowerCase();
+    cb(null, safeEmail + '-' + uniqueSuffix + extension);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (extname && mimetype) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files (jpeg, jpg, png, gif, webp) are allowed'));
+    }
+  }
+});
+
+// Function to get full avatar URL
+const getAvatarUrl = (filename) => {
+  if (!filename) return '';
+  return `${BASE_URL}/uploads/avatars/${filename}`;
+};
+
 // ================== ROUTES ==================
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   const dbStatus = isMongoConnected() ? 'connected' : 'disconnected';
   
   res.json({
@@ -402,10 +523,11 @@ app.get('/', (req, res) => {
     platform: 'Independent Secure Network',
     environment: process.env.NODE_ENV || 'development',
     database: dbStatus,
+    baseUrl: BASE_URL,
     endpoints: {
       auth: ['POST /api/register', 'POST /api/login', 'POST /api/logout', 'POST /api/verify-token'],
-      email: ['POST /api/send', 'POST /api/mail/inbox', 'POST /api/mail/sent', 'GET /api/mail/:mailId'],
-      user: ['GET /api/profile']
+      email: ['POST /api/send', 'POST /api/mail/inbox', 'POST /api/mail/sent', 'GET /api/mail/:mailId', 'POST /api/decrypt'],
+      user: ['GET /api/profile', 'PUT /api/profile', 'POST /api/change-password', 'POST /api/upload-avatar', 'DELETE /api/avatar']
     }
   });
 });
@@ -463,19 +585,20 @@ app.post('/api/register',
       });
       
       // Generate token
-      const token = generateToken(lowerEmail, name);
+      const token = generateToken(user);
       
       console.log(`✅ User registered: ${lowerEmail} (${name})`);
-      console.log(`   OTP Key: ${otpKey.substring(0, 32)}...`);
-      console.log(`   AES Key: ${aesKey.substring(0, 32)}...`);
       
       res.status(201).json({
         success: true,
         message: 'Welcome to QuMail Quantum-Secure Email Platform!',
         user: {
+          id: user._id,
           name: user.name,
           email: user.email,
-          createdAt: user.createdAt
+          avatar: user.avatar,
+          createdAt: user.createdAt,
+          settings: user.settings
         },
         token: token
       });
@@ -531,11 +654,11 @@ app.post('/api/login',
       }
       
       // Update last login
-      user.updatedAt = new Date();
+      user.lastLogin = new Date();
       await user.save();
       
       // Generate token
-      const token = generateToken(lowerEmail, user.name);
+      const token = generateToken(user);
       
       console.log(`✅ Login successful: ${lowerEmail}`);
       
@@ -549,9 +672,17 @@ app.post('/api/login',
         success: true,
         message: `Welcome back to QuMail, ${user.name}!`,
         user: {
+          id: user._id,
           name: user.name,
           email: user.email,
-          createdAt: user.createdAt
+          avatar: user.avatar,
+          settings: user.settings,
+          storageUsed: user.storageUsed,
+          storageLimit: user.storageLimit,
+          isVerified: user.isVerified,
+          role: user.role,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin
         },
         token: token,
         folderCounts: {
@@ -585,23 +716,33 @@ app.post('/api/verify-token', verifyToken, async (req, res) => {
     }
     
     // Get email counts
-    const [inboxCount, sentCount] = await Promise.all([
+    const [inboxCount, sentCount, trashCount] = await Promise.all([
       Mail.countDocuments({ owner: req.user.email, folder: 'INBOX', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, folder: 'SENT', trash: false })
+      Mail.countDocuments({ owner: req.user.email, folder: 'SENT', trash: false }),
+      Mail.countDocuments({ owner: req.user.email, trash: true })
     ]);
     
     res.json({
       success: true,
       valid: true,
       user: {
-        email: req.user.email,
-        name: req.user.name
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        settings: user.settings,
+        storageUsed: user.storageUsed,
+        storageLimit: user.storageLimit,
+        isVerified: user.isVerified,
+        role: user.role,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin
       },
       folderCounts: {
         inbox: inboxCount,
         sent: sentCount,
         drafts: 0,
-        trash: 0
+        trash: trashCount
       }
     });
   } catch (error) {
@@ -612,6 +753,8 @@ app.post('/api/verify-token', verifyToken, async (req, res) => {
     });
   }
 });
+
+// ================== PROFILE ROUTES ==================
 
 // ------------------ GET USER PROFILE ------------------
 app.get('/api/profile', verifyToken, async (req, res) => {
@@ -631,12 +774,26 @@ app.get('/api/profile', verifyToken, async (req, res) => {
       Mail.countDocuments({ owner: req.user.email, trash: true })
     ]);
     
+    // Calculate storage percentage
+    const storagePercentage = user.storageLimit > 0 
+      ? (user.storageUsed / user.storageLimit) * 100 
+      : 0;
+    
     res.json({
       success: true,
       user: {
+        id: user._id,
         name: user.name,
         email: user.email,
+        avatar: user.avatar,
+        settings: user.settings,
+        storageUsed: user.storageUsed,
+        storageLimit: user.storageLimit,
+        storagePercentage: storagePercentage,
+        isVerified: user.isVerified,
+        role: user.role,
         createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
         updatedAt: user.updatedAt
       },
       encryption: {
@@ -660,7 +817,257 @@ app.get('/api/profile', verifyToken, async (req, res) => {
   }
 });
 
-// ------------------ SEND EMAIL (MAIN FIXED ENDPOINT) ------------------
+// ------------------ UPDATE USER PROFILE ------------------
+app.put('/api/profile', 
+  [
+    verifyToken,
+    body('name').optional().trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters'),
+    body('settings.emailNotifications').optional().isBoolean().withMessage('Email notifications must be boolean'),
+    body('settings.autoSaveDrafts').optional().isBoolean().withMessage('Auto-save drafts must be boolean'),
+    body('settings.signature').optional().trim().isLength({ max: 1000 }).withMessage('Signature too long'),
+    body('settings.twoFactorEnabled').optional().isBoolean().withMessage('Two-factor enabled must be boolean'),
+    body('settings.timezone').optional().isIn(['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Asia/Kolkata']).withMessage('Invalid timezone')
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+      
+      const { name, settings } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`📝 Updating profile for: ${userEmail}`);
+      
+      // Find user
+      const user = await User.findOne({ email: userEmail });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      // Update fields
+      const updates = {};
+      if (name) {
+        updates.name = name.trim();
+      }
+      
+      if (settings) {
+        updates.settings = {
+          ...user.settings,
+          ...settings
+        };
+      }
+      
+      // Apply updates
+      Object.assign(user, updates);
+      await user.save();
+      
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          settings: user.settings,
+          storageUsed: user.storageUsed,
+          storageLimit: user.storageLimit,
+          isVerified: user.isVerified,
+          role: user.role,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin,
+          updatedAt: user.updatedAt
+        }
+      });
+      
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update profile'
+      });
+    }
+  }
+);
+
+// ------------------ CHANGE PASSWORD ------------------
+app.post('/api/change-password',
+  [
+    verifyToken,
+    body('currentPassword').notEmpty().withMessage('Current password is required'),
+    body('newPassword').isLength({ min: 12 }).withMessage('New password must be at least 12 characters'),
+    body('confirmPassword').custom((value, { req }) => value === req.body.newPassword).withMessage('Passwords do not match')
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+      
+      const { currentPassword, newPassword } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`🔐 Changing password for: ${userEmail}`);
+      
+      // Find user
+      const user = await User.findOne({ email: userEmail });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({
+          success: false,
+          message: 'Current password is incorrect'
+        });
+      }
+      
+      // Hash new password
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+      
+      // Update password
+      user.password = hashedPassword;
+      await user.save();
+      
+      // Generate new token with updated info
+      const token = generateToken(user);
+      
+      res.json({
+        success: true,
+        message: 'Password changed successfully',
+        token: token
+      });
+      
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to change password'
+      });
+    }
+  }
+);
+
+// ------------------ UPLOAD AVATAR (CORRECTED) ------------------
+app.post('/api/upload-avatar', 
+  verifyToken,
+  async (req, res) => {
+    try {
+      const { avatar } = req.body;
+      
+      if (!avatar) {
+        return res.status(400).json({
+          success: false,
+          message: 'Avatar data is required'
+        });
+      }
+      
+      const userEmail = req.user.email;
+      
+      console.log(`📷 Uploading avatar for: ${userEmail}`);
+      console.log(`   Avatar data length: ${avatar.length} characters`);
+      
+      // Find user
+      const user = await User.findOne({ email: userEmail });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      // Store Base64 avatar in MongoDB
+      user.avatar = avatar;
+      await user.save();
+      
+      console.log(`✅ Avatar stored in MongoDB for: ${userEmail}`);
+      
+      res.json({
+        success: true,
+        message: 'Avatar uploaded successfully',
+        avatar: user.avatar,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar
+        }
+      });
+      
+    } catch (error) {
+      console.error('Upload avatar error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to upload avatar'
+      });
+    }
+  }
+);
+
+// Serve uploaded files statically
+app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
+
+// ------------------ DELETE AVATAR ------------------
+app.delete('/api/avatar', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    console.log(`🗑️  Deleting avatar for: ${userEmail}`);
+    
+    // Find user
+    const user = await User.findOne({ email: userEmail });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Clear avatar field in database
+    user.avatar = '';
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'Avatar deleted successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar
+      }
+    });
+    
+  } catch (error) {
+    console.error('Delete avatar error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete avatar'
+    });
+  }
+});
+
+// ------------------ SEND EMAIL ------------------
 app.post('/api/send', 
   [
     verifyToken,
@@ -715,7 +1122,7 @@ app.post('/api/send',
             const otpKey = generateOTPKey(textLength);
             encryptedBody = otpEncrypt(body, otpKey);
             
-            // Store OTP key in sender's encryption keys (in real system, this would be sent securely)
+            // Store OTP key in sender's encryption keys
             await User.findOneAndUpdate(
               { email: from },
               { $set: { "encryptionKeys.otp": otpKey } },
@@ -996,15 +1403,18 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
       encrypted: mail.encryption !== 'NONE',
       encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 
                      mail.encryption === 'OTP' ? 'otp' : 'none',
-      requiresDecryption: mail.encryption !== 'NONE'
+      requiresDecryption: mail.encryption !== 'NONE',
+      aesKey: mail.aesKey,
+      aesIV: mail.aesIV
     };
     
-    // If encrypted with AES, decrypt it
+    // If encrypted with AES and keys exist, decrypt it automatically
     if (mail.encryption === 'AES' && mail.aesKey && mail.aesIV) {
       try {
         const decryptedBody = decryptAES(mail.body, mail.aesKey, mail.aesIV);
         response.body = decryptedBody;
         response.decrypted = true;
+        response.requiresDecryption = false;
       } catch (decryptError) {
         console.error('AES decryption error:', decryptError);
         response.decryptionError = 'Failed to decrypt AES email';
@@ -1025,6 +1435,197 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
     });
   }
 });
+
+// ------------------ DECRYPT EMAIL ------------------
+app.post('/api/decrypt', 
+  [
+    verifyToken,
+    body('emailId').notEmpty().withMessage('Email ID is required')
+  ],
+  async (req, res) => {
+    try {
+      const { emailId, encryptionKey } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`🔓 Decrypt request for email: ${emailId} by user: ${userEmail}`);
+      
+      // Find the email in MongoDB
+      const mail = await Mail.findOne({ 
+        mailId: emailId,
+        owner: userEmail 
+      });
+      
+      if (!mail) {
+        return res.status(404).json({
+          success: false,
+          message: 'Email not found'
+        });
+      }
+      
+      // Check if email is encrypted
+      if (mail.encryption === 'NONE') {
+        return res.json({
+          success: true,
+          decrypted: mail.body,
+          encryptionLevel: 'none',
+          alreadyDecrypted: true
+        });
+      }
+      
+      let decryptedBody;
+      
+      // Handle decryption based on encryption type
+      if (mail.encryption === 'AES') {
+        if (!mail.aesKey || !mail.aesIV) {
+          return res.status(400).json({
+            success: false,
+            message: 'AES key or IV missing from email record'
+          });
+        }
+        
+        try {
+          // Decrypt AES
+          decryptedBody = decryptAES(mail.body, mail.aesKey, mail.aesIV);
+          console.log(`✅ AES decryption successful for email: ${emailId}`);
+        } catch (decryptError) {
+          console.error('AES decryption error:', decryptError);
+          return res.status(500).json({
+            success: false,
+            message: 'AES decryption failed. The email may be corrupted.'
+          });
+        }
+      } 
+      else if (mail.encryption === 'OTP') {
+        // For OTP, require encryption key
+        if (!encryptionKey) {
+          return res.status(400).json({
+            success: false,
+            message: 'OTP key is required for decryption'
+          });
+        }
+        
+        try {
+          // Validate OTP key format
+          if (!isValidHexKey(encryptionKey)) {
+            return res.status(400).json({
+              success: false,
+              message: 'Invalid OTP key format. Must be hexadecimal.'
+            });
+          }
+          
+          // Decrypt OTP
+          decryptedBody = otpDecrypt(mail.body, encryptionKey);
+          console.log(`✅ OTP decryption successful for email: ${emailId}`);
+        } catch (decryptError) {
+          console.error('OTP decryption error:', decryptError);
+          return res.status(400).json({
+            success: false,
+            message: 'OTP decryption failed. Make sure the key is correct.'
+          });
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Unsupported encryption type'
+        });
+      }
+      
+      // Update mail to mark as read
+      if (!mail.read) {
+        mail.read = true;
+        await mail.save();
+      }
+      
+      res.json({
+        success: true,
+        decrypted: decryptedBody,
+        encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 'otp',
+        decryptedAt: new Date().toISOString(),
+        emailId: mail.mailId
+      });
+      
+    } catch (error) {
+      console.error('Decrypt email error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to decrypt email: ' + error.message
+      });
+    }
+  }
+);
+
+// ------------------ UPDATE EMAIL STATUS (STAR, IMPORTANT, DELETE) ------------------
+app.put('/api/mail/:mailId/status', 
+  [
+    verifyToken,
+    body('action').isIn(['star', 'unstar', 'important', 'unimportant', 'delete', 'restore']).withMessage('Invalid action'),
+  ],
+  async (req, res) => {
+    try {
+      const { mailId } = req.params;
+      const { action } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`⚡ Updating status for email: ${mailId}, action: ${action}`);
+      
+      const mail = await Mail.findOne({ 
+        mailId: mailId,
+        owner: userEmail 
+      });
+      
+      if (!mail) {
+        return res.status(404).json({
+          success: false,
+          message: 'Email not found'
+        });
+      }
+      
+      let update = {};
+      
+      switch (action) {
+        case 'star':
+          update.starred = true;
+          break;
+        case 'unstar':
+          update.starred = false;
+          break;
+        case 'important':
+          update.important = true;
+          break;
+        case 'unimportant':
+          update.important = false;
+          break;
+        case 'delete':
+          update.trash = true;
+          break;
+        case 'restore':
+          update.trash = false;
+          break;
+      }
+      
+      mail.set(update);
+      await mail.save();
+      
+      res.json({
+        success: true,
+        message: `Email ${action.replace('un', '')}ed successfully`,
+        email: {
+          id: mail.mailId,
+          starred: mail.starred,
+          important: mail.important,
+          trash: mail.trash
+        }
+      });
+      
+    } catch (error) {
+      console.error('Update email status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update email status'
+      });
+    }
+  }
+);
 
 // ------------------ LOGOUT ------------------
 app.post('/api/logout', verifyToken, (req, res) => {
@@ -1066,10 +1667,23 @@ app.post('/api/seed-test-data', async (req, res) => {
         name: 'Test User',
         email: testUser,
         password: hashedPassword,
+        settings: {
+          emailNotifications: true,
+          autoSaveDrafts: true,
+          signature: 'Best regards,\nTest User',
+          twoFactorEnabled: false,
+          language: 'en',
+          timezone: 'UTC'
+        },
         encryptionKeys: {
           otp: otpKey,
           aes256: aesKey
-        }
+        },
+        storageUsed: 250 * 1024 * 1024, // 250MB
+        storageLimit: 10 * 1024 * 1024 * 1024, // 10GB
+        isVerified: true,
+        role: 'user',
+        lastLogin: new Date()
       });
       
       console.log(`✅ Test user created: ${testUser}`);
@@ -1085,7 +1699,7 @@ app.post('/api/seed-test-data', async (req, res) => {
     for (let i = 1; i <= 10; i++) {
       const fromEmail = `sender${i}@qumail.com`;
       const mailId = uuidv4();
-      const body = `This is test email ${i} content. Welcome to QuMail!`;
+      const body = `This is test email ${i} content. Welcome to QuMail!\n\nThis email contains test content to demonstrate the QuMail platform features. You can reply, forward, or delete this email.\n\nRegards,\nSender ${i}`;
       
       // Create sender account if not exists
       await User.findOneAndUpdate(
@@ -1093,6 +1707,14 @@ app.post('/api/seed-test-data', async (req, res) => {
         {
           name: `Sender ${i}`,
           password: await bcrypt.hash('TestPassword123!', 12),
+          settings: {
+            emailNotifications: true,
+            autoSaveDrafts: true,
+            signature: '',
+            twoFactorEnabled: false,
+            language: 'en',
+            timezone: 'UTC'
+          },
           encryptionKeys: {
             otp: generateOTPKey(256),
             aes256: generateAESKey()
@@ -1101,16 +1723,33 @@ app.post('/api/seed-test-data', async (req, res) => {
         { upsert: true }
       );
       
+      const isEncrypted = i % 3 === 0;
+      const isAES = i % 2 === 0;
+      let encryptedBody = body;
+      let aesKey = null;
+      let aesIV = null;
+      
+      if (isEncrypted && isAES) {
+        // Create AES encrypted email
+        aesKey = generateAESKey();
+        aesIV = generateAESIV();
+        encryptedBody = encryptAES(body, aesKey, aesIV);
+      } else if (isEncrypted) {
+        // Create OTP encrypted email
+        const otpKey = generateOTPKey(body.length);
+        encryptedBody = otpEncrypt(body, otpKey);
+      }
+      
       // Add to test user's inbox
       testEmails.push({
         mailId: uuidv4(),
         from: fromEmail,
         to: testUser,
-        subject: i % 3 === 0 ? `🔒 Encrypted Test Email ${i}` : `Test Email ${i}`,
-        body: i % 3 === 0 ? 'ENCRYPTED_CONTENT_PLACEHOLDER' : body,
-        encryption: i % 3 === 0 ? (i % 2 === 0 ? 'AES' : 'OTP') : 'NONE',
-        aesKey: i % 3 === 0 && i % 2 === 0 ? generateAESKey() : null,
-        aesIV: i % 3 === 0 && i % 2 === 0 ? generateAESIV() : null,
+        subject: isEncrypted ? `🔒 Encrypted Test Email ${i}` : `Test Email ${i}`,
+        body: encryptedBody,
+        encryption: isEncrypted ? (isAES ? 'AES' : 'OTP') : 'NONE',
+        aesKey: aesKey,
+        aesIV: aesIV,
         folder: 'INBOX',
         owner: testUser,
         read: i % 2 === 0,
@@ -1129,7 +1768,7 @@ app.post('/api/seed-test-data', async (req, res) => {
         from: testUser,
         to: toEmail,
         subject: `Sent Test Email ${i}`,
-        body: `This is a sent test email ${i}`,
+        body: `This is a sent test email ${i} from the QuMail platform.\n\nThis demonstrates how sent emails appear in your sent folder.\n\nBest regards,\nTest User`,
         encryption: 'NONE',
         folder: 'SENT',
         owner: testUser,
@@ -1191,14 +1830,21 @@ const server = app.listen(PORT, () => {
   console.log(`🔐 Security: End-to-End Quantum-Resistant Encryption`);
   console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Database: ${dbStatus}`);
+  console.log(`📁 Upload Directory: ${path.join(__dirname, 'uploads')}`);
   console.log(`\n📋 Available Endpoints:`);
   console.log(`   POST /api/register              - Register new user`);
   console.log(`   POST /api/login                 - Login`);
-  console.log(`   POST /api/send                  - Send email (supports OTP/AES/none)`);
+  console.log(`   GET  /api/profile              - Get user profile`);
+  console.log(`   PUT  /api/profile              - Update user profile`);
+  console.log(`   POST /api/change-password      - Change password`);
+  console.log(`   POST /api/upload-avatar        - Upload avatar (Base64)`);
+  console.log(`   DELETE /api/avatar             - Delete avatar`);
+  console.log(`   POST /api/send                 - Send email (supports OTP/AES/none)`);
   console.log(`   POST /api/mail/inbox           - Get inbox emails`);
   console.log(`   POST /api/mail/sent            - Get sent emails`);
   console.log(`   GET  /api/mail/:mailId         - Get single email`);
-  console.log(`   GET  /api/profile              - Get user profile`);
+  console.log(`   POST /api/decrypt              - Decrypt encrypted email`);
+  console.log(`   PUT  /api/mail/:mailId/status  - Update email status`);
   console.log(`   POST /api/verify-token         - Verify JWT token`);
   console.log(`\n🔐 Encryption Support:`);
   console.log(`   • Standard Email (no encryption)`);

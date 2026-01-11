@@ -1,4 +1,4 @@
-// src/pages/Dashboard.js
+// src/pages/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
@@ -71,6 +71,9 @@ import Compose from "../components/Compose";
 import AppSettings from "../components/AppSettings";
 import AccountSettings from "../components/AccountSettings";
 import SecuritySettings from "../components/SecuritySettings";
+import EmailViewer from '../components/EmailViewer';
+import EmailRow from '../components/EmailRow';
+import DecryptModal from '../components/DecryptModal';
 
 // Search bar component
 const SearchBar = styled('div')(({ theme }) => ({
@@ -130,7 +133,7 @@ const NOTIFICATION_TYPES = {
   QUANTUM_SECURITY_ACTIVATED: 'quantum_security_activated'
 };
 
-// Notification Icons - FIXED: Return icon names/components, not JSX directly
+// Notification Icons
 const NOTIFICATION_ICONS = {
   [NOTIFICATION_TYPES.NEW_EMAIL]: 'Mail',
   [NOTIFICATION_TYPES.ENCRYPTION_SUCCESS]: 'Lock',
@@ -245,6 +248,9 @@ export default function Dashboard({
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalEmailsCount, setTotalEmailsCount] = useState(0);
   const [hasMoreEmails, setHasMoreEmails] = useState(true);
+  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [decryptModalOpen, setDecryptModalOpen] = useState(false);
+  const [emailToDecrypt, setEmailToDecrypt] = useState(null);
   
   // NEW: Notifications State
   const [notifications, setNotifications] = useState([]);
@@ -322,14 +328,13 @@ export default function Dashboard({
         read: false,
         action: notification.action || null,
         priority: notification.priority || 'medium',
-        icon: iconName, // Store icon name, not JSX
+        icon: iconName,
         color: notification.color || NOTIFICATION_COLORS[notification.type] || 'info'
       };
 
-      setNotifications(prev => [newNotification, ...prev].slice(0, 100)); // Keep last 100 notifications
+      setNotifications(prev => [newNotification, ...prev].slice(0, 100));
       updateUnreadCount([newNotification, ...notifications]);
       
-      // Show snackbar for important notifications
       if (notification.priority === 'high') {
         showSnackbar(`${notification.title}: ${notification.message}`, 'info');
       }
@@ -490,7 +495,6 @@ export default function Dashboard({
     const allEmails = emails || [];
     
     return {
-      // Inbox: emails that are not archived, not in trash, not spam, not sent, not draft
       inbox: allEmails.filter(email => 
         email && 
         !email.archived && 
@@ -500,34 +504,26 @@ export default function Dashboard({
         !email.draft
       ).length,
       
-      // Starred: emails marked as starred in localStorage OR have starred: true
       starred: allEmails.filter(email => 
         email && (starredEmails.includes(email.uid) || email.starred)
       ).length,
       
-      // Important: emails marked as important in localStorage OR have important: true
       important: allEmails.filter(email => 
         email && (importantEmails.includes(email.uid) || email.important)
       ).length,
       
-      // Snoozed: emails marked as snoozed in localStorage OR have snoozed: true
       snoozed: allEmails.filter(email => 
         email && (snoozedEmails.includes(email.uid) || email.snoozed)
       ).length,
       
-      // Sent: emails with sent: true flag
       sent: allEmails.filter(email => email && email.sent).length,
       
-      // Drafts: emails with draft: true flag
       drafts: allEmails.filter(email => email && email.draft).length,
       
-      // Archive: emails with archived: true flag
       archive: allEmails.filter(email => email && email.archived).length,
       
-      // Trash: emails with trash: true flag
       trash: allEmails.filter(email => email && email.trash).length,
       
-      // Spam: emails with spam: true flag
       spam: allEmails.filter(email => email && email.spam).length
     };
   }, [emails, starredEmails, importantEmails, snoozedEmails]);
@@ -588,7 +584,7 @@ export default function Dashboard({
         break;
     }
     
-    // Apply search filter if search query exists
+    // Apply search filter
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(email => {
@@ -602,7 +598,7 @@ export default function Dashboard({
       });
     }
     
-    // Sort by date (newest first)
+    // Sort by date
     filtered.sort((a, b) => {
       try {
         const dateA = new Date(a.date || a.timestamp || 0);
@@ -613,15 +609,12 @@ export default function Dashboard({
       }
     });
     
-    // Calculate pagination
     const total = filtered.length;
     setTotalEmailsCount(total);
     
-    // Calculate start and end indices for current page
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, total);
     
-    // Get emails for current page
     const paginatedEmails = filtered.slice(startIndex, endIndex);
     
     setCurrentEmails(paginatedEmails);
@@ -654,7 +647,6 @@ export default function Dashboard({
         showSnackbar("Inbox refreshed", "success");
         setCurrentPage(1);
         
-        // Add notification for refresh
         addNotification({
           type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
           title: 'Inbox Refreshed',
@@ -674,7 +666,6 @@ export default function Dashboard({
       showSnackbar("Email sent successfully!", "success");
       setOpenCompose(false);
       
-      // Create notification for sent email
       const emailData = { to, subject, encryptionLevel: level };
       createEmailNotification(emailData, 'sent');
       
@@ -794,15 +785,123 @@ export default function Dashboard({
     }
   };
 
+  const handleGetEmailBody = async (uid, folder = 'inbox') => {
+    const email = emails.find(e => e.uid === uid);
+    if (email && email.body) {
+      return email.body;
+    }
+    
+    try {
+      if (onGetEmailBody) {
+        return await onGetEmailBody(uid, folder);
+      }
+    } catch (error) {
+      console.error('Error fetching email body:', error);
+    }
+    
+    return '';
+  };
+
+  const handleDecryptEmailWrapper = async (emailId, encryptionKey = null) => {
+    try {
+      if (onDecryptEmail) {
+        const result = await onDecryptEmail(emailId, encryptionKey);
+        
+        // Update the selected email if it's currently being viewed
+        if (selectedEmail && selectedEmail.uid === emailId) {
+          setSelectedEmail(prev => ({
+            ...prev,
+            body: result.decrypted || result.body,
+            requiresDecryption: false,
+            decrypted: true
+          }));
+        }
+        
+        // Update current emails list
+        setCurrentEmails(prev => prev.map(email => 
+          email.uid === emailId ? { 
+            ...email, 
+            body: result.decrypted || result.body,
+            requiresDecryption: false,
+            decrypted: true
+          } : email
+        ));
+        
+        showSnackbar('Email decrypted successfully', 'success');
+        return result;
+      }
+    } catch (error) {
+      console.error('Decryption error:', error);
+      showSnackbar(`Decryption failed: ${error.message}`, 'error');
+      throw error;
+    }
+  };
+
+  // Open decrypt modal for specific email
+  const handleOpenDecryptModal = (email) => {
+    setEmailToDecrypt(email);
+    setDecryptModalOpen(true);
+  };
+
+  // Handle decrypt modal submit - FIXED: Accepts (emailId, key) parameters
+  const handleDecryptModalSubmit = async (emailId, key) => {
+    try {
+      await handleDecryptEmailWrapper(emailId, key);
+      setDecryptModalOpen(false);
+      setEmailToDecrypt(null);
+      
+      // Also update the selected email if it's the same one
+      if (selectedEmail && selectedEmail.uid === emailId) {
+        const updatedEmail = emails.find(e => e.uid === emailId);
+        if (updatedEmail) {
+          setSelectedEmail(prev => ({
+            ...prev,
+            body: updatedEmail.body,
+            requiresDecryption: false,
+            decrypted: true
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error in decrypt modal:', error);
+      showSnackbar('Decryption failed', 'error');
+    }
+  };
+
+  // Handle delete email
+  const handleDeleteEmail = (emailId) => {
+    try {
+      setCurrentEmails(prev => prev.filter(email => email.uid !== emailId));
+      
+      setStarredEmails(prev => prev.filter(id => id !== emailId));
+      setImportantEmails(prev => prev.filter(id => id !== emailId));
+      setSnoozedEmails(prev => prev.filter(id => id !== emailId));
+      
+      if (selectedEmail && selectedEmail.uid === emailId) {
+        setSelectedEmail(null);
+      }
+      
+      addNotification({
+        type: NOTIFICATION_TYPES.EMAIL_DELETED,
+        title: 'Email Deleted',
+        message: 'Email has been moved to trash',
+        priority: 'medium'
+      });
+      
+      showSnackbar('Email deleted', 'success');
+    } catch (error) {
+      console.error('Error deleting email:', error);
+      showSnackbar('Failed to delete email', 'error');
+    }
+  };
+
   const handleMoveEmails = (emailIds, folder) => {
     try {
-      // If moving to trash, remove from starred/important/snoozed
       if (folder === 'trash') {
         setStarredEmails(prev => prev.filter(id => !emailIds.includes(id)));
         setImportantEmails(prev => prev.filter(id => !emailIds.includes(id)));
         setSnoozedEmails(prev => prev.filter(id => !emailIds.includes(id)));
         
-        // Add notification for deletion
         addNotification({
           type: NOTIFICATION_TYPES.EMAIL_DELETED,
           title: 'Emails Moved to Trash',
@@ -810,7 +909,6 @@ export default function Dashboard({
           priority: 'medium'
         });
       } else {
-        // Add notification for moving emails
         addNotification({
           type: NOTIFICATION_TYPES.EMAIL_MOVED,
           title: 'Emails Moved',
@@ -819,7 +917,6 @@ export default function Dashboard({
         });
       }
       
-      // Call parent handler
       if (onMoveEmails) {
         onMoveEmails(emailIds, folder);
       }
@@ -835,6 +932,7 @@ export default function Dashboard({
       setActivePage("inbox");
       setCurrentPage(1);
       setSearchQuery("");
+      setSelectedEmail(null);
       
       if (isMobile) {
         setMobileOpen(false);
@@ -892,7 +990,6 @@ export default function Dashboard({
       if (notification && notification.action) {
         switch (notification.action.type) {
           case 'view_email':
-            // Navigate to email view
             showSnackbar(`Opening email ${notification.action.emailId}`, 'info');
             break;
           case 'view_security':
@@ -979,7 +1076,6 @@ export default function Dashboard({
           horizontal: 'right',
         }}
       >
-        {/* Notifications Header */}
         <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="h6" fontWeight="600" sx={{ color: 'text.primary' }}>
@@ -995,7 +1091,6 @@ export default function Dashboard({
             )}
           </Box>
           
-          {/* Notification Tabs */}
           <Tabs 
             value={activeNotificationTab} 
             onChange={(e, newValue) => setActiveNotificationTab(newValue)}
@@ -1008,7 +1103,6 @@ export default function Dashboard({
           </Tabs>
         </Box>
 
-        {/* Notifications List */}
         <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
           {hasNotifications ? (
             <List dense>
@@ -1082,7 +1176,6 @@ export default function Dashboard({
           )}
         </Box>
 
-        {/* Notifications Footer */}
         <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
             <Button
@@ -1362,7 +1455,6 @@ export default function Dashboard({
     setActivePage("security");
     if (isMobile) setMobileOpen(false);
     
-    // Add security notification
     createSecurityNotification('quantum_security_activated');
   };
 
@@ -1430,7 +1522,25 @@ export default function Dashboard({
         );
       case "inbox":
       default:
-        return (
+        return selectedEmail ? (
+          <EmailViewer
+            email={selectedEmail}
+            onBack={() => setSelectedEmail(null)}
+            onStarToggle={(emailId, starred) => handleUpdateEmail(emailId, 'star', starred)}
+            onImportantToggle={(emailId, important) => handleUpdateEmail(emailId, 'important', important)}
+            onDelete={handleDeleteEmail}
+            onReply={(email) => {
+              setOpenCompose(true);
+              showSnackbar('Reply functionality coming soon', 'info');
+            }}
+            onForward={(email) => {
+              setOpenCompose(true);
+              showSnackbar('Forward functionality coming soon', 'info');
+            }}
+            onDecryptEmail={handleOpenDecryptModal}
+            isLoading={loading}
+          />
+        ) : (
           <>
             {/* Search Bar - Mobile */}
             {isMobile && (
@@ -1539,12 +1649,14 @@ export default function Dashboard({
                 onMoveEmails={handleMoveEmails}
                 loading={loading}
                 onGetEmailBody={onGetEmailBody}
-                onDecryptEmail={onDecryptEmail}
+                onDecryptEmail={handleOpenDecryptModal}
                 determineSecurityLevel={determineSecurityLevel}
                 generatePreview={generatePreview}
                 formatDate={formatDate}
                 onSaveDraft={onSaveDraft}
                 onDeleteDraft={onDeleteDraft}
+                onSelectEmail={setSelectedEmail}
+                emailRowComponent={EmailRow}
               />
             </Box>
 
@@ -1932,6 +2044,18 @@ export default function Dashboard({
         darkMode={darkMode}
       />
 
+      {/* Decrypt Modal - FIXED: Changed onSubmit to onDecrypt */}
+      <DecryptModal
+        open={decryptModalOpen}
+        onClose={() => {
+          setDecryptModalOpen(false);
+          setEmailToDecrypt(null);
+        }}
+        onDecrypt={handleDecryptModalSubmit} // Changed from onSubmit to onDecrypt
+        email={emailToDecrypt}
+        loading={loading}
+      />
+
       {/* All Notifications Dialog */}
       {renderAllNotificationsDialog()}
 
@@ -1955,7 +2079,7 @@ export default function Dashboard({
   );
 }
 
-// Demo function to add sample notifications (call this when needed)
+// Demo function to add sample notifications
 export const addDemoNotifications = (addNotification) => {
   const demoNotifications = [
     {
@@ -2016,4 +2140,4 @@ if (typeof document !== 'undefined') {
   const styleSheet = document.createElement("style");
   styleSheet.innerText = styles;
   document.head.appendChild(styleSheet);
-};
+}
