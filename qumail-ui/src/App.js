@@ -9,18 +9,6 @@ import { SnackbarProvider, useSnackbar } from "notistack";
 import { cacheKey, getValidKey, clearKeyCache } from "./utils/keyStore";
 import { otpEncrypt, otpDecrypt, generateOTPKey } from "./utils/otp";
 
-const theme = createTheme({
-  palette: {
-    primary: { main: "#1a73e8", light: "#4285f4", dark: "#0d47a1" },
-    secondary: { main: "#ff6d00" },
-    error: { main: "#d32f2f" },
-    success: { main: "#2e7d32" },
-    warning: { main: "#ed6c02" },
-    background: { default: "#f8f9fa", paper: "#ffffff" },
-  },
-  shape: { borderRadius: 8 },
-});
-
 // Helper functions
 const determineSecurityLevel = (body) => {
   if (!body || typeof body !== 'string') return "none";
@@ -75,6 +63,53 @@ const formatDate = (dateString) => {
 
 // QuMail API Service
 const QuMailService = {
+  // Verify token
+  verifyToken: async () => {
+    try {
+      const token = localStorage.getItem('qumail_token');
+      if (!token) {
+        return { 
+          success: false, 
+          shouldRedirect: true,
+          message: 'No token found' 
+        };
+      }
+
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/verify-token`,
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      if (response.status === 401) {
+        return { 
+          success: false, 
+          shouldRedirect: true,
+          message: 'Token expired or invalid' 
+        };
+      }
+      
+      const data = await response.json();
+      return { 
+        success: data.success || false, 
+        shouldRedirect: !data.success,
+        message: data.message || 'Token verification failed'
+      };
+    } catch (error) {
+      console.error('Token verification error:', error);
+      return { 
+        success: false, 
+        shouldRedirect: false,
+        message: 'Network error during token verification'
+      };
+    }
+  },
+
   // Test backend connection
   testConnection: async () => {
     try {
@@ -202,7 +237,7 @@ const QuMailService = {
     }
   },
 
-  // ✅ FIXED: Fetch emails from folder using correct API endpoint
+  // Fetch emails from folder using correct API endpoint
   fetchEmails: async (folder = 'inbox', limit = 50) => {
     try {
       const token = localStorage.getItem('qumail_token');
@@ -212,7 +247,7 @@ const QuMailService = {
         throw new Error('Not authenticated');
       }
 
-      // ✅ FIX 5: Using the correct API endpoint with POST method
+      // Using the correct API endpoint with POST method
       const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let apiEndpoint = '';
       
@@ -322,7 +357,7 @@ const QuMailService = {
     }
   },
 
-  // ✅ ✅ ✅ FIXED: Send email with CORRECT endpoint and payload
+  // Send email with CORRECT endpoint and payload
   sendEmail: async (to, subject, body, type = "NORMAL") => {
     try {
       const token = localStorage.getItem('qumail_token');
@@ -335,7 +370,7 @@ const QuMailService = {
         };
       }
 
-      // ✅ CRITICAL: Validate all required fields
+      // Validate all required fields
       if (!to || !to.trim()) {
         return { 
           success: false, 
@@ -368,15 +403,15 @@ const QuMailService = {
         };
       }
 
-      // ✅ CRITICAL: Ensure subject is not null/undefined
+      // Ensure subject is not null/undefined
       const emailSubject = subject || '(No Subject)';
 
-      // ✅ ✅ ✅ CRITICAL: Correct request body matching backend contract
+      // Correct request body matching backend contract
       const requestBody = {
         to: recipientEmail,
         subject: emailSubject,
-        body: body,  // ✅ MUST be "body", not "message"
-        encryptionLevel:  // ✅ MUST be "encryptionLevel", not "type"
+        body: body,  // MUST be "body", not "message"
+        encryptionLevel:  // MUST be "encryptionLevel", not "type"
           type === "AES" ? "aes256" :
           type === "OTP" ? "otp" :
           "none"
@@ -389,7 +424,7 @@ const QuMailService = {
         bodyLength: body.length
       });
 
-      // ✅ ✅ ✅ CRITICAL: Correct API endpoint
+      // Correct API endpoint
       const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const response = await fetch(`${API_URL}/api/send`, {
         method: 'POST',
@@ -653,9 +688,43 @@ const AppContent = () => {
     setShowSplash(false);
   };
 
+  // 🔧 CRITICAL: Check authentication on load
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!showSplash) {
+        const result = await QuMailService.verifyToken();
+        
+        if (result.success) {
+          // Get stored email
+          const storedEmail = localStorage.getItem('qumail_email');
+          if (storedEmail) {
+            setUserEmail(storedEmail);
+            setUserName(localStorage.getItem('qumail_name') || storedEmail.split('@')[0]);
+            setLoggedIn(true);
+            loadUserData();
+          }
+        } else if (result.shouldRedirect) {
+          // Clear invalid tokens
+          localStorage.removeItem('qumail_token');
+          localStorage.removeItem('qumail_email');
+          localStorage.removeItem('qumail_name');
+          
+          // Redirect to login
+          if (window.location.pathname !== '/login') {
+            enqueueSnackbar('Session expired. Please login again.', { variant: 'warning' });
+          }
+        }
+      }
+    };
+    
+    if (!showSplash) {
+      checkAuth();
+    }
+  }, [showSplash, enqueueSnackbar]);
+
   // Check for existing session - runs after splash screen
   useEffect(() => {
-    if (!showSplash) {
+    if (!showSplash && !loggedIn) {
       const checkExistingSession = async () => {
         const token = localStorage.getItem('qumail_token');
         const email = localStorage.getItem('qumail_email');
@@ -664,17 +733,9 @@ const AppContent = () => {
         if (token && email && email.toLowerCase().endsWith('@qumail.com')) {
           // Verify token is still valid
           try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/verify-token`, {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              }
-            });
+            const result = await QuMailService.verifyToken();
             
-            const data = await response.json();
-            
-            if (data.success) {
+            if (result.success) {
               setUserEmail(email);
               setUserName(name || email.split('@')[0]);
               setLoggedIn(true);
@@ -693,7 +754,19 @@ const AppContent = () => {
       
       checkExistingSession();
     }
-  }, [showSplash]);
+  }, [showSplash, loggedIn]);
+
+  // Add global error handler
+  useEffect(() => {
+    // Make showAuthError globally available
+    window.showAuthError = (message) => {
+      enqueueSnackbar(message, { variant: 'error' });
+    };
+    
+    return () => {
+      window.showAuthError = null;
+    };
+  }, [enqueueSnackbar]);
 
   // Load user data
   const loadUserData = async () => {
@@ -1138,9 +1211,9 @@ const AppContent = () => {
     }
   };
 
-  // ✅ ✅ ✅ FIXED: Send email with CORRECT backend contract
+  // Send email with CORRECT backend contract
   const handleSendEmail = async (to, subject, body, level, draftId = null) => {
-    // ✅ CRITICAL: Frontend validation
+    // Frontend validation
     if (!to || !to.trim()) {
       enqueueSnackbar("Please enter recipient email", { variant: "warning" });
       return;
@@ -1177,7 +1250,7 @@ const AppContent = () => {
       let sendLevel = "none";
       let backendType = "NORMAL"; // Default type for backend
 
-      // ✅ PROPER ENCRYPTION SEPARATION:
+      // PROPER ENCRYPTION SEPARATION:
       if (level === "otp") {
         // FRONTEND OTP ENCRYPTION
         const key = generateOTPKey(32); // HEX key
@@ -1189,10 +1262,10 @@ const AppContent = () => {
         console.log("✅ OTP encrypted in UI. Key cached.");
       }
       else if (level === "aes") {
-        // ✅ BACKEND AES ENCRYPTION - DO NOT ENCRYPT IN UI
+        // BACKEND AES ENCRYPTION - DO NOT ENCRYPT IN UI
         // Just mark it as AES - backend will encrypt it
         sendLevel = "aes";
-        backendType = "AES"; // ✅ CRITICAL: Tell backend to encrypt with AES
+        backendType = "AES"; // CRITICAL: Tell backend to encrypt with AES
         console.log("📤 AES encryption delegated to backend with type: AES");
       }
       else {
@@ -1201,7 +1274,7 @@ const AppContent = () => {
         backendType = "NORMAL";
       }
 
-      // ✅ ✅ ✅ FIXED: Send with CORRECT encryption type mapping
+      // Send with CORRECT encryption type mapping
       const result = await QuMailService.sendEmail(
         recipientEmail, 
         subject || '(No Subject)', 
@@ -1372,18 +1445,31 @@ const AppContent = () => {
     setShowRegister(!showRegister);
   };
 
-  // Apply theme
+  // Base theme configuration
+  const baseTheme = createTheme({
+    palette: {
+      primary: { main: "#1a73e8", light: "#4285f4", dark: "#0d47a1" },
+      secondary: { main: "#ff6d00" },
+      error: { main: "#d32f2f" },
+      success: { main: "#2e7d32" },
+      warning: { main: "#ed6c02" },
+      background: { default: "#f8f9fa", paper: "#ffffff" },
+    },
+    shape: { borderRadius: 8 },
+  });
+
+  // Apply theme with dark/light mode
   const appliedTheme = useMemo(() => createTheme({
-    ...theme,
+    ...baseTheme,
     palette: { 
-      ...theme.palette, 
+      ...baseTheme.palette, 
       mode: darkMode ? 'dark' : 'light',
       background: darkMode ? { 
         default: '#121212', 
         paper: '#1e1e1e' 
-      } : theme.palette.background
+      } : baseTheme.palette.background
     },
-  }), [darkMode]);
+  }), [darkMode, baseTheme]);
 
   // Handle email list when active folder changes
   useEffect(() => {

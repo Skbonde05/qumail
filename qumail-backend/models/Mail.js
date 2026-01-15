@@ -1,10 +1,8 @@
-import mongoose from "mongoose";
-
 const MailSchema = new mongoose.Schema({
   mailId: {
     type: String,
     required: true,
-    unique: true
+    // REMOVED: unique: true  ← Don't make mailId unique alone
   },
 
   from: {
@@ -67,5 +65,9 @@ const MailSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Create a compound unique index instead
+// This allows the same mailId for different owners
+MailSchema.index({ mailId: 1, owner: 1 }, { unique: true });
 
 export default mongoose.model("Mail", MailSchema);

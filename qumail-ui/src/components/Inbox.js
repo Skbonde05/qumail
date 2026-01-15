@@ -271,7 +271,8 @@ export default function Inbox({
   generatePreview,
   formatDate,
   onSaveDraft,
-  onDeleteDraft
+  onDeleteDraft,
+  onSelectEmail
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -296,16 +297,24 @@ export default function Inbox({
 
   // Initialize from localStorage
   useEffect(() => {
-    const savedStarred = localStorage.getItem('qumail_starred');
-    const savedImportant = localStorage.getItem('qumail_important');
-    if (savedStarred) setStarredEmails(JSON.parse(savedStarred));
-    if (savedImportant) setImportantEmails(JSON.parse(savedImportant));
+    try {
+      const savedStarred = localStorage.getItem('qumail_starred');
+      const savedImportant = localStorage.getItem('qumail_important');
+      if (savedStarred) setStarredEmails(JSON.parse(savedStarred));
+      if (savedImportant) setImportantEmails(JSON.parse(savedImportant));
+    } catch (error) {
+      console.error('Error loading from localStorage:', error);
+    }
   }, []);
 
   // Save to localStorage
   useEffect(() => {
-    localStorage.setItem('qumail_starred', JSON.stringify(starredEmails));
-    localStorage.setItem('qumail_important', JSON.stringify(importantEmails));
+    try {
+      localStorage.setItem('qumail_starred', JSON.stringify(starredEmails));
+      localStorage.setItem('qumail_important', JSON.stringify(importantEmails));
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
   }, [starredEmails, importantEmails]);
 
   // Handle responsive view mode
@@ -327,10 +336,10 @@ export default function Inbox({
       return [];
     }
 
-    let filtered = [...safeEmails];
+    let filtered = safeEmails.filter(email => email && (email.uid || email.id));
 
     // Apply search filter
-    if (searchTerm) {
+    if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(email => {
         if (!email) return false;
@@ -349,14 +358,21 @@ export default function Inbox({
         filtered = filtered.filter(email => !email.read);
         break;
       case "starred":
-        filtered = filtered.filter(email => email.starred);
+        filtered = filtered.filter(email => 
+          starredEmails.includes(email.uid || email.id) || email.starred
+        );
         break;
       case "important":
-        filtered = filtered.filter(email => email.important);
+        filtered = filtered.filter(email => 
+          importantEmails.includes(email.uid || email.id) || email.important
+        );
         break;
       case "encrypted":
         filtered = filtered.filter(email => 
-          email.body?.includes('[otp|') || email.body?.includes('[aes|')
+          (email.body && (
+            email.body.includes('[otp|') || 
+            email.body.includes('[aes|')
+          ))
         );
         break;
       default:
@@ -364,21 +380,27 @@ export default function Inbox({
     }
 
     return filtered;
-  }, [safeEmails, searchTerm, filter]);
+  }, [safeEmails, searchTerm, filter, starredEmails, importantEmails]);
+
+  // Get email ID (uid or id)
+  const getEmailId = useCallback((email) => {
+    return email?.uid || email?.id || null;
+  }, []);
 
   // Handlers
   const toggleStar = useCallback((emailId, event) => {
     if (event) event.stopPropagation();
+    const isStarred = starredEmails.includes(emailId);
     setStarredEmails(prev => 
-      prev.includes(emailId) 
+      isStarred
         ? prev.filter(id => id !== emailId)
         : [...prev, emailId]
     );
     if (onUpdateEmail) {
-      onUpdateEmail(emailId, 'star', !starredEmails.includes(emailId));
+      onUpdateEmail(emailId, 'star', !isStarred);
     }
     showSnackbar(
-      starredEmails.includes(emailId) 
+      isStarred 
         ? "Email unstarred" 
         : "Email starred",
       "success"
@@ -387,16 +409,17 @@ export default function Inbox({
 
   const toggleImportant = useCallback((emailId, event) => {
     if (event) event.stopPropagation();
+    const isImportant = importantEmails.includes(emailId);
     setImportantEmails(prev => 
-      prev.includes(emailId) 
+      isImportant
         ? prev.filter(id => id !== emailId)
         : [...prev, emailId]
     );
     if (onUpdateEmail) {
-      onUpdateEmail(emailId, 'important', !importantEmails.includes(emailId));
+      onUpdateEmail(emailId, 'important', !isImportant);
     }
     showSnackbar(
-      importantEmails.includes(emailId) 
+      isImportant 
         ? "Email marked as not important" 
         : "Email marked as important",
       "success"
@@ -416,38 +439,60 @@ export default function Inbox({
     if (selectedEmails.length === filteredEmails.length) {
       setSelectedEmails([]);
     } else {
-      setSelectedEmails(filteredEmails.map(email => email.uid).filter(Boolean));
+      setSelectedEmails(
+        filteredEmails
+          .map(email => getEmailId(email))
+          .filter(Boolean)
+      );
     }
-  }, [filteredEmails, selectedEmails.length]);
+  }, [filteredEmails, selectedEmails.length, getEmailId]);
 
-  const openEmail = async (email) => {
+  const openEmail = useCallback(async (email) => {
+    const emailId = getEmailId(email);
+    if (!emailId) {
+      showSnackbar("Invalid email", "error");
+      return;
+    }
+
     // Don't reload if same email is already selected
-    if (selectedEmail?.uid === email.uid) {
+    if (selectedEmail && (getEmailId(selectedEmail) === emailId)) {
+      if (isMobile) {
+        setShowEmailViewer(true);
+      }
       return;
     }
 
     setSelectedEmail(email);
+    if (onSelectEmail) {
+      onSelectEmail(email);
+    }
     
     if (isMobile) {
       setShowEmailViewer(true);
     }
 
     // Check if email body is already cached
-    if (emailBodyCache[email.uid]) {
+    if (emailBodyCache[emailId]) {
       return;
     }
 
     setLoading(true);
     try {
       // Use the prop function to get email body
-      const emailBody = await onGetEmailBody(email.uid, activeFolder);
+      let emailBody = '';
+      if (onGetEmailBody && typeof onGetEmailBody === 'function') {
+        emailBody = await onGetEmailBody(emailId);
+      } else {
+        emailBody = email.body || '';
+      }
       
       // Determine security level
-      const securityLevel = determineSecurityLevel(emailBody);
+      const securityLevel = determineSecurityLevel ? 
+        determineSecurityLevel(emailBody) : 'none';
       
       // Extract key and encrypted content if needed
       let decryptedBody = emailBody;
-      if (securityLevel !== 'none') {
+      if (securityLevel !== 'none' && onDecryptEmail) {
         const match = emailBody.match(/\[(.*?)\|(.*?)\]:(.*)/s);
         if (match) {
           const [, level, key, encryptedContent] = match;
@@ -460,12 +505,12 @@ export default function Inbox({
         body: emailBody,
         decryptedBody: decryptedBody,
         security: securityLevel,
-        preview: generatePreview(decryptedBody)
+        preview: generatePreview ? generatePreview(decryptedBody) : decryptedBody?.substring(0, 100) || ''
       };
 
       setEmailBodyCache(prev => ({
         ...prev,
-        [email.uid]: cachedEmail
+        [emailId]: cachedEmail
       }));
       
     } catch (err) {
@@ -474,7 +519,17 @@ export default function Inbox({
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    selectedEmail, 
+    isMobile, 
+    emailBodyCache, 
+    onGetEmailBody, 
+    determineSecurityLevel, 
+    generatePreview, 
+    onDecryptEmail,
+    onSelectEmail,
+    getEmailId
+  ]);
 
   const getSecurityColor = (level) => {
     switch (level) {
@@ -496,7 +551,7 @@ export default function Inbox({
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleBulkAction = (action) => {
+  const handleBulkAction = useCallback((action) => {
     if (!onBulkAction || selectedEmails.length === 0) return;
     
     switch (action) {
@@ -529,7 +584,13 @@ export default function Inbox({
         break;
     }
     setBulkActionMenu(null);
-  };
+  }, [onBulkAction, selectedEmails, onMoveEmails]);
+
+  const handleRefresh = useCallback(() => {
+    if (onRefresh) {
+      onRefresh();
+    }
+  }, [onRefresh]);
 
   // Render components
   const renderToolbar = () => (
@@ -600,7 +661,7 @@ export default function Inbox({
       ) : (
         <>
           <Tooltip title="Refresh">
-            <IconButton size="small" onClick={onRefresh} disabled={globalLoading}>
+            <IconButton size="small" onClick={handleRefresh} disabled={globalLoading}>
               <Refresh />
             </IconButton>
           </Tooltip>
@@ -670,16 +731,17 @@ export default function Inbox({
             {filteredEmails.map((email, index) => {
               if (!email) return null;
               
-              const cachedEmail = emailBodyCache[email.uid] || email;
-              const isStarred = starredEmails.includes(email.uid) || email.starred;
-              const isImportant = importantEmails.includes(email.uid) || email.important;
-              const isSelected = selectedEmails.includes(email.uid);
+              const emailId = getEmailId(email);
+              const cachedEmail = emailBodyCache[emailId] || email;
+              const isStarred = starredEmails.includes(emailId) || email.starred;
+              const isImportant = importantEmails.includes(emailId) || email.important;
+              const isSelected = selectedEmails.includes(emailId);
               const isUnread = !email.read;
               const securityLevel = cachedEmail.security || "none";
 
               return (
                 <motion.div
-                  key={email.uid || index}
+                  key={emailId || index}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
@@ -687,21 +749,21 @@ export default function Inbox({
                 >
                   <EmailListItem
                     unread={isUnread}
-                    selected={selectedEmail?.uid === email.uid}
+                    selected={selectedEmail && (getEmailId(selectedEmail) === emailId)}
                     onClick={() => openEmail(email)}
                   >
                     <ListItemIcon sx={{ minWidth: 40 }}>
                       <Checkbox
                         size="small"
                         checked={isSelected}
-                        onClick={(e) => toggleSelectEmail(email.uid, e)}
+                        onClick={(e) => toggleSelectEmail(emailId, e)}
                       />
                     </ListItemIcon>
                     
                     <ListItemIcon sx={{ minWidth: 40 }}>
                       <IconButton 
                         size="small"
-                        onClick={(e) => toggleStar(email.uid, e)}
+                        onClick={(e) => toggleStar(emailId, e)}
                         sx={{ color: isStarred ? theme.palette.warning.main : undefined }}
                       >
                         {isStarred ? <Star /> : <StarBorder />}
@@ -711,7 +773,7 @@ export default function Inbox({
                     <ListItemIcon sx={{ minWidth: 40 }}>
                       <IconButton 
                         size="small"
-                        onClick={(e) => toggleImportant(email.uid, e)}
+                        onClick={(e) => toggleImportant(emailId, e)}
                         sx={{ color: isImportant ? theme.palette.warning.main : undefined }}
                       >
                         {isImportant ? <LabelImportant /> : <LabelImportantOutlined />}
@@ -752,7 +814,7 @@ export default function Inbox({
                             {email.from?.split("<")[0].trim() || "Unknown Sender"}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {formatDate(email.date)}
+                            {formatDate ? formatDate(email.date) : new Date(email.date).toLocaleDateString()}
                           </Typography>
                         </Box>
                       }
@@ -808,7 +870,8 @@ export default function Inbox({
   const renderEmailViewer = () => {
     if (!selectedEmail) return null;
 
-    const cachedEmail = emailBodyCache[selectedEmail.uid] || selectedEmail;
+    const emailId = getEmailId(selectedEmail);
+    const cachedEmail = emailBodyCache[emailId] || selectedEmail;
 
     return (
       <EmailViewer
@@ -816,21 +879,26 @@ export default function Inbox({
         onBack={() => {
           setSelectedEmail(null);
           if (isMobile) setShowEmailViewer(false);
+          if (onSelectEmail) {
+            onSelectEmail(null);
+          }
         }}
         onReply={(email) => {
-          onCompose();
+          if (onCompose) onCompose();
         }}
         onReplyAll={(email) => {
-          onCompose();
+          if (onCompose) onCompose();
         }}
         onForward={(email) => {
-          onCompose();
+          if (onCompose) onCompose();
         }}
         onDelete={(emailId) => {
           if (onMoveEmails) {
             onMoveEmails([emailId], 'trash');
           }
           showSnackbar("Email moved to trash", "success");
+          setSelectedEmail(null);
+          if (isMobile) setShowEmailViewer(false);
         }}
         onArchive={(emailId) => {
           if (onMoveEmails) {
@@ -838,8 +906,12 @@ export default function Inbox({
           }
           showSnackbar("Email archived", "success");
         }}
-        onToggleStar={(emailId) => toggleStar(emailId)}
-        onToggleImportant={(emailId) => toggleImportant(emailId)}
+        onStarToggle={(emailId, starred) => {
+          toggleStar(emailId);
+        }}
+        onImportantToggle={(emailId, important) => {
+          toggleImportant(emailId);
+        }}
         userEmail={userEmail}
         userPassword={userPassword}
         isLoading={loading}
@@ -916,7 +988,13 @@ export default function Inbox({
               borderBottom: `1px solid ${theme.palette.divider}`
             }}
           >
-            <IconButton onClick={() => setShowEmailViewer(false)} sx={{ mr: 2 }}>
+            <IconButton onClick={() => {
+              setShowEmailViewer(false);
+              setSelectedEmail(null);
+              if (onSelectEmail) {
+                onSelectEmail(null);
+              }
+            }} sx={{ mr: 2 }}>
               <ArrowBack />
             </IconButton>
             <Typography variant="h6" noWrap sx={{ flex: 1 }}>

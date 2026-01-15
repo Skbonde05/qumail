@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
@@ -74,6 +73,9 @@ import SecuritySettings from "../components/SecuritySettings";
 import EmailViewer from '../components/EmailViewer';
 import EmailRow from '../components/EmailRow';
 import DecryptModal from '../components/DecryptModal';
+import HelpSupport from "../components/HelpSupport";
+import AboutQuMail from "../components/AboutQuMail";
+import EmailService from '../services/EmailService';
 
 // Search bar component
 const SearchBar = styled('div')(({ theme }) => ({
@@ -201,11 +203,6 @@ export default function Dashboard({
   onDeleteDraft,
   onLogout,
   onRefresh,
-  onUpdateEmail,
-  onBulkAction,
-  onMoveEmails,
-  onGetEmailBody,
-  onDecryptEmail,
   loading,
   emailStats = {},
   onToggleTheme,
@@ -231,9 +228,9 @@ export default function Dashboard({
     } catch {
       return "Unknown";
     }
-  },
-  onLoadMoreEmails
+  }
 }) {
+  const theme = useTheme();
   const [openCompose, setOpenCompose] = useState(false);
   const [activeSection, setActiveSection] = useState(activeFolder);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -247,28 +244,28 @@ export default function Dashboard({
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalEmailsCount, setTotalEmailsCount] = useState(0);
-  const [hasMoreEmails, setHasMoreEmails] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [decryptModalOpen, setDecryptModalOpen] = useState(false);
   const [emailToDecrypt, setEmailToDecrypt] = useState(null);
   
-  // NEW: Notifications State
+  // Notifications State
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [notificationsAnchorEl, setNotificationsAnchorEl] = useState(null);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const [activeNotificationTab, setActiveNotificationTab] = useState(0);
   
-  // Settings pages state - FIXED: Changed "app" to handle settings dialog
-  const [activePage, setActivePage] = useState("inbox");
-  const [appSettingsOpen, setAppSettingsOpen] = useState(false); // NEW: Control AppSettings dialog
+  // Main content state - tracks what to display in main area
+  const [mainContent, setMainContent] = useState({
+    type: "inbox",
+    data: null
+  });
   
   const ITEMS_PER_PAGE = 50;
 
-  const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Load notifications from localStorage on mount
+  // Initialize with demo notifications
   useEffect(() => {
     try {
       const savedNotifications = JSON.parse(localStorage.getItem('qumail_notifications') || '[]');
@@ -276,16 +273,44 @@ export default function Dashboard({
       const savedImportant = JSON.parse(localStorage.getItem('qumail_important') || '[]');
       const savedSnoozed = JSON.parse(localStorage.getItem('qumail_snoozed') || '[]');
       
-      setNotifications(savedNotifications);
+      if (savedNotifications.length === 0) {
+        const demoNotifications = [
+          {
+            id: Date.now(),
+            type: NOTIFICATION_TYPES.NEW_EMAIL,
+            title: 'Welcome to QuMail!',
+            message: 'Your secure email journey begins',
+            timestamp: new Date().toISOString(),
+            read: false,
+            priority: 'high',
+            icon: 'Mail',
+            color: 'primary'
+          },
+          {
+            id: Date.now() + 1,
+            type: NOTIFICATION_TYPES.SECURITY_ALERT,
+            title: 'Security Activated',
+            message: 'Quantum encryption is enabled',
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+            read: true,
+            priority: 'high',
+            icon: 'Security',
+            color: 'success'
+          }
+        ];
+        setNotifications(demoNotifications);
+        localStorage.setItem('qumail_notifications', JSON.stringify(demoNotifications));
+      } else {
+        setNotifications(savedNotifications);
+      }
+      
       setStarredEmails(savedStarred);
       setImportantEmails(savedImportant);
       setSnoozedEmails(savedSnoozed);
       
-      // Calculate initial unread count
-      updateUnreadCount(savedNotifications);
+      updateUnreadCount(savedNotifications.length > 0 ? savedNotifications : []);
     } catch (error) {
       console.error('Error loading from localStorage:', error);
-      // Initialize with empty arrays
       setNotifications([]);
       setStarredEmails([]);
       setImportantEmails([]);
@@ -392,91 +417,6 @@ export default function Dashboard({
     }
   };
 
-  // Function to create specific notification types
-  const createEmailNotification = (email, action) => {
-    try {
-      let notificationType, title, message;
-      
-      switch(action) {
-        case 'received':
-          notificationType = NOTIFICATION_TYPES.NEW_EMAIL;
-          title = 'New Email Received';
-          message = `From: ${email.from || 'Unknown'}`;
-          break;
-        case 'sent':
-          notificationType = NOTIFICATION_TYPES.NEW_EMAIL;
-          title = 'Email Sent Successfully';
-          message = `To: ${email.to || 'Unknown'}`;
-          break;
-        case 'encrypted':
-          notificationType = NOTIFICATION_TYPES.ENCRYPTION_SUCCESS;
-          title = 'Email Encrypted Securely';
-          message = `Sent with ${email.encryptionLevel || 'AES-256'} encryption`;
-          break;
-        case 'starred':
-          notificationType = NOTIFICATION_TYPES.EMAIL_STARRED;
-          title = 'Email Starred';
-          message = `Subject: ${email.subject || 'No Subject'}`;
-          break;
-        default:
-          notificationType = NOTIFICATION_TYPES.SYSTEM_UPDATE;
-          title = 'Email Action';
-          message = `Action performed on email`;
-      }
-
-      addNotification({
-        type: notificationType,
-        title,
-        message,
-        priority: action === 'received' ? 'high' : 'medium',
-        action: {
-          type: 'view_email',
-          emailId: email.id || ''
-        }
-      });
-    } catch (error) {
-      console.error('Error creating email notification:', error);
-    }
-  };
-
-  // Function to create security notification
-  const createSecurityNotification = (action, details = {}) => {
-    try {
-      let title, message, notificationType;
-      
-      switch(action) {
-        case 'login':
-          notificationType = NOTIFICATION_TYPES.LOGIN_ATTEMPT;
-          title = 'New Login Detected';
-          message = `Logged in from ${details.location || 'unknown location'}`;
-          break;
-        case 'encryption_key_generated':
-          notificationType = NOTIFICATION_TYPES.ENCRYPTION_KEY_GENERATED;
-          title = 'New Encryption Key Generated';
-          message = `Quantum ${details.algorithm || 'AES-256'} key created`;
-          break;
-        case 'quantum_security_activated':
-          notificationType = NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED;
-          title = 'Quantum Security Activated';
-          message = 'Your emails are now quantum-resistant';
-          break;
-        default:
-          notificationType = NOTIFICATION_TYPES.SECURITY_ALERT;
-          title = 'Security Event';
-          message = details.message || 'Security-related activity detected';
-      }
-
-      addNotification({
-        type: notificationType,
-        title,
-        message,
-        priority: 'high'
-      });
-    } catch (error) {
-      console.error('Error creating security notification:', error);
-    }
-  };
-
   // CALCULATE REAL FOLDER COUNTS
   const folderCounts = useMemo(() => {
     if (!Array.isArray(emails)) {
@@ -506,15 +446,15 @@ export default function Dashboard({
       ).length,
       
       starred: allEmails.filter(email => 
-        email && (starredEmails.includes(email.uid) || email.starred)
+        email && (starredEmails.includes(email.uid) || starredEmails.includes(email.id) || email.starred)
       ).length,
       
       important: allEmails.filter(email => 
-        email && (importantEmails.includes(email.uid) || email.important)
+        email && (importantEmails.includes(email.uid) || importantEmails.includes(email.id) || email.important)
       ).length,
       
       snoozed: allEmails.filter(email => 
-        email && (snoozedEmails.includes(email.uid) || email.snoozed)
+        email && (snoozedEmails.includes(email.uid) || snoozedEmails.includes(email.id) || email.snoozed)
       ).length,
       
       sent: allEmails.filter(email => email && email.sent).length,
@@ -539,21 +479,20 @@ export default function Dashboard({
 
     let filtered = [...emails];
     
-    // Apply folder-specific filtering
     switch (activeSection) {
       case "starred":
         filtered = filtered.filter(email => 
-          email && (starredEmails.includes(email.uid) || email.starred)
+          email && (starredEmails.includes(email.uid) || starredEmails.includes(email.id) || email.starred)
         );
         break;
       case "important":
         filtered = filtered.filter(email => 
-          email && (importantEmails.includes(email.uid) || email.important)
+          email && (importantEmails.includes(email.uid) || importantEmails.includes(email.id) || email.important)
         );
         break;
       case "snoozed":
         filtered = filtered.filter(email => 
-          email && (snoozedEmails.includes(email.uid) || email.snoozed)
+          email && (snoozedEmails.includes(email.uid) || snoozedEmails.includes(email.id) || email.snoozed)
         );
         break;
       case "inbox":
@@ -585,7 +524,6 @@ export default function Dashboard({
         break;
     }
     
-    // Apply search filter
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(email => {
@@ -599,7 +537,6 @@ export default function Dashboard({
       });
     }
     
-    // Sort by date
     filtered.sort((a, b) => {
       try {
         const dateA = new Date(a.date || a.timestamp || 0);
@@ -642,40 +579,58 @@ export default function Dashboard({
   };
 
   const handleRefresh = async () => {
-    if (onRefresh) {
-      try {
+    try {
+      showSnackbar("Refreshing emails...", "info");
+      
+      if (onRefresh) {
         await onRefresh();
-        showSnackbar("Inbox refreshed", "success");
-        setCurrentPage(1);
-        
-        addNotification({
-          type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
-          title: 'Inbox Refreshed',
-          message: 'Your emails have been synced',
-          priority: 'low'
-        });
-      } catch (error) {
-        console.error('Error refreshing inbox:', error);
-        showSnackbar("Failed to refresh inbox", "error");
+      } else {
+        // Direct refresh logic
+        const result = await EmailService.getFolderCounts();
+        if (result.success) {
+          setCurrentPage(1);
+        }
       }
+      
+      showSnackbar("Inbox refreshed", "success");
+      setCurrentPage(1);
+      
+      addNotification({
+        type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
+        title: 'Inbox Refreshed',
+        message: 'Your emails have been synced',
+        priority: 'low'
+      });
+    } catch (error) {
+      console.error('Error refreshing inbox:', error);
+      showSnackbar(`Failed to refresh inbox: ${error.message}`, "error");
     }
   };
 
   const handleSend = async (to, subject, body, level, draftId = null) => {
     try {
-      await onSendEmail(to, subject, body, level, draftId);
-      showSnackbar("Email sent successfully!", "success");
-      setOpenCompose(false);
+      // Use EmailService to send email
+      const result = await EmailService.sendEmail(to, subject, body, level);
       
-      const emailData = { to, subject, encryptionLevel: level };
-      createEmailNotification(emailData, 'sent');
-      
-      if (level !== 'none') {
-        createEmailNotification(emailData, 'encrypted');
+      if (result.success) {
+        showSnackbar("Email sent successfully!", "success");
+        setOpenCompose(false);
+        
+        addNotification({
+          type: NOTIFICATION_TYPES.ENCRYPTION_SUCCESS,
+          title: 'Email Sent',
+          message: `Encrypted with ${level} encryption`,
+          priority: 'medium'
+        });
+        
+        // Refresh emails after sending
+        await handleRefresh();
+      } else {
+        showSnackbar(`Failed to send email: ${result.message}`, "error");
       }
     } catch (error) {
       console.error("Failed to send email:", error);
-      showSnackbar("Failed to send email: " + error.message, "error");
+      showSnackbar(`Failed to send email: ${error.message}`, "error");
     }
   };
 
@@ -684,245 +639,402 @@ export default function Dashboard({
     setCurrentPage(1);
   };
 
-  // Handle email actions with notifications
-  const handleUpdateEmail = (emailId, field, value) => {
+  // Handle opening different content types
+  const handleOpenInbox = () => {
+    setMainContent({ type: "inbox", data: null });
+    if (isMobile) setMobileOpen(false);
+  };
+
+  const handleOpenSettings = () => {
+    handleMenuClose();
+    setMainContent({ type: "settings", data: null });
+    if (isMobile) setMobileOpen(false);
+  };
+
+  const handleOpenAccountSettings = () => {
+    handleMenuClose();
+    setMainContent({ type: "account", data: null });
+    if (isMobile) setMobileOpen(false);
+  };
+
+  const handleOpenSecuritySettings = () => {
+    handleMenuClose();
+    setMainContent({ type: "security", data: null });
+    if (isMobile) setMobileOpen(false);
+    
+    addNotification({
+      type: NOTIFICATION_TYPES.QUANTUM_SECURITY_ACTIVATED,
+      title: 'Security Settings',
+      message: 'Opening security configuration',
+      priority: 'medium'
+    });
+  };
+
+  const handleOpenHelp = () => {
+    handleMenuClose();
+    setMainContent({ type: "help", data: null });
+    if (isMobile) setMobileOpen(false);
+  };
+
+  const handleOpenAbout = () => {
+    handleMenuClose();
+    setMainContent({ type: "about", data: null });
+    if (isMobile) setMobileOpen(false);
+  };
+
+  const handleOpenNotificationsPage = () => {
+    handleMenuClose();
+    setMainContent({ type: "notifications", data: null });
+    if (isMobile) setMobileOpen(false);
+  };
+
+  // ✅ FIXED: Handle email actions with EmailService
+  const handleUpdateEmail = async (emailId, field, value) => {
     try {
-      const email = currentEmails.find(e => e && e.uid === emailId);
+      // Find the email to get the uid
+      const email = currentEmails.find(e => e && (e.uid === emailId || e.id === emailId));
       
-      // Update local state
+      if (!email) {
+        console.error(`❌ Email not found for ID: ${emailId}`);
+        showSnackbar('Email not found', 'error');
+        return;
+      }
+
+      // ✅ ALWAYS USE email.uid for backend calls, fallback to email.id
+      const backendId = email.uid || email.id;
+      
+      if (!backendId) {
+        console.error('❌ No valid backend ID found:', email);
+        showSnackbar('Invalid email ID', 'error');
+        return;
+      }
+
+      console.log(`🔄 Updating email ${backendId}: ${field} = ${value}`);
+      
+      // Update local state immediately for responsiveness
       switch (field) {
         case 'star':
           setStarredEmails(prev => 
             value 
-              ? [...prev, emailId]
-              : prev.filter(id => id !== emailId)
+              ? [...prev, backendId]
+              : prev.filter(id => id !== backendId)
           );
-          if (email) {
-            createEmailNotification(email, 'starred');
+          if (email && value) {
+            addNotification({
+              type: NOTIFICATION_TYPES.EMAIL_STARRED,
+              title: 'Email Starred',
+              message: `Subject: ${email.subject || 'No Subject'}`,
+              priority: 'low'
+            });
           }
           break;
         case 'important':
           setImportantEmails(prev => 
             value 
-              ? [...prev, emailId]
-              : prev.filter(id => id !== emailId)
+              ? [...prev, backendId]
+              : prev.filter(id => id !== backendId)
           );
-          addNotification({
-            type: NOTIFICATION_TYPES.EMAIL_STARRED,
-            title: 'Email Marked as Important',
-            message: email ? `Subject: ${email.subject || 'No Subject'}` : 'Email marked',
-            priority: 'medium'
-          });
           break;
         case 'snooze':
           setSnoozedEmails(prev => 
             value 
-              ? [...prev, emailId]
-              : prev.filter(id => id !== emailId)
+              ? [...prev, backendId]
+              : prev.filter(id => id !== backendId)
+          );
+          break;
+        case 'read':
+          setCurrentEmails(prev => 
+            prev.map(email => 
+              (email.uid === backendId || email.id === backendId) ? { ...email, read: value } : email
+            )
           );
           break;
         default:
           break;
       }
-      
-      // Call parent handler if provided
-      if (onUpdateEmail) {
-        onUpdateEmail(emailId, field, value);
+
+      // Make API call to update on server
+      try {
+        const action = field === 'star' ? 'toggle-star' : 
+                      field === 'important' ? 'toggle-important' :
+                      field === 'snooze' ? 'snooze' :
+                      field === 'read' ? 'mark-read' : field;
+        
+        const result = await EmailService.updateEmailStatus(backendId, action);
+        
+        if (result.success) {
+          console.log(`✅ Email ${backendId} ${field} updated successfully`);
+          showSnackbar(`Email ${field === 'star' ? 'starred' : field} updated`, "success");
+          
+          // Refresh emails to get updated data from server
+          await handleRefresh();
+        } else {
+          console.error(`❌ Failed to update email ${backendId}:`, result.message);
+          showSnackbar(`Failed to update email: ${result.message}`, "error");
+        }
+      } catch (apiError) {
+        console.error(`❌ API error updating email ${backendId}:`, apiError.message);
+        showSnackbar(`Failed to update email: ${apiError.message}`, "error");
       }
+
     } catch (error) {
       console.error('Error updating email:', error);
+      showSnackbar(`Failed to update email: ${error.message}`, "error");
     }
   };
 
-  const handleBulkActionWrapper = (emailIds, action, value) => {
+  // ✅ FIXED: Bulk actions with EmailService
+  const handleBulkActionWrapper = async (emailIds, action, value) => {
     try {
-      // Update local state for starred/important/snoozed
-      if (action === 'star' || action === 'important' || action === 'snooze') {
-        emailIds.forEach(emailId => {
-          const email = currentEmails.find(e => e && e.uid === emailId);
-          switch (action) {
-            case 'star':
-              setStarredEmails(prev => 
-                value 
-                  ? [...prev, emailId]
-                  : prev.filter(id => id !== emailId)
-              );
-              if (email && value) {
-                createEmailNotification(email, 'starred');
-              }
-              break;
-            case 'important':
-              setImportantEmails(prev => 
-                value 
-                  ? [...prev, emailId]
-                  : prev.filter(id => id !== emailId)
-              );
-              break;
-            case 'snooze':
-              setSnoozedEmails(prev => 
-                value 
-                  ? [...prev, emailId]
-                  : prev.filter(id => id !== emailId)
-              );
-              break;
-          }
-        });
-      }
+      // Map all IDs to their backend IDs (uid)
+      const backendIds = emailIds.map(emailId => {
+        const email = currentEmails.find(e => e && (e.uid === emailId || e.id === emailId));
+        return email?.uid || email?.id || emailId;
+      }).filter(id => id);
+
+      console.log(`🔄 Bulk action: ${action} on ${backendIds.length} emails`);
       
-      // Call parent handler
-      if (onBulkAction) {
-        onBulkAction(emailIds, action, value);
-      }
-      
-      // Add notification for bulk action
-      addNotification({
-        type: NOTIFICATION_TYPES.EMAIL_MOVED,
-        title: 'Bulk Action Completed',
-        message: `${emailIds.length} emails ${action}ed`,
-        priority: 'medium'
+      // First update UI state immediately
+      emailIds.forEach(emailId => {
+        const backendId = emailId; // Use the ID as passed (could be uid or id)
+        switch (action) {
+          case 'star':
+            setStarredEmails(prev => 
+              value 
+                ? [...prev, backendId]
+                : prev.filter(id => id !== backendId)
+            );
+            break;
+          case 'important':
+            setImportantEmails(prev => 
+              value 
+                ? [...prev, backendId]
+                : prev.filter(id => id !== backendId)
+            );
+            break;
+          case 'snooze':
+            setSnoozedEmails(prev => 
+              value 
+                ? [...prev, backendId]
+                : prev.filter(id => id !== backendId)
+            );
+            break;
+          case 'read':
+            setCurrentEmails(prev => 
+              prev.map(email => 
+                (emailIds.includes(email.uid) || emailIds.includes(email.id)) ? { ...email, read: value } : email
+              )
+            );
+            break;
+        }
       });
+
+      // Make API call
+      try {
+        let result;
+        
+        if (action === 'delete' || action === 'archive' || action === 'move') {
+          const targetFolder = action === 'delete' ? 'trash' : 
+                             action === 'archive' ? 'archive' : value;
+          
+          result = await EmailService.moveEmailsToFolder(backendIds, targetFolder);
+          
+          if (result.success && action === 'delete') {
+            setStarredEmails(prev => prev.filter(id => !backendIds.includes(id)));
+            setImportantEmails(prev => prev.filter(id => !backendIds.includes(id)));
+            setSnoozedEmails(prev => prev.filter(id => !backendIds.includes(id)));
+          }
+        } else {
+          result = await EmailService.batchUpdateEmails(backendIds, action);
+        }
+
+        if (result.success) {
+          console.log(`✅ Bulk action successful`);
+          showSnackbar(`${backendIds.length} emails updated`, "success");
+          
+          // Refresh emails
+          await handleRefresh();
+          
+          addNotification({
+            type: NOTIFICATION_TYPES.EMAIL_MOVED,
+            title: 'Bulk Action Completed',
+            message: `${backendIds.length} emails ${action}ed`,
+            priority: 'medium'
+          });
+        } else {
+          console.error('❌ Bulk action failed:', result.message);
+          showSnackbar(`Failed to update emails: ${result.message}`, "error");
+        }
+      } catch (apiError) {
+        console.error('❌ API error in bulk action:', apiError.message);
+        showSnackbar(`Failed to update emails: ${apiError.message}`, "error");
+      }
+
     } catch (error) {
       console.error('Error in bulk action:', error);
+      showSnackbar(`Failed to update emails: ${error.message}`, "error");
     }
   };
 
-  const handleGetEmailBody = async (uid, folder = 'inbox') => {
-    const email = emails.find(e => e.uid === uid);
-    if (email && email.body) {
-      return email.body;
-    }
-    
-    try {
-      if (onGetEmailBody) {
-        return await onGetEmailBody(uid, folder);
-      }
-    } catch (error) {
-      console.error('Error fetching email body:', error);
-    }
-    
-    return '';
-  };
-
-  const handleDecryptEmailWrapper = async (emailId, encryptionKey = null) => {
-    try {
-      if (onDecryptEmail) {
-        const result = await onDecryptEmail(emailId, encryptionKey);
-        
-        // Update the selected email if it's currently being viewed
-        if (selectedEmail && selectedEmail.uid === emailId) {
-          setSelectedEmail(prev => ({
-            ...prev,
-            body: result.decrypted || result.body,
-            requiresDecryption: false,
-            decrypted: true
-          }));
-        }
-        
-        // Update current emails list
-        setCurrentEmails(prev => prev.map(email => 
-          email.uid === emailId ? { 
-            ...email, 
-            body: result.decrypted || result.body,
-            requiresDecryption: false,
-            decrypted: true
-          } : email
-        ));
-        
-        showSnackbar('Email decrypted successfully', 'success');
-        return result;
-      }
-    } catch (error) {
-      console.error('Decryption error:', error);
-      showSnackbar(`Decryption failed: ${error.message}`, 'error');
-      throw error;
-    }
-  };
-
-  // Open decrypt modal for specific email
-  const handleOpenDecryptModal = (email) => {
-    setEmailToDecrypt(email);
-    setDecryptModalOpen(true);
-  };
-
-  // Handle decrypt modal submit - FIXED: Accepts (emailId, key) parameters
+  // Handle decrypt modal submit with EmailService
   const handleDecryptModalSubmit = async (emailId, key) => {
     try {
-      await handleDecryptEmailWrapper(emailId, key);
-      setDecryptModalOpen(false);
-      setEmailToDecrypt(null);
+      console.log(`🔓 Decrypting email: ${emailId}`);
       
-      // Also update the selected email if it's the same one
-      if (selectedEmail && selectedEmail.uid === emailId) {
-        const updatedEmail = emails.find(e => e.uid === emailId);
-        if (updatedEmail) {
-          setSelectedEmail(prev => ({
-            ...prev,
-            body: updatedEmail.body,
-            requiresDecryption: false,
-            decrypted: true
-          }));
+      const result = await EmailService.decryptEmail(emailId, key);
+      
+      if (result.success) {
+        setDecryptModalOpen(false);
+        setEmailToDecrypt(null);
+        showSnackbar('Email decrypted successfully', 'success');
+        
+        // Update the email in state with decrypted content
+        setCurrentEmails(prev => 
+          prev.map(email => 
+            (email.uid === emailId || email.id === emailId)
+              ? { ...email, body: result.decryptedContent || email.body, isDecrypted: true }
+              : email
+          )
+        );
+        
+        if (selectedEmail && (selectedEmail.uid === emailId || selectedEmail.id === emailId)) {
+          setSelectedEmail(prev => 
+            ({ ...prev, body: result.decryptedContent || prev.body, isDecrypted: true })
+          );
         }
+        
+        return result;
+      } else {
+        showSnackbar(`Decryption failed: ${result.message}`, 'error');
       }
     } catch (error) {
       console.error('Error in decrypt modal:', error);
-      showSnackbar('Decryption failed', 'error');
+      showSnackbar(`Decryption failed: ${error.message}`, 'error');
     }
   };
 
-  // Handle delete email
-  const handleDeleteEmail = (emailId) => {
+  // ✅ FIXED: Handle delete email with EmailService
+  const handleDeleteEmail = async (emailId) => {
     try {
-      setCurrentEmails(prev => prev.filter(email => email.uid !== emailId));
+      // Find the email to get the uid
+      const email = currentEmails.find(e => e && (e.uid === emailId || e.id === emailId));
       
-      setStarredEmails(prev => prev.filter(id => id !== emailId));
-      setImportantEmails(prev => prev.filter(id => id !== emailId));
-      setSnoozedEmails(prev => prev.filter(id => id !== emailId));
+      if (!email) {
+        console.error(`❌ Email not found for ID: ${emailId}`);
+        showSnackbar('Email not found', 'error');
+        return;
+      }
+
+      // ✅ ALWAYS USE email.uid for backend calls
+      const backendId = email.uid || email.id;
       
-      if (selectedEmail && selectedEmail.uid === emailId) {
+      console.log(`🗑️ Deleting email: ${backendId}`);
+      
+      // Update local state immediately
+      setCurrentEmails(prev => prev.filter(email => (email.uid !== backendId && email.id !== backendId)));
+      setStarredEmails(prev => prev.filter(id => id !== backendId));
+      setImportantEmails(prev => prev.filter(id => id !== backendId));
+      setSnoozedEmails(prev => prev.filter(id => id !== backendId));
+      
+      if (selectedEmail && (selectedEmail.uid === backendId || selectedEmail.id === backendId)) {
         setSelectedEmail(null);
       }
-      
-      addNotification({
-        type: NOTIFICATION_TYPES.EMAIL_DELETED,
-        title: 'Email Deleted',
-        message: 'Email has been moved to trash',
-        priority: 'medium'
-      });
-      
-      showSnackbar('Email deleted', 'success');
+
+      // Make API call
+      try {
+        const result = await EmailService.moveEmailsToFolder([backendId], 'trash');
+        
+        if (result.success) {
+          showSnackbar('Email moved to trash', 'success');
+          
+          addNotification({
+            type: NOTIFICATION_TYPES.EMAIL_DELETED,
+            title: 'Email Deleted',
+            message: 'Email has been moved to trash',
+            priority: 'medium'
+          });
+          
+          // Refresh emails
+          await handleRefresh();
+        } else {
+          console.error('Delete failed:', result.message);
+          showSnackbar('Failed to delete email', 'error');
+        }
+      } catch (apiError) {
+        console.error('API error deleting email:', apiError.message);
+        showSnackbar('Failed to delete email', 'error');
+      }
     } catch (error) {
       console.error('Error deleting email:', error);
       showSnackbar('Failed to delete email', 'error');
     }
   };
 
-  const handleMoveEmails = (emailIds, folder) => {
+  // ✅ FIXED: Handle move emails with EmailService
+  const handleMoveEmails = async (emailIds, folder) => {
     try {
-      if (folder === 'trash') {
-        setStarredEmails(prev => prev.filter(id => !emailIds.includes(id)));
-        setImportantEmails(prev => prev.filter(id => !emailIds.includes(id)));
-        setSnoozedEmails(prev => prev.filter(id => !emailIds.includes(id)));
-        
-        addNotification({
-          type: NOTIFICATION_TYPES.EMAIL_DELETED,
-          title: 'Emails Moved to Trash',
-          message: `${emailIds.length} emails moved to trash`,
-          priority: 'medium'
-        });
-      } else {
-        addNotification({
-          type: NOTIFICATION_TYPES.EMAIL_MOVED,
-          title: 'Emails Moved',
-          message: `${emailIds.length} emails moved to ${folder}`,
-          priority: 'medium'
-        });
-      }
+      // Map all IDs to their backend IDs (uid)
+      const backendIds = emailIds.map(emailId => {
+        const email = currentEmails.find(e => e && (e.uid === emailId || e.id === emailId));
+        return email?.uid || email?.id || emailId;
+      }).filter(id => id);
+
+      console.log(`📂 Moving ${backendIds.length} emails to ${folder}`);
       
-      if (onMoveEmails) {
-        onMoveEmails(emailIds, folder);
+      // Update local state
+      if (folder === 'trash') {
+        setStarredEmails(prev => prev.filter(id => !backendIds.includes(id)));
+        setImportantEmails(prev => prev.filter(id => !backendIds.includes(id)));
+        setSnoozedEmails(prev => prev.filter(id => !backendIds.includes(id)));
+      }
+
+      // Make API call
+      try {
+        const result = await EmailService.moveEmailsToFolder(backendIds, folder);
+        
+        if (result.success) {
+          showSnackbar(`${backendIds.length} emails moved to ${folder}`, "success");
+          
+          // Refresh emails
+          await handleRefresh();
+          
+          addNotification({
+            type: NOTIFICATION_TYPES.EMAIL_MOVED,
+            title: 'Emails Moved',
+            message: `${backendIds.length} emails moved to ${folder}`,
+            priority: 'medium'
+          });
+        } else {
+          console.error('Move failed:', result.message);
+          showSnackbar(`Failed to move emails: ${result.message}`, "error");
+        }
+      } catch (apiError) {
+        console.error('API error moving emails:', apiError.message);
+        showSnackbar(`Failed to move emails: ${apiError.message}`, "error");
       }
     } catch (error) {
       console.error('Error moving emails:', error);
+      showSnackbar(`Failed to move emails: ${error.message}`, "error");
+    }
+  };
+
+  // UPDATED: Open decrypt modal
+  const handleOpenDecryptModal = (email) => {
+    setEmailToDecrypt(email);
+    setDecryptModalOpen(true);
+  };
+
+  // Handle get email body with EmailService
+  const handleGetEmailBody = async (emailId) => {
+    try {
+      const result = await EmailService.getEmailById(emailId);
+      if (result.success) {
+        return result.email.body || '';
+      }
+      return '';
+    } catch (error) {
+      console.error('Error getting email body:', error);
+      return '';
     }
   };
 
@@ -930,7 +1042,7 @@ export default function Dashboard({
   const handleFolderChange = (folder) => {
     try {
       setActiveSection(folder);
-      setActivePage("inbox");
+      setMainContent({ type: "inbox", data: null });
       setCurrentPage(1);
       setSearchQuery("");
       setSelectedEmail(null);
@@ -944,22 +1056,6 @@ export default function Dashboard({
       }
     } catch (error) {
       console.error('Error changing folder:', error);
-    }
-  };
-
-  // Load more emails function
-  const loadMoreEmails = async () => {
-    if (!onLoadMoreEmails || loadingMore) return;
-    
-    setLoadingMore(true);
-    try {
-      await onLoadMoreEmails(activeSection, currentEmails.length);
-      showSnackbar("Loaded more emails", "success");
-    } catch (error) {
-      console.error("Failed to load more emails:", error);
-      showSnackbar("Failed to load more emails", "error");
-    } finally {
-      setLoadingMore(false);
     }
   };
 
@@ -991,13 +1087,17 @@ export default function Dashboard({
       if (notification && notification.action) {
         switch (notification.action.type) {
           case 'view_email':
-            showSnackbar(`Opening email ${notification.action.emailId}`, 'info');
+            const email = currentEmails.find(e => e.uid === notification.action.emailId);
+            if (email) {
+              setSelectedEmail(email);
+              setMainContent({ type: "inbox", data: null });
+            }
             break;
           case 'view_security':
-            setActivePage("security");
+            handleOpenSecuritySettings();
             break;
           case 'view_account':
-            setActivePage("account");
+            handleOpenAccountSettings();
             break;
           default:
             break;
@@ -1367,8 +1467,14 @@ export default function Dashboard({
       userEmail={userEmail}
       userAvatar={userEmail?.charAt(0).toUpperCase() || 'U'}
       onLogout={onLogout}
-      activePage={activePage}
-      onPageChange={setActivePage}
+      darkMode={darkMode}
+      onToggleTheme={onToggleTheme}
+      onOpenSettings={handleOpenSettings}
+      onOpenProfile={handleOpenAccountSettings}
+      onOpenNotifications={handleOpenNotificationsPage}
+      onOpenSecurity={handleOpenSecuritySettings}
+      onOpenHelp={handleOpenHelp}
+      onOpenAbout={handleOpenAbout}
     />
   );
 
@@ -1395,6 +1501,7 @@ export default function Dashboard({
             startIcon={<ChevronLeft />}
             disabled={currentPage === 1 || loadingMore}
             onClick={() => handlePageChange(null, currentPage - 1)}
+            sx={{ color: 'text.primary' }}
           >
             Previous
           </Button>
@@ -1422,6 +1529,7 @@ export default function Dashboard({
             endIcon={<ChevronRight />}
             disabled={currentPage === totalPages || loadingMore}
             onClick={() => handlePageChange(null, currentPage + 1)}
+            sx={{ color: 'text.primary' }}
           >
             Next
           </Button>
@@ -1437,76 +1545,11 @@ export default function Dashboard({
             label={ITEMS_PER_PAGE} 
             size="small" 
             variant="outlined"
-            sx={{ color: 'text.primary', borderColor: 'divider' }}
+            sx={{ color: 'text.primary', borderColor: theme.palette.divider }}
           />
         </Box>
       </Box>
     );
-  };
-
-  // Handle opening settings pages - FIXED: AppSettings is now a dialog
-  const handleOpenAccountSettings = () => {
-    handleMenuClose();
-    setActivePage("account");
-    if (isMobile) setMobileOpen(false);
-  };
-
-  const handleOpenSecuritySettings = () => {
-    handleMenuClose();
-    setActivePage("security");
-    if (isMobile) setMobileOpen(false);
-    
-    createSecurityNotification('quantum_security_activated');
-  };
-
-  const handleOpenAppSettings = () => {
-    handleMenuClose();
-    setAppSettingsOpen(true); // NEW: Open AppSettings dialog
-    if (isMobile) setMobileOpen(false);
-  };
-
-  // FIXED: Render settings pages properly
-  const renderSettingsPage = () => {
-    switch (activePage) {
-      case "account":
-        return (
-          <AccountSettings
-            userEmail={userEmail}
-            onUpdateProfile={(updatedData) => {
-              showSnackbar("Profile updated successfully", "success");
-              addNotification({
-                type: NOTIFICATION_TYPES.ACCOUNT_ACTIVITY,
-                title: 'Profile Updated',
-                message: 'Your account information has been updated',
-                priority: 'medium'
-              });
-            }}
-            onBack={() => setActivePage("inbox")}
-          />
-        );
-      case "security":
-        return (
-          <SecuritySettings
-            user={{ email: userEmail, settings: {} }}
-            onUpdateSecurity={(settings) => {
-              showSnackbar("Security settings saved", "success");
-              addNotification({
-                type: NOTIFICATION_TYPES.SECURITY_ALERT,
-                title: 'Security Settings Updated',
-                message: 'Your security preferences have been saved',
-                priority: 'medium'
-              });
-            }}
-            encryptionStatus={{
-              hasOTPKey: false,
-              hasAESKey: false
-            }}
-            onBack={() => setActivePage("inbox")}
-          />
-        );
-      default:
-        return null;
-    }
   };
 
   // Render inbox content
@@ -1536,7 +1579,7 @@ export default function Dashboard({
           <Box sx={{ 
             p: 2, 
             borderBottom: '1px solid',
-            borderColor: 'divider',
+            borderColor: theme.palette.divider,
             bgcolor: 'background.paper'
           }}>
             <StyledInputBase
@@ -1553,7 +1596,7 @@ export default function Dashboard({
           p: 2, 
           bgcolor: 'background.paper',
           borderBottom: '1px solid',
-          borderColor: 'divider',
+          borderColor: theme.palette.divider,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1574,7 +1617,7 @@ export default function Dashboard({
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                 Unread
               </Typography>
-              <Typography variant="h6" fontWeight="600" sx={{ color: 'primary.main' }}>
+              <Typography variant="h6" fontWeight="600" sx={{ color: theme.palette.primary.main }}>
                 {currentEmails.filter(email => email && !email.read).length}
               </Typography>
             </Box>
@@ -1583,7 +1626,7 @@ export default function Dashboard({
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                 Page
               </Typography>
-              <Typography variant="h6" fontWeight="600" sx={{ color: 'success.main' }}>
+              <Typography variant="h6" fontWeight="600" sx={{ color: theme.palette.success.main }}>
                 {currentPage} / {totalPages || 1}
               </Typography>
             </Box>
@@ -1599,7 +1642,7 @@ export default function Dashboard({
               disabled={loading}
               sx={{ 
                 color: 'primary.main',
-                borderColor: 'divider',
+                borderColor: theme.palette.divider,
                 '&:hover': {
                   borderColor: 'primary.main'
                 }
@@ -1637,7 +1680,7 @@ export default function Dashboard({
             onBulkAction={handleBulkActionWrapper}
             onMoveEmails={handleMoveEmails}
             loading={loading}
-            onGetEmailBody={onGetEmailBody}
+            onGetEmailBody={handleGetEmailBody}
             onDecryptEmail={handleOpenDecryptModal}
             determineSecurityLevel={determineSecurityLevel}
             generatePreview={generatePreview}
@@ -1655,27 +1698,140 @@ export default function Dashboard({
     );
   };
 
-  // Render the current page
-  const renderCurrentPage = () => {
-    if (activePage === "inbox") {
-      return renderInboxContent();
-    } else {
-      return renderSettingsPage();
+  // Render the current page based on mainContent type
+  const renderMainContent = () => {
+    switch (mainContent.type) {
+      case "inbox":
+        return renderInboxContent();
+        
+      case "account":
+        return (
+          <AccountSettings
+            userEmail={userEmail}
+            onUpdateProfile={async (updatedData) => {
+              try {
+                const result = await EmailService.updateProfile(updatedData.name, updatedData.settings);
+                if (result.success) {
+                  showSnackbar("Profile updated successfully", "success");
+                  addNotification({
+                    type: NOTIFICATION_TYPES.ACCOUNT_ACTIVITY,
+                    title: 'Profile Updated',
+                    message: 'Your account information has been updated',
+                    priority: 'medium'
+                  });
+                } else {
+                  showSnackbar(`Failed to update profile: ${result.message}`, "error");
+                }
+              } catch (error) {
+                showSnackbar(`Failed to update profile: ${error.message}`, "error");
+              }
+            }}
+            onBack={handleOpenInbox}
+          />
+        );
+        
+      case "security":
+        return (
+          <SecuritySettings
+            user={{ email: userEmail, settings: {} }}
+            onUpdateSecurity={async (settings) => {
+              try {
+                showSnackbar("Security settings saved", "success");
+                addNotification({
+                  type: NOTIFICATION_TYPES.SECURITY_ALERT,
+                  title: 'Security Settings Updated',
+                  message: 'Your security preferences have been saved',
+                  priority: 'medium'
+                });
+              } catch (error) {
+                showSnackbar(`Failed to save security settings: ${error.message}`, "error");
+              }
+            }}
+            encryptionStatus={{
+              hasOTPKey: false,
+              hasAESKey: false
+            }}
+            onBack={handleOpenInbox}
+          />
+        );
+        
+      case "settings":
+        return (
+          <AppSettings
+            darkMode={darkMode}
+            onToggleTheme={() => {
+              onToggleTheme();
+              addNotification({
+                type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
+                title: 'Theme Changed',
+                message: `Switched to ${darkMode ? 'light' : 'dark'} mode`,
+                priority: 'low'
+              });
+            }}
+            userEmail={userEmail}
+            onBack={handleOpenInbox}
+          />
+        );
+        
+      case "help":
+        return (
+          <HelpSupport
+            onBack={handleOpenInbox}
+          />
+        );
+        
+      case "about":
+        return (
+          <AboutQuMail
+            onBack={handleOpenInbox}
+          />
+        );
+        
+      case "notifications":
+        return (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h4" gutterBottom>
+              Notifications
+            </Typography>
+            <Typography variant="body1" paragraph>
+              Manage your notification preferences and view recent alerts.
+            </Typography>
+            <Box sx={{ mt: 2 }}>
+              <Button 
+                variant="contained" 
+                onClick={handleOpenInbox}
+              >
+                Back to Inbox
+              </Button>
+            </Box>
+          </Box>
+        );
+        
+      default:
+        return renderInboxContent();
     }
   };
 
-  // Render page header for settings pages
+  // Render page header for non-inbox pages
   const renderPageHeader = () => {
-    if (activePage === "inbox") return null;
+    if (mainContent.type === "inbox") return null;
     
     const pageTitles = {
       "account": "Account Settings",
-      "security": "Security Settings"
+      "security": "Security Settings",
+      "settings": "Application Settings",
+      "help": "Help & Support",
+      "about": "About QuMail",
+      "notifications": "Notifications"
     };
     
     const pageIcons = {
       "account": <Person />,
-      "security": <Security />
+      "security": <Security />,
+      "settings": <Settings />,
+      "help": <Info />,
+      "about": <Public />,
+      "notifications": <Notifications />
     };
     
     return (
@@ -1683,18 +1839,18 @@ export default function Dashboard({
         p: 2, 
         bgcolor: 'background.paper',
         borderBottom: '1px solid',
-        borderColor: 'divider',
+        borderColor: theme.palette.divider,
         display: 'flex',
         alignItems: 'center',
         gap: 2
       }}>
-        <IconButton onClick={() => setActivePage("inbox")}>
+        <IconButton onClick={handleOpenInbox}>
           <ArrowBack />
         </IconButton>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {pageIcons[activePage]}
-          <Typography variant="h6" fontWeight="600">
-            {pageTitles[activePage]}
+          {pageIcons[mainContent.type]}
+          <Typography variant="h6" fontWeight="600" sx={{ color: 'text.primary' }}>
+            {pageTitles[mainContent.type]}
           </Typography>
         </Box>
       </Box>
@@ -1710,9 +1866,9 @@ export default function Dashboard({
           zIndex: theme.zIndex.drawer + 1,
           bgcolor: 'background.paper',
           color: 'text.primary',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+          boxShadow: theme.shadows[1],
           borderBottom: '1px solid',
-          borderColor: 'divider',
+          borderColor: theme.palette.divider,
         }}
       >
         <Toolbar>
@@ -1741,7 +1897,7 @@ export default function Dashboard({
             >
               <Security sx={{ fontSize: 20 }} />
             </Avatar>
-            <Typography variant="h6" noWrap component="div" fontWeight="600">
+            <Typography variant="h6" noWrap component="div" fontWeight="600" sx={{ color: 'text.primary' }}>
               QuMail
             </Typography>
             <Typography variant="caption" sx={{ 
@@ -1753,7 +1909,7 @@ export default function Dashboard({
           </Box>
 
           {/* Search Bar - Desktop (only show in inbox view) */}
-          {!isMobile && activePage === "inbox" && (
+          {!isMobile && mainContent.type === "inbox" && (
             <SearchBar>
               <SearchIconWrapper>
                 <Search sx={{ color: 'text.secondary' }} />
@@ -1769,7 +1925,7 @@ export default function Dashboard({
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Right Side Actions (only show in inbox view) */}
-          {activePage === "inbox" && (
+          {mainContent.type === "inbox" && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {/* Security Status */}
               <Tooltip title="Security Status">
@@ -1780,16 +1936,12 @@ export default function Dashboard({
                   px: 1.5,
                   py: 0.5,
                   borderRadius: 1,
-                  bgcolor: theme.palette.mode === 'dark' 
-                    ? 'rgba(25, 118, 210, 0.2)' 
-                    : 'rgba(25, 118, 210, 0.08)',
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
                   border: '1px solid',
-                  borderColor: theme.palette.mode === 'dark'
-                    ? 'rgba(25, 118, 210, 0.3)'
-                    : 'rgba(25, 118, 210, 0.2)'
+                  borderColor: alpha(theme.palette.primary.main, 0.2)
                 }}>
-                  <FiberManualRecord sx={{ fontSize: 12, color: 'success.main' }} />
-                  <Typography variant="caption" fontWeight="500" sx={{ color: 'primary.main' }}>
+                  <FiberManualRecord sx={{ fontSize: 12, color: theme.palette.success.main }} />
+                  <Typography variant="caption" fontWeight="500" sx={{ color: 'text.primary' }}>
                     {currentEmails.filter(email => {
                       if (!email || !email.body) return false;
                       return determineSecurityLevel(email.body) !== "none";
@@ -1804,6 +1956,7 @@ export default function Dashboard({
                   size="small" 
                   onClick={handleRefresh}
                   disabled={loading}
+                  sx={{ color: 'text.primary' }}
                 >
                   <Refresh />
                 </IconButton>
@@ -1811,7 +1964,7 @@ export default function Dashboard({
 
               {/* Theme Toggle */}
               <Tooltip title="Toggle theme">
-                <IconButton size="small" onClick={onToggleTheme}>
+                <IconButton size="small" onClick={onToggleTheme} sx={{ color: 'text.primary' }}>
                   {darkMode ? <Brightness7 /> : <Brightness4 />}
                 </IconButton>
               </Tooltip>
@@ -1821,6 +1974,7 @@ export default function Dashboard({
                 <IconButton 
                   size="small" 
                   onClick={handleNotificationsMenuOpen}
+                  sx={{ color: 'text.primary' }}
                 >
                   <Badge 
                     badgeContent={unreadNotifications} 
@@ -1835,7 +1989,7 @@ export default function Dashboard({
               {/* Search - Mobile */}
               {isMobile && (
                 <Tooltip title="Search">
-                  <IconButton size="small">
+                  <IconButton size="small" sx={{ color: 'text.primary' }}>
                     <Search />
                   </IconButton>
                 </Tooltip>
@@ -1855,7 +2009,7 @@ export default function Dashboard({
                       <Avatar sx={{ 
                         width: 12, 
                         height: 12, 
-                        bgcolor: 'success.main', 
+                        bgcolor: theme.palette.success.main, 
                         border: `2px solid ${theme.palette.background.paper}` 
                       }} />
                     }
@@ -1889,60 +2043,60 @@ export default function Dashboard({
                 {userEmail?.charAt(0).toUpperCase() || 'U'}
               </Avatar>
               <Box>
-                <Typography variant="body1" fontWeight="600">
+                <Typography variant="body1" fontWeight="600" sx={{ color: 'text.primary' }}>
                   {userEmail?.split('@')[0] || 'User'}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   {userEmail || 'No email'}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                  <FiberManualRecord sx={{ fontSize: 8, color: 'success.main' }} />
+                  <FiberManualRecord sx={{ fontSize: 8, color: theme.palette.success.main }} />
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Account Active
                   </Typography>
                 </Box>
               </Box>
             </Box>
-            <Divider />
+            <Divider sx={{ borderColor: theme.palette.divider }} />
 
             {/* Menu Items */}
             <MenuItem onClick={handleOpenAccountSettings}>
-              <Person sx={{ mr: 2, fontSize: 20 }} />
+              <Person sx={{ mr: 2, fontSize: 20, color: theme.palette.text.secondary }} />
               <Box>
-                <Typography variant="body2">My Account</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ color: theme.palette.text.primary }}>My Account</Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                   Manage your profile
                 </Typography>
               </Box>
             </MenuItem>
             
             <MenuItem onClick={handleOpenSecuritySettings}>
-              <Security sx={{ mr: 2, fontSize: 20 }} />
+              <Security sx={{ mr: 2, fontSize: 20, color: theme.palette.text.secondary }} />
               <Box>
-                <Typography variant="body2">Security Settings</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ color: theme.palette.text.primary }}>Security Settings</Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                   Encryption preferences
                 </Typography>
               </Box>
             </MenuItem>
             
-            <MenuItem onClick={handleOpenAppSettings}>
-              <Settings sx={{ mr: 2, fontSize: 20 }} />
+            <MenuItem onClick={handleOpenSettings}>
+              <Settings sx={{ mr: 2, fontSize: 20, color: theme.palette.text.secondary }} />
               <Box>
-                <Typography variant="body2">App Settings</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ color: theme.palette.text.primary }}>App Settings</Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                   Customize QuMail
                 </Typography>
               </Box>
             </MenuItem>
             
-            <Divider />
+            <Divider sx={{ borderColor: theme.palette.divider }} />
             
             <MenuItem onClick={() => { handleMenuClose(); onLogout(); }}>
-              <ExitToApp sx={{ mr: 2, fontSize: 20 }} />
+              <ExitToApp sx={{ mr: 2, fontSize: 20, color: theme.palette.text.secondary }} />
               <Box>
-                <Typography variant="body2">Sign Out</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ color: theme.palette.text.primary }}>Sign Out</Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                   {userEmail || ''}
                 </Typography>
               </Box>
@@ -1979,7 +2133,7 @@ export default function Dashboard({
               width: 280,
               boxSizing: 'border-box',
               borderRight: '1px solid',
-              borderColor: 'divider',
+              borderColor: theme.palette.divider,
               bgcolor: 'background.paper'
             },
           }}
@@ -1996,7 +2150,7 @@ export default function Dashboard({
               width: 280,
               boxSizing: 'border-box',
               borderRight: '1px solid',
-              borderColor: 'divider',
+              borderColor: theme.palette.divider,
               bgcolor: 'background.paper',
               display: 'flex',
               flexDirection: 'column'
@@ -2020,12 +2174,12 @@ export default function Dashboard({
           bgcolor: 'background.default'
         }}
       >
-        {/* Page Header for settings pages */}
+        {/* Page Header for non-inbox pages */}
         {renderPageHeader()}
 
         {/* Dynamic Content Area */}
         <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {renderCurrentPage()}
+          {renderMainContent()}
         </Box>
       </Box>
 
@@ -2051,23 +2205,6 @@ export default function Dashboard({
         loading={loading}
       />
 
-      {/* App Settings Dialog - NEW: Added proper AppSettings dialog */}
-      <AppSettings
-        open={appSettingsOpen}
-        onClose={() => setAppSettingsOpen(false)}
-        darkMode={darkMode}
-        onToggleTheme={() => {
-          onToggleTheme();
-          addNotification({
-            type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
-            title: 'Theme Changed',
-            message: `Switched to ${darkMode ? 'light' : 'dark'} mode`,
-            priority: 'low'
-          });
-        }}
-        userEmail={userEmail}
-      />
-
       {/* All Notifications Dialog */}
       {renderAllNotificationsDialog()}
 
@@ -2090,44 +2227,6 @@ export default function Dashboard({
     </Box>
   );
 }
-
-// Demo function to add sample notifications
-export const addDemoNotifications = (addNotification) => {
-  const demoNotifications = [
-    {
-      type: NOTIFICATION_TYPES.NEW_EMAIL,
-      title: 'New Secure Email',
-      message: 'From: security@qumail.com',
-      priority: 'high'
-    },
-    {
-      type: NOTIFICATION_TYPES.ENCRYPTION_SUCCESS,
-      title: 'Encryption Activated',
-      message: 'Quantum OTP encryption enabled',
-      priority: 'high'
-    },
-    {
-      type: NOTIFICATION_TYPES.SECURITY_ALERT,
-      title: 'Security Scan Complete',
-      message: 'No threats detected in your account',
-      priority: 'medium'
-    },
-    {
-      type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
-      title: 'System Update',
-      message: 'QuMail v2.0 is now available',
-      priority: 'medium'
-    },
-    {
-      type: NOTIFICATION_TYPES.LOGIN_ATTEMPT,
-      title: 'New Login Detected',
-      message: 'From: New York, USA',
-      priority: 'high'
-    }
-  ];
-
-  demoNotifications.forEach(notification => addNotification(notification));
-};
 
 // Add styles
 const styles = `

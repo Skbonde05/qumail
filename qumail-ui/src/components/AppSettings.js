@@ -1,9 +1,6 @@
+// src/components/AppSettings.js
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Box,
   Typography,
   TextField,
@@ -23,7 +20,22 @@ import {
   Tooltip,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  InputAdornment,
+  Badge,
+  LinearProgress,
+  Tabs,
+  Tab,
+  Avatar,
+  RadioGroup,
+  Radio,
+  FormLabel,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Collapse,
+  CircularProgress
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -39,11 +51,120 @@ import {
   Close as CloseIcon,
   RestartAlt as ResetIcon,
   Brightness4 as DarkIcon,
-  Brightness7 as LightIcon
+  Brightness7 as LightIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Info as InfoIcon,
+  Verified as VerifiedIcon,
+  Speed as SpeedIcon,
+  CloudDownload as CloudDownloadIcon,
+  VpnKey as VpnKeyIcon,
+  PaletteOutlined as PaletteOutlinedIcon,
+  Translate as TranslateIcon,
+  Schedule as ScheduleIcon,
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  Lock as LockIcon,
+  Memory as MemoryIcon,
+  Bolt as BoltIcon,
+  DataUsage as DataUsageIcon,
+  AutoAwesome as AutoAwesomeIcon,
+  Science as ScienceIcon,
+  RocketLaunch as RocketLaunchIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
+import { styled, alpha } from '@mui/material/styles';
 
-const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
-  // Settings state
+// Styled Components
+const ProfessionalPaper = styled(Paper)(({ theme }) => ({
+  borderRadius: theme.shape.borderRadius * 1.5,
+  border: `1px solid ${theme.palette.divider}`,
+  background: theme.palette.mode === 'dark'
+    ? `linear-gradient(145deg, ${alpha(theme.palette.background.paper, 0.95)} 0%, ${alpha(theme.palette.background.default, 0.95)} 100%)`
+    : `linear-gradient(145deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.grey[50], 0.8)} 100%)`,
+  backdropFilter: 'blur(10px)',
+  boxShadow: theme.shadows[1],
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  '&:hover': {
+    boxShadow: theme.shadows[4],
+    borderColor: theme.palette.primary.light,
+    transform: 'translateY(-2px)'
+  }
+}));
+
+const SectionIconWrapper = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 48,
+  height: 48,
+  borderRadius: '12px',
+  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+  color: theme.palette.primary.contrastText,
+  boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+  marginRight: theme.spacing(2)
+}));
+
+const PremiumChip = styled(Chip)(({ theme }) => ({
+  background: `linear-gradient(45deg, ${theme.palette.secondary.main} 30%, ${theme.palette.primary.main} 90%)`,
+  color: 'white',
+  fontWeight: 600,
+  fontSize: '0.7rem',
+  height: 24,
+  '& .MuiChip-label': {
+    paddingLeft: 8,
+    paddingRight: 8
+  }
+}));
+
+const SettingItem = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(2.5),
+  borderRadius: theme.shape.borderRadius,
+  border: `1px solid ${theme.palette.divider}`,
+  marginBottom: theme.spacing(2),
+  transition: 'all 0.2s ease',
+  '&:hover': {
+    borderColor: theme.palette.primary.light,
+    backgroundColor: alpha(theme.palette.primary.main, 0.03)
+  }
+}));
+
+const StyledSlider = styled(Slider)(({ theme }) => ({
+  color: theme.palette.primary.main,
+  height: 8,
+  '& .MuiSlider-track': {
+    border: 'none',
+  },
+  '& .MuiSlider-thumb': {
+    height: 20,
+    width: 20,
+    backgroundColor: '#fff',
+    border: `2px solid ${theme.palette.primary.main}`,
+    '&:focus, &:hover, &.Mui-active': {
+      boxShadow: `0 0 0 8px ${alpha(theme.palette.primary.main, 0.16)}`,
+    },
+  },
+  '& .MuiSlider-valueLabel': {
+    backgroundColor: theme.palette.primary.main,
+    borderRadius: 8,
+    padding: '4px 8px',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    '&:before': {
+      content: '""',
+      position: 'absolute',
+      width: 8,
+      height: 8,
+      backgroundColor: theme.palette.primary.main,
+      bottom: -4,
+      left: '50%',
+      transform: 'translateX(-50%) rotate(45deg)',
+    },
+  },
+}));
+
+const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
+  // Settings state with enhanced defaults
   const [settings, setSettings] = useState({
     // General settings
     language: 'en',
@@ -55,41 +176,63 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
     theme: darkMode ? 'dark' : 'light',
     density: 'comfortable', // compact, comfortable, spacious
     fontSize: 14,
+    animationLevel: 'normal', // minimal, normal, enhanced
     
     // Notifications
     emailNotifications: true,
     pushNotifications: false,
     soundNotifications: true,
     desktopNotifications: true,
+    notificationSound: 'gentle',
     
     // Email settings
     autoSaveDrafts: true,
     autoSaveInterval: 30, // seconds
     sendConfirmation: true,
     spellCheck: true,
-    signature: `Sent from QuMail`,
+    grammarCheck: false,
+    signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
     
     // Security
     autoEncrypt: false,
-    defaultEncryptionLevel: 'medium',
+    defaultEncryptionLevel: 'high',
     sessionTimeout: 30, // minutes
     twoFactorAuth: false,
+    autoLogout: true,
     
     // Storage
     syncFrequency: 5, // minutes
     cacheEmails: true,
-    maxCacheSize: 500, // MB
+    maxCacheSize: 1000, // MB
     autoCleanup: true,
+    cleanupThreshold: 70, // percentage
     
-    // Experimental
+    // Performance
+    hardwareAcceleration: true,
+    backgroundSync: true,
+    dataSaver: false,
+    
+    // Advanced
     enableBetaFeatures: false,
     useQuantumEncryption: true,
-    performanceMode: false
+    performanceMode: false,
+    developerMode: false,
+    telemetry: false
   });
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [expandedSections, setExpandedSections] = useState({
+    general: true,
+    appearance: false,
+    notifications: false,
+    email: false,
+    security: false,
+    storage: false,
+    advanced: false
+  });
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -114,31 +257,41 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
       theme: darkMode ? 'dark' : 'light',
       density: 'comfortable',
       fontSize: 14,
+      animationLevel: 'normal',
       emailNotifications: true,
       pushNotifications: false,
       soundNotifications: true,
       desktopNotifications: true,
+      notificationSound: 'gentle',
       autoSaveDrafts: true,
       autoSaveInterval: 30,
       sendConfirmation: true,
       spellCheck: true,
-      signature: `Sent from QuMail`,
+      grammarCheck: false,
+      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
       autoEncrypt: false,
-      defaultEncryptionLevel: 'medium',
+      defaultEncryptionLevel: 'high',
       sessionTimeout: 30,
       twoFactorAuth: false,
+      autoLogout: true,
       syncFrequency: 5,
       cacheEmails: true,
-      maxCacheSize: 500,
+      maxCacheSize: 1000,
       autoCleanup: true,
+      cleanupThreshold: 70,
+      hardwareAcceleration: true,
+      backgroundSync: true,
+      dataSaver: false,
       enableBetaFeatures: false,
       useQuantumEncryption: true,
-      performanceMode: false
+      performanceMode: false,
+      developerMode: false,
+      telemetry: false
     };
 
     const hasChanges = JSON.stringify(settings) !== JSON.stringify(defaultSettings);
     setHasUnsavedChanges(hasChanges);
-  }, [settings, darkMode]);
+  }, [settings, darkMode, userEmail]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
@@ -156,34 +309,41 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
     }
   };
 
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   const handleSave = () => {
     setIsSaving(true);
     
-    // Simulate API call
+    // Simulate API call with progress
     setTimeout(() => {
       try {
         localStorage.setItem('qumail_settings', JSON.stringify(settings));
         
         setSaveMessage({
           type: 'success',
-          text: 'Settings saved successfully!'
+          text: 'Settings saved successfully! Your preferences have been updated.'
         });
         
         setHasUnsavedChanges(false);
         
-        // Clear message after 3 seconds
+        // Clear message after 4 seconds
         setTimeout(() => {
           setSaveMessage({ type: '', text: '' });
-        }, 3000);
+        }, 4000);
       } catch (error) {
         setSaveMessage({
           type: 'error',
-          text: 'Failed to save settings: ' + error.message
+          text: `Failed to save settings: ${error.message}. Please try again.`
         });
       } finally {
         setIsSaving(false);
       }
-    }, 500);
+    }, 800);
   };
 
   const handleReset = () => {
@@ -195,32 +355,42 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
       theme: darkMode ? 'dark' : 'light',
       density: 'comfortable',
       fontSize: 14,
+      animationLevel: 'normal',
       emailNotifications: true,
       pushNotifications: false,
       soundNotifications: true,
       desktopNotifications: true,
+      notificationSound: 'gentle',
       autoSaveDrafts: true,
       autoSaveInterval: 30,
       sendConfirmation: true,
       spellCheck: true,
-      signature: `Sent from QuMail`,
+      grammarCheck: false,
+      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
       autoEncrypt: false,
-      defaultEncryptionLevel: 'medium',
+      defaultEncryptionLevel: 'high',
       sessionTimeout: 30,
       twoFactorAuth: false,
+      autoLogout: true,
       syncFrequency: 5,
       cacheEmails: true,
-      maxCacheSize: 500,
+      maxCacheSize: 1000,
       autoCleanup: true,
+      cleanupThreshold: 70,
+      hardwareAcceleration: true,
+      backgroundSync: true,
+      dataSaver: false,
       enableBetaFeatures: false,
       useQuantumEncryption: true,
-      performanceMode: false
+      performanceMode: false,
+      developerMode: false,
+      telemetry: false
     };
     
     setSettings(defaultSettings);
     setSaveMessage({
       type: 'info',
-      text: 'Settings reset to defaults'
+      text: 'All settings have been reset to their default values.'
     });
     
     setTimeout(() => {
@@ -228,146 +398,191 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
     }, 3000);
   };
 
-  const handleClose = () => {
-    if (hasUnsavedChanges) {
-      if (window.confirm('You have unsaved changes. Are you sure you want to close?')) {
-        onClose();
-      }
-    } else {
-      onClose();
-    }
-  };
-
-  // Settings sections
+  // Enhanced settings sections with more detail
   const settingsSections = [
     {
+      id: 'general',
       title: 'General',
       icon: <SettingsIcon />,
-      description: 'Basic application settings',
+      description: 'Basic application preferences and regional settings',
+      badge: 'updated',
       fields: [
         {
           key: 'language',
           label: 'Language',
           type: 'select',
+          icon: <TranslateIcon />,
           options: [
-            { value: 'en', label: 'English' },
-            { value: 'es', label: 'Spanish' },
-            { value: 'fr', label: 'French' },
-            { value: 'de', label: 'German' },
-            { value: 'zh', label: 'Chinese' }
-          ]
+            { value: 'en', label: 'US English', flag: '🇺🇸' },
+            { value: 'en-gb', label: 'UK English', flag: '🇬🇧' },
+            { value: 'es', label: 'Español', flag: '🇪🇸' },
+            { value: 'fr', label: 'Français', flag: '🇫🇷' },
+            { value: 'de', label: 'Deutsch', flag: '🇩🇪' },
+            { value: 'zh', label: '中文', flag: '🇨🇳' },
+            { value: 'ja', label: '日本語', flag: '🇯🇵' },
+            { value: 'ko', label: '한국어', flag: '🇰🇷' },
+            { value: 'ru', label: 'Русский', flag: '🇷🇺' }
+          ],
+          description: 'Interface language for QuMail'
         },
         {
           key: 'timezone',
           label: 'Timezone',
           type: 'select',
+          icon: <ScheduleIcon />,
           options: [
             { value: 'America/New_York', label: 'Eastern Time (ET)' },
             { value: 'America/Chicago', label: 'Central Time (CT)' },
             { value: 'America/Denver', label: 'Mountain Time (MT)' },
             { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+            { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+            { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
             { value: 'Europe/London', label: 'GMT (London)' },
             { value: 'Europe/Paris', label: 'CET (Paris)' },
-            { value: 'Asia/Tokyo', label: 'JST (Tokyo)' }
-          ]
+            { value: 'Europe/Berlin', label: 'CET (Berlin)' },
+            { value: 'Asia/Tokyo', label: 'JST (Tokyo)' },
+            { value: 'Asia/Shanghai', label: 'CST (Shanghai)' },
+            { value: 'Asia/Kolkata', label: 'IST (India)' },
+            { value: 'Australia/Sydney', label: 'AEST (Sydney)' }
+          ],
+          description: 'Your local timezone for email timestamps'
         },
         {
           key: 'dateFormat',
           label: 'Date Format',
           type: 'select',
           options: [
-            { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
-            { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
-            { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' }
-          ]
+            { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY (US)' },
+            { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY (EU)' },
+            { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD (ISO)' }
+          ],
+          description: 'How dates are displayed in the interface'
         },
         {
           key: 'timeFormat',
           label: 'Time Format',
           type: 'select',
           options: [
-            { value: '12h', label: '12-hour' },
+            { value: '12h', label: '12-hour (AM/PM)' },
             { value: '24h', label: '24-hour' }
-          ]
+          ],
+          description: 'Clock format used throughout the app'
         }
       ]
     },
     {
+      id: 'appearance',
       title: 'Appearance',
       icon: <PaletteIcon />,
-      description: 'Customize the look and feel',
+      description: 'Customize the visual style and layout',
+      badge: 'Premium',
       fields: [
         {
           key: 'theme',
           label: 'Theme',
           type: 'select',
+          icon: darkMode ? <DarkIcon /> : <LightIcon />,
           options: [
-            { value: 'light', label: 'Light', icon: <LightIcon /> },
-            { value: 'dark', label: 'Dark', icon: <DarkIcon /> },
-            { value: 'auto', label: 'Auto (System)' }
-          ]
+            { value: 'light', label: 'Light Mode', icon: <LightIcon />, description: 'Clean and bright' },
+            { value: 'dark', label: 'Dark Mode', icon: <DarkIcon />, description: 'Easy on the eyes' },
+            { value: 'auto', label: 'Auto (System)', icon: <SettingsIcon />, description: 'Follows system preference' }
+          ],
+          description: 'Color theme for the application interface'
         },
         {
           key: 'density',
-          label: 'Density',
+          label: 'Interface Density',
           type: 'select',
           options: [
-            { value: 'compact', label: 'Compact' },
-            { value: 'comfortable', label: 'Comfortable' },
-            { value: 'spacious', label: 'Spacious' }
-          ]
+            { value: 'compact', label: 'Compact', description: 'More content, less space' },
+            { value: 'comfortable', label: 'Comfortable', description: 'Balanced spacing' },
+            { value: 'spacious', label: 'Spacious', description: 'Breathing room for content' }
+          ],
+          description: 'Spacing between interface elements'
         },
         {
           key: 'fontSize',
           label: 'Font Size',
           type: 'slider',
+          icon: <Typography fontSize="small" />,
           min: 12,
           max: 20,
           step: 1,
-          unit: 'px'
+          unit: 'px',
+          description: 'Adjust text size for better readability'
+        },
+        {
+          key: 'animationLevel',
+          label: 'Animations',
+          type: 'select',
+          options: [
+            { value: 'minimal', label: 'Minimal', description: 'Essential animations only' },
+            { value: 'normal', label: 'Normal', description: 'Smooth transitions' },
+            { value: 'enhanced', label: 'Enhanced', description: 'Rich visual feedback' }
+          ],
+          description: 'Level of animations and transitions'
         }
       ]
     },
     {
+      id: 'notifications',
       title: 'Notifications',
       icon: <NotificationsIcon />,
-      description: 'Manage your notification preferences',
+      description: 'Manage alerts and notification preferences',
       fields: [
         {
           key: 'emailNotifications',
           label: 'Email Notifications',
           type: 'switch',
-          description: 'Receive email notifications for new messages'
+          icon: <EmailIcon />,
+          description: 'Receive email alerts for new messages and updates'
         },
         {
           key: 'pushNotifications',
           label: 'Push Notifications',
           type: 'switch',
-          description: 'Enable browser push notifications'
+          icon: <NotificationsIcon />,
+          description: 'Enable browser push notifications for instant alerts'
         },
         {
           key: 'soundNotifications',
-          label: 'Sound Notifications',
+          label: 'Sound Alerts',
           type: 'switch',
-          description: 'Play sound for new emails'
+          icon: <SpeedIcon />,
+          description: 'Play sound when new emails arrive'
         },
         {
           key: 'desktopNotifications',
           label: 'Desktop Notifications',
           type: 'switch',
-          description: 'Show desktop notifications'
+          icon: <CloudIcon />,
+          description: 'Show desktop notifications for important events'
+        },
+        {
+          key: 'notificationSound',
+          label: 'Alert Sound',
+          type: 'select',
+          options: [
+            { value: 'gentle', label: 'Gentle Chime' },
+            { value: 'classic', label: 'Classic Notification' },
+            { value: 'modern', label: 'Modern Tone' },
+            { value: 'custom', label: 'Custom Sound' }
+          ],
+          description: 'Sound played for notifications'
         }
       ]
     },
     {
+      id: 'email',
       title: 'Email',
       icon: <EmailIcon />,
-      description: 'Email composition and behavior',
+      description: 'Email composition and sending preferences',
       fields: [
         {
           key: 'autoSaveDrafts',
           label: 'Auto-save Drafts',
           type: 'switch',
+          icon: <SaveIcon />,
           description: 'Automatically save drafts while composing'
         },
         {
@@ -384,43 +599,57 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
           key: 'sendConfirmation',
           label: 'Send Confirmation',
           type: 'switch',
-          description: 'Ask for confirmation before sending'
+          icon: <CheckCircleIcon />,
+          description: 'Ask for confirmation before sending emails'
         },
         {
           key: 'spellCheck',
           label: 'Spell Check',
           type: 'switch',
-          description: 'Enable spell checking in emails'
+          icon: <Typography fontSize="small" />,
+          description: 'Check spelling while composing emails'
+        },
+        {
+          key: 'grammarCheck',
+          label: 'Grammar Check',
+          type: 'switch',
+          icon: <VerifiedIcon />,
+          description: 'Check grammar and writing style'
         },
         {
           key: 'signature',
           label: 'Email Signature',
           type: 'textarea',
-          description: 'Signature added to outgoing emails',
-          rows: 3
+          rows: 4,
+          description: 'Signature automatically added to outgoing emails'
         }
       ]
     },
     {
+      id: 'security',
       title: 'Security',
       icon: <SecurityIcon />,
-      description: 'Security and privacy settings',
+      description: 'Security, privacy, and encryption settings',
+      badge: 'High Security',
       fields: [
         {
           key: 'autoEncrypt',
-          label: 'Auto-encrypt',
+          label: 'Auto-encrypt Sensitive Emails',
           type: 'switch',
-          description: 'Automatically encrypt sensitive emails'
+          icon: <LockIcon />,
+          description: 'Automatically encrypt emails containing sensitive content'
         },
         {
           key: 'defaultEncryptionLevel',
-          label: 'Default Encryption Level',
+          label: 'Default Encryption',
           type: 'select',
+          icon: <VpnKeyIcon />,
           options: [
-            { value: 'low', label: 'Low (Basic)' },
-            { value: 'medium', label: 'Medium (Standard)' },
-            { value: 'high', label: 'High (Maximum)' }
-          ]
+            { value: 'low', label: 'AES-128', description: 'Fast encryption' },
+            { value: 'medium', label: 'AES-256', description: 'Strong encryption' },
+            { value: 'high', label: 'Quantum OTP', description: 'Maximum security' }
+          ],
+          description: 'Default encryption level for new emails'
         },
         {
           key: 'sessionTimeout',
@@ -430,17 +659,26 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
           max: 120,
           step: 5,
           unit: 'minutes',
+          icon: <ScheduleIcon />,
           description: 'Automatic logout after inactivity'
         },
         {
           key: 'twoFactorAuth',
           label: 'Two-Factor Authentication',
           type: 'switch',
-          description: 'Enable 2FA for added security'
+          icon: <SecurityIcon />,
+          description: 'Require 2FA for login (recommended)'
+        },
+        {
+          key: 'autoLogout',
+          label: 'Auto-logout on Close',
+          type: 'switch',
+          description: 'Automatically log out when closing browser'
         }
       ]
     },
     {
+      id: 'storage',
       title: 'Storage & Sync',
       icon: <StorageIcon />,
       description: 'Data management and synchronization',
@@ -453,29 +691,103 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
           max: 60,
           step: 1,
           unit: 'minutes',
-          description: 'How often to sync with server'
+          icon: <CloudDownloadIcon />,
+          description: 'How often to sync emails with server'
         },
         {
           key: 'cacheEmails',
           label: 'Cache Emails',
           type: 'switch',
+          icon: <StorageIcon />,
           description: 'Store emails locally for offline access'
         },
         {
           key: 'maxCacheSize',
-          label: 'Max Cache Size',
+          label: 'Maximum Cache Size',
           type: 'slider',
           min: 100,
-          max: 2000,
+          max: 5000,
           step: 100,
           unit: 'MB',
-          description: 'Maximum local storage for emails'
+          icon: <DataUsageIcon />,
+          description: 'Maximum storage for cached emails'
         },
         {
           key: 'autoCleanup',
-          label: 'Auto Cleanup',
+          label: 'Automatic Cleanup',
           type: 'switch',
           description: 'Automatically remove old cached emails'
+        },
+        {
+          key: 'cleanupThreshold',
+          label: 'Cleanup Threshold',
+          type: 'slider',
+          min: 50,
+          max: 95,
+          step: 5,
+          unit: '%',
+          description: 'Clean cache when this percentage is reached'
+        }
+      ]
+    },
+    {
+      id: 'advanced',
+      title: 'Advanced',
+      icon: <ScienceIcon />,
+      description: 'Experimental features and developer options',
+      badge: 'Beta',
+      fields: [
+        {
+          key: 'enableBetaFeatures',
+          label: 'Beta Features',
+          type: 'switch',
+          icon: <RocketLaunchIcon />,
+          description: 'Enable experimental features (may be unstable)'
+        },
+        {
+          key: 'useQuantumEncryption',
+          label: 'Quantum Encryption',
+          type: 'switch',
+          icon: <AutoAwesomeIcon />,
+          description: 'Use quantum-safe encryption algorithms (experimental)'
+        },
+        {
+          key: 'performanceMode',
+          label: 'Performance Mode',
+          type: 'switch',
+          icon: <BoltIcon />,
+          description: 'Optimize for speed over visual effects'
+        },
+        {
+          key: 'hardwareAcceleration',
+          label: 'Hardware Acceleration',
+          type: 'switch',
+          icon: <MemoryIcon />,
+          description: 'Use GPU acceleration for better performance'
+        },
+        {
+          key: 'backgroundSync',
+          label: 'Background Sync',
+          type: 'switch',
+          description: 'Sync emails in background (recommended)'
+        },
+        {
+          key: 'dataSaver',
+          label: 'Data Saver Mode',
+          type: 'switch',
+          description: 'Reduce data usage for mobile connections'
+        },
+        {
+          key: 'developerMode',
+          label: 'Developer Mode',
+          type: 'switch',
+          description: 'Enable debugging tools and advanced options'
+        },
+        {
+          key: 'telemetry',
+          label: 'Anonymous Telemetry',
+          type: 'switch',
+          description: 'Help improve QuMail by sharing anonymous usage data'
         }
       ]
     }
@@ -487,64 +799,113 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
     switch (field.type) {
       case 'switch':
         return (
-          <FormControlLabel
-            control={
+          <SettingItem>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <Box sx={{ flex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                  {field.icon && (
+                    <Box sx={{ 
+                      color: 'primary.main',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      {field.icon}
+                    </Box>
+                  )}
+                  <Typography variant="body1" fontWeight="600">
+                    {field.label}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  {field.description}
+                </Typography>
+              </Box>
               <Switch
                 checked={value}
                 onChange={(e) => handleSettingChange(field.key, e.target.checked)}
                 color="primary"
+                sx={{ ml: 2 }}
               />
-            }
-            label={
-              <Box>
-                <Typography variant="body1">{field.label}</Typography>
-                {field.description && (
-                  <Typography variant="caption" color="text.secondary">
-                    {field.description}
-                  </Typography>
-                )}
-              </Box>
-            }
-            sx={{ width: '100%', ml: 0 }}
-          />
+            </Box>
+          </SettingItem>
         );
         
       case 'select':
         return (
-          <FormControl fullWidth size="small">
-            <InputLabel>{field.label}</InputLabel>
-            <Select
-              value={value}
-              label={field.label}
-              onChange={(e) => handleSettingChange(field.key, e.target.value)}
-            >
-              {field.options.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {option.icon}
-                    {option.label}
+          <SettingItem>
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                {field.icon && (
+                  <Box sx={{ color: 'primary.main' }}>
+                    {field.icon}
                   </Box>
-                </MenuItem>
-              ))}
-            </Select>
-            {field.description && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                )}
+                <Typography variant="body1" fontWeight="600">
+                  {field.label}
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
                 {field.description}
               </Typography>
-            )}
-          </FormControl>
+            </Box>
+            <FormControl fullWidth size="small">
+              <Select
+                value={value}
+                onChange={(e) => handleSettingChange(field.key, e.target.value)}
+                sx={{
+                  borderRadius: 2,
+                  '& .MuiSelect-select': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }
+                }}
+              >
+                {field.options.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                      {option.flag && <span>{option.flag}</span>}
+                      {option.icon && option.icon}
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2">{option.label}</Typography>
+                        {option.description && (
+                          <Typography variant="caption" color="text.secondary">
+                            {option.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </SettingItem>
         );
         
       case 'slider':
         return (
-          <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography variant="body1">{field.label}</Typography>
-              <Typography variant="body2" color="primary">
-                {value} {field.unit}
+          <SettingItem>
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  {field.icon && (
+                    <Box sx={{ color: 'primary.main' }}>
+                      {field.icon}
+                    </Box>
+                  )}
+                  <Typography variant="body1" fontWeight="600">
+                    {field.label}
+                  </Typography>
+                </Box>
+                <Typography variant="body1" fontWeight="600" color="primary">
+                  {value} {field.unit}
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {field.description}
               </Typography>
             </Box>
-            <Slider
+            <StyledSlider
               value={value}
               onChange={(e, newValue) => handleSettingChange(field.key, newValue)}
               min={field.min}
@@ -553,34 +914,35 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
               valueLabelDisplay="auto"
               valueLabelFormat={(value) => `${value} ${field.unit}`}
             />
-            {field.description && (
-              <Typography variant="caption" color="text.secondary">
-                {field.description}
-              </Typography>
-            )}
-          </Box>
+          </SettingItem>
         );
         
       case 'textarea':
         return (
-          <Box>
-            <Typography variant="body1" gutterBottom>
-              {field.label}
-            </Typography>
+          <SettingItem>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body1" fontWeight="600" gutterBottom>
+                {field.label}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {field.description}
+              </Typography>
+            </Box>
             <TextField
               fullWidth
               multiline
               rows={field.rows || 3}
               value={value}
               onChange={(e) => handleSettingChange(field.key, e.target.value)}
-              size="small"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  backgroundColor: 'background.default'
+                }
+              }}
+              placeholder="Enter your email signature here..."
             />
-            {field.description && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                {field.description}
-              </Typography>
-            )}
-          </Box>
+          </SettingItem>
         );
         
       default:
@@ -588,228 +950,383 @@ const AppSettings = ({ open, onClose, darkMode, onToggleTheme, userEmail }) => {
     }
   };
 
+  // Calculate settings statistics
+  const settingsStats = React.useMemo(() => {
+    const changedCount = Object.keys(settings).filter(key => {
+      const defaultValue = {
+        language: 'en',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        dateFormat: 'MM/DD/YYYY',
+        timeFormat: '12h',
+        theme: darkMode ? 'dark' : 'light',
+        density: 'comfortable',
+        fontSize: 14,
+        animationLevel: 'normal',
+        emailNotifications: true,
+        pushNotifications: false,
+        soundNotifications: true,
+        desktopNotifications: true,
+        notificationSound: 'gentle',
+        autoSaveDrafts: true,
+        autoSaveInterval: 30,
+        sendConfirmation: true,
+        spellCheck: true,
+        grammarCheck: false,
+        signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
+        autoEncrypt: false,
+        defaultEncryptionLevel: 'high',
+        sessionTimeout: 30,
+        twoFactorAuth: false,
+        autoLogout: true,
+        syncFrequency: 5,
+        cacheEmails: true,
+        maxCacheSize: 1000,
+        autoCleanup: true,
+        cleanupThreshold: 70,
+        hardwareAcceleration: true,
+        backgroundSync: true,
+        dataSaver: false,
+        enableBetaFeatures: false,
+        useQuantumEncryption: true,
+        performanceMode: false,
+        developerMode: false,
+        telemetry: false
+      };
+      
+      return JSON.stringify(settings[key]) !== JSON.stringify(defaultValue[key]);
+    }).length;
+    
+    const totalCount = Object.keys(settings).length;
+    const changedPercentage = Math.round((changedCount / totalCount) * 100);
+    
+    return { changedCount, totalCount, changedPercentage };
+  }, [settings, darkMode, userEmail]);
+
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          maxHeight: '90vh'
-        }
-      }}
-    >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <SettingsIcon color="primary" />
-            <Typography variant="h6" fontWeight="600">
-              App Settings
-            </Typography>
-            {hasUnsavedChanges && (
-              <Chip
-                label="Unsaved Changes"
-                color="warning"
-                size="small"
-                variant="outlined"
-              />
-            )}
-          </Box>
-          <IconButton onClick={handleClose} size="small">
-            <CloseIcon />
-          </IconButton>
+    <Box sx={{ 
+      height: '100%',
+      overflow: 'auto',
+      bgcolor: 'background.default',
+      p: { xs: 2, md: 3 }
+    }}>
+      {/* Page Header */}
+      <Box sx={{ 
+        mb: 4,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 2
+      }}>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {hasUnsavedChanges && (
+            <Chip
+              label={`${settingsStats.changedCount} changes`}
+              color="warning"
+              size="small"
+              variant="outlined"
+              icon={<WarningIcon />}
+              sx={{ fontWeight: 600 }}
+            />
+          )}
         </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Configure your QuMail experience
-        </Typography>
-      </DialogTitle>
+      </Box>
+      
+      {/* Stats Bar */}
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 3, 
+        mb: 4,
+        p: 3,
+        borderRadius: 2,
+        backgroundColor: alpha(darkMode ? '#fff' : '#000', 0.05),
+        border: `1px solid ${alpha(darkMode ? '#fff' : '#000', 0.1)}`
+      }}>
+        <Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+            Settings Modified
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" fontWeight="700">
+              {settingsStats.changedPercentage}%
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={settingsStats.changedPercentage} 
+              sx={{ 
+                width: 100, 
+                height: 8, 
+                borderRadius: 4,
+                backgroundColor: alpha('#ccc', 0.2),
+                '& .MuiLinearProgress-bar': {
+                  background: `linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%)`,
+                  borderRadius: 4
+                }
+              }}
+            />
+          </Box>
+        </Box>
+        
+        <Divider orientation="vertical" flexItem />
+        
+        <Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+            Current Theme
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {darkMode ? <DarkIcon color="primary" /> : <LightIcon color="primary" />}
+            <Typography variant="body1" fontWeight="600">
+              {darkMode ? 'Dark Mode' : 'Light Mode'}
+            </Typography>
+          </Box>
+        </Box>
+        
+        <Divider orientation="vertical" flexItem />
+        
+        <Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+            Account
+          </Typography>
+          <Typography variant="body1" fontWeight="600" sx={{ 
+            color: 'primary.main',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: 200
+          }}>
+            {userEmail || 'Not signed in'}
+          </Typography>
+        </Box>
+      </Box>
+      
+      {saveMessage.text && (
+        <Alert 
+          severity={saveMessage.type} 
+          sx={{ 
+            mb: 3, 
+            borderRadius: 2,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            border: `1px solid ${alpha(saveMessage.type === 'success' ? '#4caf50' : saveMessage.type === 'error' ? '#f44336' : '#2196f3', 0.2)}`
+          }}
+          icon={saveMessage.type === 'success' ? <CheckCircleIcon /> : saveMessage.type === 'error' ? <WarningIcon /> : <InfoIcon />}
+          onClose={() => setSaveMessage({ type: '', text: '' })}
+        >
+          <Typography fontWeight="600">{saveMessage.text}</Typography>
+        </Alert>
+      )}
 
-      <DialogContent dividers>
-        {saveMessage.text && (
-          <Alert 
-            severity={saveMessage.type} 
-            sx={{ mb: 2 }}
-            onClose={() => setSaveMessage({ type: '', text: '' })}
-          >
-            {saveMessage.text}
-          </Alert>
-        )}
-
-        <Grid container spacing={3}>
-          {settingsSections.map((section, index) => (
-            <Grid item xs={12} md={6} key={section.title}>
-              <Paper 
-                elevation={0} 
-                sx={{ 
-                  p: 2.5, 
-                  border: '1px solid', 
-                  borderColor: 'divider',
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: 3 }}>
+        {/* Left Navigation */}
+        <Box sx={{ 
+          width: { xs: '100%', lg: 300 }, 
+          border: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`,
+          p: 3,
+          borderRadius: 2,
+          height: 'fit-content',
+          bgcolor: 'background.paper'
+        }}>
+          <Typography variant="subtitle2" sx={{ 
+            color: 'text.secondary', 
+            mb: 2, 
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+            fontWeight: 600 
+          }}>
+            Settings Categories
+          </Typography>
+          
+          <List disablePadding>
+            {settingsSections.map((section) => (
+              <ListItem
+                key={section.id}
+                button
+                onClick={() => toggleSection(section.id)}
+                sx={{
                   borderRadius: 2,
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column'
+                  mb: 1,
+                  py: 1.5,
+                  px: 2,
+                  backgroundColor: expandedSections[section.id] 
+                    ? alpha(darkMode ? '#667eea' : '#4f46e5', 0.1)
+                    : 'transparent',
+                  border: expandedSections[section.id] 
+                    ? `1px solid ${alpha(darkMode ? '#667eea' : '#4f46e5', 0.3)}`
+                    : '1px solid transparent',
+                  '&:hover': {
+                    backgroundColor: alpha(darkMode ? '#667eea' : '#4f46e5', 0.05),
+                    borderColor: alpha(darkMode ? '#667eea' : '#4f46e5', 0.2)
+                  }
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                  <Box sx={{ 
-                    p: 1, 
-                    borderRadius: 1, 
-                    bgcolor: 'primary.50',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <Avatar sx={{ 
+                    width: 32, 
+                    height: 32, 
+                    bgcolor: expandedSections[section.id] 
+                      ? darkMode ? '#667eea' : '#4f46e5'
+                      : alpha(darkMode ? '#fff' : '#000', 0.1),
+                    color: expandedSections[section.id] ? 'white' : 'inherit'
                   }}>
                     {section.icon}
-                  </Box>
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight="600">
-                      {section.title}
+                  </Avatar>
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" fontWeight="600">
+                        {section.title}
+                      </Typography>
+                      {section.badge && (
+                        <PremiumChip 
+                          label={section.badge} 
+                          size="small" 
+                        />
+                      )}
+                    </Box>
+                  }
+                  secondary={
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {section.description}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                  }
+                />
+                {expandedSections[section.id] ? (
+                  <ExpandLessIcon fontSize="small" />
+                ) : (
+                  <ExpandMoreIcon fontSize="small" />
+                )}
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+
+        {/* Right Content */}
+        <Box sx={{ 
+          flex: 1,
+          borderRadius: 2,
+          p: 3,
+          bgcolor: 'background.paper',
+          border: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`
+        }}>
+          {settingsSections.map((section) => (
+            <Collapse key={section.id} in={expandedSections[section.id]}>
+              <Box sx={{ mb: 4 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 2, 
+                  mb: 3,
+                  p: 2.5,
+                  borderRadius: 3,
+                  background: darkMode
+                    ? `linear-gradient(90deg, ${alpha('#1a1a1a', 0.8)} 0%, ${alpha('#2a2a2a', 0.8)} 100%)`
+                    : `linear-gradient(90deg, ${alpha('#ffffff', 0.9)} 0%, ${alpha('#f8f9fa', 0.9)} 100%)`,
+                  border: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`,
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                }}>
+                  <SectionIconWrapper>
+                    {section.icon}
+                  </SectionIconWrapper>
+                  <Box sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <Typography variant="h6" fontWeight="700">
+                        {section.title}
+                      </Typography>
+                      {section.badge && (
+                        <PremiumChip label={section.badge} />
+                      )}
+                    </Box>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       {section.description}
                     </Typography>
                   </Box>
                 </Box>
 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                <Grid container spacing={2}>
                   {section.fields.map((field) => (
-                    <Box key={field.key}>
+                    <Grid item xs={12} key={field.key}>
                       {renderField(field)}
-                    </Box>
+                    </Grid>
                   ))}
-                </Box>
-              </Paper>
-            </Grid>
+                </Grid>
+              </Box>
+            </Collapse>
           ))}
-        </Grid>
-
-        {/* Advanced Settings Section */}
-        <Paper 
-          elevation={0} 
-          sx={{ 
-            p: 2.5, 
-            border: '1px solid', 
-            borderColor: 'divider',
-            borderRadius: 2,
-            mt: 3
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <CloudIcon color="primary" />
-            <Typography variant="subtitle1" fontWeight="600">
-              Advanced Settings
-            </Typography>
-          </Box>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.enableBetaFeatures}
-                    onChange={(e) => handleSettingChange('enableBetaFeatures', e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">Beta Features</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Enable experimental features
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.useQuantumEncryption}
-                    onChange={(e) => handleSettingChange('useQuantumEncryption', e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">Quantum Encryption</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Use quantum-safe encryption algorithms
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.performanceMode}
-                    onChange={(e) => handleSettingChange('performanceMode', e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">Performance Mode</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Optimize for speed over visual effects
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Current Settings Info */}
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            Current Configuration
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, mt: 1, flexWrap: 'wrap' }}>
-            <Chip label={`Theme: ${settings.theme}`} size="small" variant="outlined" />
-            <Chip label={`Language: ${settings.language}`} size="small" variant="outlined" />
-            <Chip label={`Timezone: ${settings.timezone}`} size="small" variant="outlined" />
-            <Chip label={`Encryption: ${settings.defaultEncryptionLevel}`} size="small" variant="outlined" />
-          </Box>
-        </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <Button
-            startIcon={<ResetIcon />}
-            onClick={handleReset}
-            disabled={isSaving}
-            variant="outlined"
-          >
-            Reset to Defaults
-          </Button>
           
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              onClick={handleClose}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={isSaving ? null : <SaveIcon />}
-              onClick={handleSave}
-              disabled={isSaving || !hasUnsavedChanges}
-            >
-              {isSaving ? 'Saving...' : 'Save Settings'}
-            </Button>
+          {/* Action Buttons */}
+          <Box sx={{ 
+            mt: 4, 
+            pt: 3, 
+            borderTop: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`,
+            display: 'flex', 
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 2
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button
+                startIcon={<ResetIcon />}
+                onClick={handleReset}
+                disabled={isSaving}
+                variant="outlined"
+                sx={{
+                  borderRadius: 2,
+                  px: 3,
+                  py: 1,
+                  borderColor: alpha(darkMode ? '#fff' : '#000', 0.2),
+                  '&:hover': {
+                    borderColor: 'error.main',
+                    backgroundColor: alpha('#f44336', 0.1)
+                  }
+                }}
+              >
+                Reset All
+              </Button>
+              <Tooltip title="This will reset all settings to their default values">
+                <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              </Tooltip>
+            </Box>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {isSaving && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    Saving...
+                  </Typography>
+                </Box>
+              )}
+              
+              <Button
+                variant="contained"
+                startIcon={isSaving ? null : <SaveIcon />}
+                onClick={handleSave}
+                disabled={isSaving || !hasUnsavedChanges}
+                sx={{
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1,
+                  background: `linear-gradient(45deg, #4f46e5 30%, #7c3aed 90%)`,
+                  boxShadow: '0 4px 20px rgba(79, 70, 229, 0.3)',
+                  '&:hover': {
+                    background: `linear-gradient(45deg, #4338ca 30%, #6d28d9 90%)`,
+                    boxShadow: '0 6px 25px rgba(79, 70, 229, 0.4)'
+                  },
+                  '&:disabled': {
+                    background: alpha('#ccc', 0.5),
+                    boxShadow: 'none'
+                  }
+                }}
+              >
+                {isSaving ? 'Saving Changes...' : 'Save Settings'}
+              </Button>
+            </Box>
           </Box>
         </Box>
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </Box>
   );
 };
 

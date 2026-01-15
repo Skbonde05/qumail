@@ -1,5 +1,4 @@
 // server.js - QUMAIL INDEPENDENT PLATFORM BACKEND WITH QUANTUM ENCRYPTION
-
 // Load environment variables from .env file
 const path = require('path');
 const fs = require('fs');
@@ -13,13 +12,12 @@ const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const multer = require('multer');
 
 const app = express();
 
 // Configure CORS properly
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -49,16 +47,26 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
 // ================== MONGODB CONNECTION ==================
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/qumail';
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('✅ MongoDB connected successfully');
   })
   .catch((err) => {
     console.error('❌ MongoDB connection error:', err.message);
   });
+
+// Database connection event handlers
+mongoose.connection.on('connected', () => {
+  console.log('✅ MongoDB connected successfully');
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('❌ MongoDB disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB connection error:', err);
+});
 
 const isMongoConnected = () => {
   return mongoose.connection.readyState === 1;
@@ -154,12 +162,12 @@ userSchema.pre('save', function(next) {
 
 const User = mongoose.model('User', userSchema);
 
-// Mail Schema
+// Mail Schema - FIXED: Removed unique constraint from mailId
 const mailSchema = new mongoose.Schema({
   mailId: {
     type: String,
     required: true,
-    unique: true
+    // CRITICAL FIX: Removed unique: true - allows same mailId for different owners
   },
   from: {
     type: String,
@@ -197,7 +205,7 @@ const mailSchema = new mongoose.Schema({
   },
   folder: {
     type: String,
-    enum: ["INBOX", "SENT"],
+    enum: ["INBOX", "SENT", "ARCHIVE", "DRAFTS", "TRASH"],
     required: true
   },
   owner: {
@@ -222,10 +230,38 @@ const mailSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  snoozed: {
+    type: Date,
+    default: null
+  },
+  labels: [{
+    type: String,
+    default: []
+  }],
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
+});
+
+// CRITICAL FIX: Compound index for mailId + owner to ensure uniqueness per user
+// This allows same mailId for different owners
+mailSchema.index({ mailId: 1, owner: 1 }, { unique: true });
+
+// Add other indexes for better performance
+mailSchema.index({ owner: 1, folder: 1, trash: 1 });
+mailSchema.index({ owner: 1, starred: 1 });
+mailSchema.index({ owner: 1, important: 1 });
+mailSchema.index({ owner: 1, read: 1 });
+mailSchema.index({ createdAt: -1 });
+
+mailSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
 });
 
 const Mail = mongoose.model('Mail', mailSchema);
@@ -436,65 +472,6 @@ const decryptAES = (encryptedText, key, iv) => {
   }
 };
 
-// ================== FILE UPLOAD CONFIGURATION ==================
-const createUploadsDirectory = () => {
-  const uploadsDir = path.join(__dirname, 'uploads');
-  const avatarsDir = path.join(__dirname, 'uploads/avatars');
-  
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log(`📁 Created uploads directory: ${uploadsDir}`);
-  }
-  
-  if (!fs.existsSync(avatarsDir)) {
-    fs.mkdirSync(avatarsDir, { recursive: true });
-    console.log(`📁 Created avatars directory: ${avatarsDir}`);
-  }
-};
-
-createUploadsDirectory();
-
-// Configure multer for avatar uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, 'uploads/avatars');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const safeEmail = req.user.email.replace(/[@.]/g, '-').toLowerCase();
-    const extension = path.extname(file.originalname).toLowerCase();
-    cb(null, safeEmail + '-' + uniqueSuffix + extension);
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: function (req, file, cb) {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (extname && mimetype) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only image files (jpeg, jpg, png, gif, webp) are allowed'));
-    }
-  }
-});
-
-// Function to get full avatar URL
-const getAvatarUrl = (filename) => {
-  if (!filename) return '';
-  return `${BASE_URL}/uploads/avatars/${filename}`;
-};
-
 // ================== ROUTES ==================
 
 // Health check endpoint
@@ -526,7 +503,7 @@ app.get('/', (req, res) => {
     baseUrl: BASE_URL,
     endpoints: {
       auth: ['POST /api/register', 'POST /api/login', 'POST /api/logout', 'POST /api/verify-token'],
-      email: ['POST /api/send', 'POST /api/mail/inbox', 'POST /api/mail/sent', 'GET /api/mail/:mailId', 'POST /api/decrypt'],
+      email: ['POST /api/send', 'POST /api/mail/inbox', 'POST /api/mail/sent', 'GET /api/mail/:mailId', 'POST /api/decrypt', 'PUT /api/mail/:mailId/status', 'POST /api/mail/batch-update', 'POST /api/mail/move-to-folder', 'POST /api/mail/bulk-actions', 'POST /api/mail/empty-trash'],
       user: ['GET /api/profile', 'PUT /api/profile', 'POST /api/change-password', 'POST /api/upload-avatar', 'DELETE /api/avatar']
     }
   });
@@ -663,9 +640,11 @@ app.post('/api/login',
       console.log(`✅ Login successful: ${lowerEmail}`);
       
       // Get email counts for response
-      const [inboxCount, sentCount] = await Promise.all([
+      const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
         Mail.countDocuments({ owner: lowerEmail, folder: 'INBOX', trash: false }),
-        Mail.countDocuments({ owner: lowerEmail, folder: 'SENT', trash: false })
+        Mail.countDocuments({ owner: lowerEmail, folder: 'SENT', trash: false }),
+        Mail.countDocuments({ owner: lowerEmail, folder: 'ARCHIVE', trash: false }),
+        Mail.countDocuments({ owner: lowerEmail, trash: true })
       ]);
       
       res.json({
@@ -688,8 +667,8 @@ app.post('/api/login',
         folderCounts: {
           inbox: inboxCount,
           sent: sentCount,
-          drafts: 0,
-          trash: 0
+          archive: archiveCount,
+          trash: trashCount
         }
       });
       
@@ -716,9 +695,10 @@ app.post('/api/verify-token', verifyToken, async (req, res) => {
     }
     
     // Get email counts
-    const [inboxCount, sentCount, trashCount] = await Promise.all([
+    const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
       Mail.countDocuments({ owner: req.user.email, folder: 'INBOX', trash: false }),
       Mail.countDocuments({ owner: req.user.email, folder: 'SENT', trash: false }),
+      Mail.countDocuments({ owner: req.user.email, folder: 'ARCHIVE', trash: false }),
       Mail.countDocuments({ owner: req.user.email, trash: true })
     ]);
     
@@ -741,7 +721,7 @@ app.post('/api/verify-token', verifyToken, async (req, res) => {
       folderCounts: {
         inbox: inboxCount,
         sent: sentCount,
-        drafts: 0,
+        archive: archiveCount,
         trash: trashCount
       }
     });
@@ -753,8 +733,6 @@ app.post('/api/verify-token', verifyToken, async (req, res) => {
     });
   }
 });
-
-// ================== PROFILE ROUTES ==================
 
 // ------------------ GET USER PROFILE ------------------
 app.get('/api/profile', verifyToken, async (req, res) => {
@@ -768,9 +746,10 @@ app.get('/api/profile', verifyToken, async (req, res) => {
     }
     
     // Get email counts
-    const [inboxCount, sentCount, trashCount] = await Promise.all([
+    const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
       Mail.countDocuments({ owner: req.user.email, folder: 'INBOX', trash: false }),
       Mail.countDocuments({ owner: req.user.email, folder: 'SENT', trash: false }),
+      Mail.countDocuments({ owner: req.user.email, folder: 'ARCHIVE', trash: false }),
       Mail.countDocuments({ owner: req.user.email, trash: true })
     ]);
     
@@ -803,7 +782,7 @@ app.get('/api/profile', verifyToken, async (req, res) => {
       folderCounts: {
         inbox: inboxCount,
         sent: sentCount,
-        drafts: 0,
+        archive: archiveCount,
         trash: trashCount
       }
     });
@@ -968,7 +947,7 @@ app.post('/api/change-password',
   }
 );
 
-// ------------------ UPLOAD AVATAR (CORRECTED) ------------------
+// ------------------ UPLOAD AVATAR ------------------
 app.post('/api/upload-avatar', 
   verifyToken,
   async (req, res) => {
@@ -1024,9 +1003,6 @@ app.post('/api/upload-avatar',
   }
 );
 
-// Serve uploaded files statically
-app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
-
 // ------------------ DELETE AVATAR ------------------
 app.delete('/api/avatar', verifyToken, async (req, res) => {
   try {
@@ -1067,16 +1043,23 @@ app.delete('/api/avatar', verifyToken, async (req, res) => {
   }
 });
 
-// ------------------ SEND EMAIL ------------------
+// ------------------ SEND EMAIL (FIXED DUPLICATE KEY ISSUE) ------------------
 app.post('/api/send', 
   [
     verifyToken,
     body('to').isEmail().withMessage('Valid recipient email required').custom(validateQumailEmail).withMessage('Can only send to @qumail.com addresses'),
     body('subject').optional().trim().isLength({ max: 200 }).withMessage('Subject too long'),
     body('body').trim().notEmpty().withMessage('Message body is required'),
-    body('encryptionLevel').optional().isIn(['none', 'otp', 'aes256']).withMessage('Invalid encryption level. Use: none, otp, or aes256')
+    body('encryptionLevel').optional().custom((value) => {
+      const validValues = ['none', 'otp', 'aes256', 'aes'];
+      return validValues.includes(value);
+    }).withMessage('Invalid encryption level. Use: none, otp, or aes256')
   ],
   async (req, res) => {
+    console.log("📧 SEND REQUEST RECEIVED ==================================");
+    console.log("Body:", req.body);
+    console.log("========================================================");
+    
     const session = await mongoose.startSession();
     session.startTransaction();
     
@@ -1084,6 +1067,7 @@ app.post('/api/send',
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         await session.abortTransaction();
+        session.endSession();
         return res.status(400).json({
           success: false,
           message: 'Validation failed',
@@ -1094,13 +1078,19 @@ app.post('/api/send',
       const { to, subject, body, encryptionLevel = 'none' } = req.body;
       const from = req.user.email;
       
-      console.log(`📧 Sending email from ${from} to ${to} with encryption: ${encryptionLevel}`);
+      // Convert 'aes' to 'aes256' for consistency
+      const normalizedEncryptionLevel = encryptionLevel === 'aes' ? 'aes256' : encryptionLevel;
+      
+      console.log(`📧 Sending email from ${from} to ${to} with encryption: ${normalizedEncryptionLevel}`);
+      console.log(`   Subject: ${subject}`);
+      console.log(`   Body length: ${body ? body.length : 0} characters`);
       
       // Check if recipient exists
-      const lowerTo = to.toLowerCase();
-      const recipient = await User.findOne({ email: lowerTo });
+      const lowerTo = to.toLowerCase().trim();
+      const recipient = await User.findOne({ email: lowerTo }).session(session);
       if (!recipient) {
         await session.abortTransaction();
+        session.endSession();
         return res.status(404).json({
           success: false,
           message: 'Recipient @qumail.com address not found'
@@ -1112,51 +1102,48 @@ app.post('/api/send',
       let aesKey = null;
       let aesIV = null;
       
-      // Handle encryption
-      if (encryptionLevel !== 'none') {
+      // Handle encryption - use normalizedEncryptionLevel
+      if (normalizedEncryptionLevel !== 'none') {
         try {
-          if (encryptionLevel === 'otp') {
+          if (normalizedEncryptionLevel === 'otp') {
             // OTP encryption
             encryptionType = 'OTP';
-            const textLength = Buffer.from(body, 'utf8').length;
-            const otpKey = generateOTPKey(textLength);
-            encryptedBody = otpEncrypt(body, otpKey);
             
-            // Store OTP key in sender's encryption keys
-            await User.findOneAndUpdate(
-              { email: from },
-              { $set: { "encryptionKeys.otp": otpKey } },
-              { session }
-            );
+            // Check if body already has OTP format
+            if (body.startsWith('[otp|') && body.includes(']:')) {
+              // Body already contains OTP encrypted content
+              encryptedBody = body;
+              console.log(`📤 Body already OTP encrypted`);
+            } else {
+              // Encrypt with OTP
+              const textLength = Buffer.from(body, 'utf8').length;
+              const otpKey = generateOTPKey(textLength);
+              encryptedBody = otpEncrypt(body, otpKey);
+              encryptedBody = `[otp|${otpKey}]:${encryptedBody}`;
+              
+              console.log(`✅ OTP Encryption successful. Key length: ${otpKey.length} chars`);
+            }
             
-            console.log(`✅ OTP Encryption successful`);
-            
-          } else if (encryptionLevel === 'aes256') {
+          } else if (normalizedEncryptionLevel === 'aes256') {
             // AES encryption
             encryptionType = 'AES';
             
             // Get sender's AES key or generate new one
-            const sender = await User.findOne({ email: from });
-            if (!sender.encryptionKeys?.aes256) {
-              // Generate and save new AES key for sender
-              aesKey = generateAESKey();
-              await User.findOneAndUpdate(
-                { email: from },
-                { $set: { "encryptionKeys.aes256": aesKey } },
-                { session }
-              );
-              console.log(`🔑 Generated new AES key for ${from}`);
-            } else {
-              aesKey = sender.encryptionKeys.aes256;
-            }
-            
+            const sender = await User.findOne({ email: from }).session(session);
+            aesKey = sender.encryptionKeys?.aes256 || generateAESKey();
             aesIV = generateAESIV();
-            encryptedBody = encryptAES(body, aesKey, aesIV);
+            
+            // Encrypt the body
+            const encryptedData = aesEncrypt(body, aesKey, aesIV);
+            encryptedBody = JSON.stringify(encryptedData);
             
             console.log(`✅ AES Encryption successful`);
+            console.log(`   AES Key: ${aesKey.substring(0, 32)}...`);
+            console.log(`   AES IV: ${aesIV.substring(0, 16)}...`);
           }
         } catch (encryptionError) {
           await session.abortTransaction();
+          session.endSession();
           console.error('Encryption failed:', encryptionError);
           return res.status(500).json({
             success: false,
@@ -1165,67 +1152,104 @@ app.post('/api/send',
         }
       }
       
-      // Create mail objects
-      const mailId = uuidv4();
+      // Create mail objects with SAME mailId but DIFFERENT owners
+      const mailId = uuidv4(); // ✅ ONE mailId for the entire email thread
       const timestamp = new Date();
       
-      // Sent mail for sender
-      await Mail.create([{
-        mailId: mailId,
-        from: from,
-        to: lowerTo,
-        subject: subject || '(No Subject)',
-        body: body, // Original body for sender
-        encryption: 'NONE', // Sender sees unencrypted
-        aesKey: null,
-        aesIV: null,
-        folder: 'SENT',
-        owner: from,
-        read: true,
-        createdAt: timestamp
-      }], { session });
+      console.log(`📧 Creating emails with mailId: ${mailId}`);
+      console.log(`   Sender: ${from} (SENT folder)`);
+      console.log(`   Recipient: ${lowerTo} (INBOX folder)`);
       
-      // Inbox mail for recipient
-      await Mail.create([{
-        mailId: uuidv4(),
-        from: from,
-        to: lowerTo,
-        subject: encryptionType !== 'NONE' ? `🔒 ${subject || 'Encrypted Message'}` : (subject || '(No Subject)'),
-        body: encryptedBody,
-        encryption: encryptionType,
-        aesKey: aesKey,
-        aesIV: aesIV,
-        folder: 'INBOX',
-        owner: lowerTo,
-        read: false,
-        createdAt: timestamp
-      }], { session });
+      try {
+        // Sent mail for sender (owner: from)
+        await Mail.create([{
+          mailId: mailId,
+          from: from,
+          to: lowerTo,
+          subject: subject || '(No Subject)',
+          body: body, // Original body for sender
+          encryption: 'NONE', // Sender sees unencrypted
+          aesKey: null,
+          aesIV: null,
+          folder: 'SENT',
+          owner: from,
+          read: true,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        }], { session });
+        
+        console.log(`✅ Sender's SENT email created for: ${from}`);
+        
+        // Inbox mail for recipient (owner: lowerTo)
+        await Mail.create([{
+          mailId: mailId,
+          from: from,
+          to: lowerTo,
+          subject: encryptionType !== 'NONE' ? `🔒 ${subject || 'Encrypted Message'}` : (subject || '(No Subject)'),
+          body: encryptedBody,
+          encryption: encryptionType,
+          aesKey: aesKey,
+          aesIV: aesIV,
+          folder: 'INBOX',
+          owner: lowerTo,
+          read: false,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        }], { session });
+        
+        console.log(`✅ Recipient's INBOX email created for: ${lowerTo}`);
+        
+        await session.commitTransaction();
+        console.log(`✅ Transaction committed successfully`);
+        
+      } catch (dbError) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error('Database error during email creation:', dbError);
+        
+        // Check if it's a duplicate key error
+        if (dbError.code === 11000) {
+          return res.status(500).json({
+            success: false,
+            message: 'Database constraint violation. Please try again with a new email.',
+            error: 'Duplicate key error. The server needs to fix its database indexes.'
+          });
+        }
+        
+        throw dbError;
+      }
       
-      await session.commitTransaction();
+      session.endSession();
       
-      console.log(`✅ Email sent: ${mailId} from ${from} to ${to} (${encryptionLevel})`);
+      console.log(`✅ Email sent successfully: ${mailId}`);
+      console.log(`   From: ${from} to ${to}`);
+      console.log(`   Encryption: ${normalizedEncryptionLevel}`);
       
       res.json({
         success: true,
-        message: `Email sent successfully via QuMail (${encryptionLevel})`,
+        message: `Email sent successfully via QuMail (${normalizedEncryptionLevel})`,
         messageId: mailId,
         sentAt: timestamp,
         encryption: {
-          level: encryptionLevel,
-          encrypted: encryptionLevel !== 'none',
+          level: normalizedEncryptionLevel,
+          encrypted: normalizedEncryptionLevel !== 'none',
           type: encryptionType
         }
       });
       
     } catch (error) {
-      await session.abortTransaction();
+      try {
+        await session.abortTransaction();
+      } catch (abortError) {
+        console.error('Error aborting transaction:', abortError);
+      }
+      session.endSession();
+      
       console.error('Send email error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to send email: ' + error.message
       });
-    } finally {
-      session.endSession();
     }
   }
 );
@@ -1233,19 +1257,29 @@ app.post('/api/send',
 // ------------------ GET INBOX EMAILS ------------------
 app.post('/api/mail/inbox', verifyToken, async (req, res) => {
   try {
-    const { limit = 50 } = req.body;
+    const { limit = 50, page = 1 } = req.body;
     const email = req.user.email;
+    const skip = (page - 1) * limit;
     
-    console.log(`📥 Fetching inbox for: ${email}`);
+    console.log(`📥 Fetching inbox for: ${email}, page: ${page}, limit: ${limit}`);
     
-    const mails = await Mail.find({
-      owner: email,
-      folder: 'INBOX',
-      trash: false
-    })
-    .select('-aesKey -aesIV')
-    .sort({ createdAt: -1 })
-    .limit(limit);
+    const [mails, total] = await Promise.all([
+      Mail.find({
+        owner: email,
+        folder: 'INBOX',
+        trash: false
+      })
+      .select('-aesKey -aesIV')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+      
+      Mail.countDocuments({ 
+        owner: email, 
+        folder: 'INBOX', 
+        trash: false 
+      })
+    ]);
     
     // Format emails for frontend
     const formattedEmails = mails.map(mail => ({
@@ -1265,8 +1299,8 @@ app.post('/api/mail/inbox', verifyToken, async (req, res) => {
       sent: false,
       trash: mail.trash,
       spam: false,
-      archived: false,
-      folder: 'inbox',
+      archived: mail.folder === 'ARCHIVE',
+      folder: mail.folder.toLowerCase(),
       encrypted: mail.encryption !== 'NONE',
       encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 
                      mail.encryption === 'OTP' ? 'otp' : 'none',
@@ -1279,7 +1313,9 @@ app.post('/api/mail/inbox', verifyToken, async (req, res) => {
       success: true,
       emails: formattedEmails,
       count: formattedEmails.length,
-      total: await Mail.countDocuments({ owner: email, folder: 'INBOX', trash: false }),
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit),
       folder: 'inbox'
     });
     
@@ -1296,19 +1332,29 @@ app.post('/api/mail/inbox', verifyToken, async (req, res) => {
 // ------------------ GET SENT EMAILS ------------------
 app.post('/api/mail/sent', verifyToken, async (req, res) => {
   try {
-    const { limit = 50 } = req.body;
+    const { limit = 50, page = 1 } = req.body;
     const email = req.user.email;
+    const skip = (page - 1) * limit;
     
-    console.log(`📤 Fetching sent for: ${email}`);
+    console.log(`📤 Fetching sent for: ${email}, page: ${page}, limit: ${limit}`);
     
-    const mails = await Mail.find({
-      owner: email,
-      folder: 'SENT',
-      trash: false
-    })
-    .select('-aesKey -aesIV')
-    .sort({ createdAt: -1 })
-    .limit(limit);
+    const [mails, total] = await Promise.all([
+      Mail.find({
+        owner: email,
+        folder: 'SENT',
+        trash: false
+      })
+      .select('-aesKey -aesIV')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+      
+      Mail.countDocuments({ 
+        owner: email, 
+        folder: 'SENT', 
+        trash: false 
+      })
+    ]);
     
     // Format emails for frontend
     const formattedEmails = mails.map(mail => ({
@@ -1328,7 +1374,7 @@ app.post('/api/mail/sent', verifyToken, async (req, res) => {
       sent: true,
       trash: mail.trash,
       spam: false,
-      archived: false,
+      archived: mail.folder === 'ARCHIVE',
       folder: 'sent',
       encrypted: false,
       encryptionLevel: 'none',
@@ -1341,7 +1387,9 @@ app.post('/api/mail/sent', verifyToken, async (req, res) => {
       success: true,
       emails: formattedEmails,
       count: formattedEmails.length,
-      total: await Mail.countDocuments({ owner: email, folder: 'SENT', trash: false }),
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit),
       folder: 'sent'
     });
     
@@ -1355,6 +1403,154 @@ app.post('/api/mail/sent', verifyToken, async (req, res) => {
   }
 });
 
+// ------------------ GET ARCHIVE EMAILS ------------------
+app.post('/api/mail/archive', verifyToken, async (req, res) => {
+  try {
+    const { limit = 50, page = 1 } = req.body;
+    const email = req.user.email;
+    const skip = (page - 1) * limit;
+    
+    console.log(`📁 Fetching archive for: ${email}, page: ${page}, limit: ${limit}`);
+    
+    const [mails, total] = await Promise.all([
+      Mail.find({
+        owner: email,
+        folder: 'ARCHIVE',
+        trash: false
+      })
+      .select('-aesKey -aesIV')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+      
+      Mail.countDocuments({ 
+        owner: email, 
+        folder: 'ARCHIVE', 
+        trash: false 
+      })
+    ]);
+    
+    // Format emails for frontend
+    const formattedEmails = mails.map(mail => ({
+      id: mail.mailId,
+      uid: mail.mailId,
+      from: mail.from,
+      to: mail.to,
+      subject: mail.subject,
+      body: mail.body,
+      preview: mail.subject || 'No subject',
+      date: mail.createdAt,
+      originalDate: mail.createdAt,
+      read: mail.read,
+      starred: mail.starred,
+      important: mail.important,
+      draft: false,
+      sent: mail.folder === 'SENT',
+      trash: mail.trash,
+      spam: false,
+      archived: true,
+      folder: 'archive',
+      encrypted: mail.encryption !== 'NONE',
+      encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 
+                     mail.encryption === 'OTP' ? 'otp' : 'none',
+      requiresDecryption: mail.encryption !== 'NONE',
+      attachments: [],
+      size: mail.body ? mail.body.length : 0
+    }));
+    
+    res.json({
+      success: true,
+      emails: formattedEmails,
+      count: formattedEmails.length,
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit),
+      folder: 'archive'
+    });
+    
+  } catch (error) {
+    console.error('Fetch archive error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch archive emails',
+      error: error.message
+    });
+  }
+});
+
+// ------------------ GET TRASH EMAILS ------------------
+app.post('/api/mail/trash', verifyToken, async (req, res) => {
+  try {
+    const { limit = 50, page = 1 } = req.body;
+    const email = req.user.email;
+    const skip = (page - 1) * limit;
+    
+    console.log(`🗑️ Fetching trash for: ${email}, page: ${page}, limit: ${limit}`);
+    
+    const [mails, total] = await Promise.all([
+      Mail.find({
+        owner: email,
+        trash: true
+      })
+      .select('-aesKey -aesIV')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+      
+      Mail.countDocuments({ 
+        owner: email, 
+        trash: true 
+      })
+    ]);
+    
+    // Format emails for frontend
+    const formattedEmails = mails.map(mail => ({
+      id: mail.mailId,
+      uid: mail.mailId,
+      from: mail.from,
+      to: mail.to,
+      subject: mail.subject,
+      body: mail.body,
+      preview: mail.subject || 'No subject',
+      date: mail.createdAt,
+      originalDate: mail.createdAt,
+      read: mail.read,
+      starred: mail.starred,
+      important: mail.important,
+      draft: false,
+      sent: mail.folder === 'SENT',
+      trash: true,
+      spam: false,
+      archived: false,
+      folder: 'trash',
+      encrypted: mail.encryption !== 'NONE',
+      encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 
+                     mail.encryption === 'OTP' ? 'otp' : 'none',
+      requiresDecryption: mail.encryption !== 'NONE',
+      attachments: [],
+      size: mail.body ? mail.body.length : 0
+    }));
+    
+    res.json({
+      success: true,
+      emails: formattedEmails,
+      count: formattedEmails.length,
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit),
+      folder: 'trash'
+    });
+    
+  } catch (error) {
+    console.error('Fetch trash error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trash emails',
+      error: error.message
+    });
+  }
+});
+
 // ------------------ GET SINGLE EMAIL ------------------
 app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
   try {
@@ -1363,9 +1559,10 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
     
     console.log(`📄 Fetching email: ${mailId} for ${userEmail}`);
     
-    const mail = await Mail.findOne({ 
+    // Find the email
+    const mail = await Mail.findOne({
       mailId: mailId,
-      owner: userEmail 
+      owner: userEmail
     });
     
     if (!mail) {
@@ -1398,14 +1595,29 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
       sent: mail.folder === 'SENT',
       trash: mail.trash,
       spam: false,
-      archived: false,
+      archived: mail.folder === 'ARCHIVE',
       folder: mail.folder.toLowerCase(),
       encrypted: mail.encryption !== 'NONE',
       encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 
                      mail.encryption === 'OTP' ? 'otp' : 'none',
       requiresDecryption: mail.encryption !== 'NONE',
       aesKey: mail.aesKey,
-      aesIV: mail.aesIV
+      aesIV: mail.aesIV,
+      snoozed: mail.snoozed,
+      labels: mail.labels || []
+    };
+    
+    // Add security information
+    response.security = {
+      encryption: mail.encryption,
+      algorithm:
+        mail.encryption === 'AES' ? 'AES-256-GCM' :
+        mail.encryption === 'OTP' ? 'One-Time Pad' :
+        'None',
+      description:
+        mail.encryption === 'AES' ? 'End-to-end encrypted with AES-256' :
+        mail.encryption === 'OTP' ? 'Quantum-secure one-time pad encryption' :
+        'Standard email (no encryption)'
     };
     
     // If encrypted with AES and keys exist, decrypt it automatically
@@ -1415,10 +1627,16 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
         response.body = decryptedBody;
         response.decrypted = true;
         response.requiresDecryption = false;
+        response.security.decrypted = true;
+        response.security.decryptionMethod = 'automatic';
       } catch (decryptError) {
         console.error('AES decryption error:', decryptError);
         response.decryptionError = 'Failed to decrypt AES email';
+        response.security.decryptionError = 'Automatic decryption failed';
       }
+    } else if (mail.encryption === 'OTP') {
+      response.security.decryptionMethod = 'manual';
+      response.security.keyRequired = true;
     }
     
     res.json({
@@ -1431,6 +1649,625 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get email',
+      error: error.message
+    });
+  }
+});
+
+// ------------------ UPDATE SINGLE EMAIL STATUS ------------------
+app.put('/api/mail/:mailId/status', 
+  [
+    verifyToken,
+    body('action').isIn([
+      'star', 'unstar', 'toggle-star', 
+      'important', 'unimportant', 'toggle-important',
+      'archive', 'unarchive', 
+      'trash', 'delete', 'restore', 
+      'read', 'unread', 'toggle-read',
+      'snooze', 'unsnooze', 
+      'move'
+    ]).withMessage('Invalid action'),
+  ],
+  async (req, res) => {
+    try {
+      const { mailId } = req.params;
+      const { action, folder, snoozeDate } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`⚡ Updating status for email: ${mailId}, action: ${action} by user: ${userEmail}`);
+      
+      // Find the email
+      const mail = await Mail.findOne({
+        mailId: mailId,
+        owner: userEmail
+      });
+      
+      if (!mail) {
+        return res.status(404).json({
+          success: false,
+          message: 'Email not found'
+        });
+      }
+      
+      let updateData = {};
+      let message = '';
+      
+      // Set update data based on action
+      switch (action) {
+        case 'star':
+          updateData.starred = true;
+          message = 'Email starred successfully';
+          break;
+          
+        case 'unstar':
+          updateData.starred = false;
+          message = 'Email unstarred successfully';
+          break;
+          
+        case 'toggle-star':
+          updateData.starred = !mail.starred;
+          message = mail.starred ? 'Email starred successfully' : 'Email unstarred successfully';
+          break;
+          
+        case 'important':
+          updateData.important = true;
+          message = 'Email marked as important';
+          break;
+          
+        case 'unimportant':
+          updateData.important = false;
+          message = 'Email removed from important';
+          break;
+          
+        case 'toggle-important':
+          updateData.important = !mail.important;
+          message = mail.important ? 'Email marked as important' : 'Email removed from important';
+          break;
+          
+        case 'read':
+          updateData.read = true;
+          message = 'Email marked as read';
+          break;
+          
+        case 'unread':
+          updateData.read = false;
+          message = 'Email marked as unread';
+          break;
+          
+        case 'toggle-read':
+          updateData.read = !mail.read;
+          message = mail.read ? 'Email marked as read' : 'Email marked as unread';
+          break;
+          
+        case 'archive':
+          updateData.folder = 'ARCHIVE';
+          updateData.trash = false;
+          message = 'Email archived successfully';
+          break;
+          
+        case 'unarchive':
+          const originalFolder = mail.to === userEmail ? 'INBOX' : 'SENT';
+          updateData.folder = originalFolder;
+          updateData.trash = false;
+          message = 'Email moved to ' + (originalFolder === 'INBOX' ? 'inbox' : 'sent');
+          break;
+          
+        case 'trash':
+          updateData.trash = true;
+          message = 'Email moved to trash';
+          break;
+          
+        case 'delete':
+          // Permanent delete
+          await Mail.deleteOne({
+            mailId: mailId,
+            owner: userEmail
+          });
+          
+          return res.json({
+            success: true,
+            message: 'Email permanently deleted',
+            emailId: mailId,
+            deleted: true
+          });
+          
+        case 'restore':
+          updateData.trash = false;
+          message = 'Email restored from trash';
+          break;
+          
+        case 'snooze':
+          if (!snoozeDate) {
+            return res.status(400).json({
+              success: false,
+              message: 'snoozeDate is required for snooze action'
+            });
+          }
+          updateData.snoozed = new Date(snoozeDate);
+          message = `Email snoozed until ${snoozeDate}`;
+          break;
+          
+        case 'unsnooze':
+          updateData.snoozed = null;
+          message = 'Email unsnoozed';
+          break;
+          
+        case 'move':
+          if (!folder || !['inbox', 'sent', 'archive'].includes(folder.toLowerCase())) {
+            return res.status(400).json({
+              success: false,
+              message: 'Valid folder is required for move action (inbox, sent, archive)'
+            });
+          }
+          
+          const targetFolder = folder.toUpperCase();
+          updateData.folder = targetFolder;
+          updateData.trash = false;
+          
+          message = `Email moved to ${folder}`;
+          break;
+          
+        default:
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid action'
+          });
+      }
+      
+      // Update the email
+      const updateResult = await Mail.updateOne(
+        {
+          mailId: mailId,
+          owner: userEmail
+        },
+        { $set: updateData }
+      );
+      
+      if (updateResult.modifiedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Email not found or no changes needed'
+        });
+      }
+      
+      // Get the updated email
+      const updatedMail = await Mail.findOne({
+        mailId: mailId,
+        owner: userEmail
+      });
+      
+      res.json({
+        success: true,
+        message: message,
+        email: {
+          id: updatedMail.mailId,
+          starred: updatedMail.starred,
+          important: updatedMail.important,
+          read: updatedMail.read,
+          folder: updatedMail.folder.toLowerCase(),
+          trash: updatedMail.trash,
+          snoozed: updatedMail.snoozed
+        }
+      });
+      
+    } catch (error) {
+      console.error('Update email status error:', error);
+      res.status(500).json({
+        success: false,
+        message: `Failed to update email: ${error.message}`
+      });
+    }
+  }
+);
+
+// ------------------ BATCH UPDATE EMAILS ------------------
+app.post('/api/mail/batch-update', 
+  [
+    verifyToken,
+    body('emailIds').isArray({ min: 1 }).withMessage('emailIds must be a non-empty array'),
+    body('action').isIn([
+      'star', 'unstar', 'toggle-star',
+      'important', 'unimportant', 'toggle-important',
+      'archive', 'unarchive', 
+      'trash', 'delete', 'restore', 
+      'read', 'unread', 'toggle-read',
+      'move'
+    ]).withMessage('Invalid action'),
+  ],
+  async (req, res) => {
+    try {
+      const { emailIds, action, folder } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`⚡ Batch updating ${emailIds.length} emails, action: ${action} by user: ${userEmail}`);
+      
+      // Validate emailIds
+      if (!Array.isArray(emailIds) || emailIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide email IDs to update'
+        });
+      }
+      
+      let updateQuery = {};
+      let message = '';
+      
+      switch (action) {
+        case 'star':
+          updateQuery = { $set: { starred: true } };
+          message = 'emails starred successfully';
+          break;
+          
+        case 'unstar':
+          updateQuery = { $set: { starred: false } };
+          message = 'emails unstarred successfully';
+          break;
+          
+        case 'toggle-star':
+          // For toggle, we need to get current state and update accordingly
+          const emails = await Mail.find({ 
+            mailId: { $in: emailIds }, 
+            owner: userEmail 
+          });
+          
+          const starOps = emails.map(mail => ({
+            updateOne: {
+              filter: { mailId: mail.mailId, owner: userEmail },
+              update: { $set: { starred: !mail.starred } }
+            }
+          }));
+          
+          if (starOps.length > 0) {
+            await Mail.bulkWrite(starOps);
+          }
+          
+          return res.json({
+            success: true,
+            message: `Emails ${emails[0]?.starred ? 'unstarred' : 'starred'} successfully`,
+            count: starOps.length
+          });
+          
+        case 'important':
+          updateQuery = { $set: { important: true } };
+          message = 'emails marked as important';
+          break;
+          
+        case 'unimportant':
+          updateQuery = { $set: { important: false } };
+          message = 'emails removed from important';
+          break;
+          
+        case 'toggle-important':
+          const importantEmails = await Mail.find({ 
+            mailId: { $in: emailIds }, 
+            owner: userEmail 
+          });
+          
+          const importantOps = importantEmails.map(mail => ({
+            updateOne: {
+              filter: { mailId: mail.mailId, owner: userEmail },
+              update: { $set: { important: !mail.important } }
+            }
+          }));
+          
+          if (importantOps.length > 0) {
+            await Mail.bulkWrite(importantOps);
+          }
+          
+          return res.json({
+            success: true,
+            message: `Emails ${importantEmails[0]?.important ? 'unmarked as important' : 'marked as important'} successfully`,
+            count: importantOps.length
+          });
+          
+        case 'read':
+          updateQuery = { $set: { read: true } };
+          message = 'emails marked as read';
+          break;
+          
+        case 'unread':
+          updateQuery = { $set: { read: false } };
+          message = 'emails marked as unread';
+          break;
+          
+        case 'toggle-read':
+          const readEmails = await Mail.find({ 
+            mailId: { $in: emailIds }, 
+            owner: userEmail 
+          });
+          
+          const readOps = readEmails.map(mail => ({
+            updateOne: {
+              filter: { mailId: mail.mailId, owner: userEmail },
+              update: { $set: { read: !mail.read } }
+            }
+          }));
+          
+          if (readOps.length > 0) {
+            await Mail.bulkWrite(readOps);
+          }
+          
+          return res.json({
+            success: true,
+            message: `Emails ${readEmails[0]?.read ? 'marked as unread' : 'marked as read'} successfully`,
+            count: readOps.length
+          });
+          
+        case 'archive':
+          updateQuery = { 
+            $set: { 
+              folder: 'ARCHIVE',
+              trash: false 
+            } 
+          };
+          message = 'emails archived successfully';
+          break;
+          
+        case 'unarchive':
+          // Find emails to unarchive and restore to original folder
+          const emailsToUnarchive = await Mail.find({ 
+            mailId: { $in: emailIds }, 
+            owner: userEmail 
+          });
+          
+          const bulkOps = emailsToUnarchive.map(mail => {
+            const originalFolder = mail.to === userEmail ? 'INBOX' : 'SENT';
+            return {
+              updateOne: {
+                filter: { mailId: mail.mailId, owner: userEmail },
+                update: { 
+                  $set: { 
+                    folder: originalFolder,
+                    trash: false 
+                  } 
+                }
+              }
+            };
+          });
+          
+          if (bulkOps.length > 0) {
+            await Mail.bulkWrite(bulkOps);
+          }
+          
+          return res.json({
+            success: true,
+            message: `Emails unarchived successfully`,
+            count: bulkOps.length
+          });
+          
+        case 'trash':
+          updateQuery = { $set: { trash: true } };
+          message = 'emails moved to trash';
+          break;
+          
+        case 'delete':
+          // Permanent delete
+          const deleteResult = await Mail.deleteMany({ 
+            mailId: { $in: emailIds }, 
+            owner: userEmail 
+          });
+          
+          return res.json({
+            success: true,
+            message: `${deleteResult.deletedCount} emails permanently deleted`,
+            count: deleteResult.deletedCount
+          });
+          
+        case 'restore':
+          updateQuery = { $set: { trash: false } };
+          message = 'emails restored from trash';
+          break;
+          
+        case 'move':
+          if (!folder || !['inbox', 'sent', 'archive'].includes(folder.toLowerCase())) {
+            return res.status(400).json({
+              success: false,
+              message: 'Valid folder is required for move action (inbox, sent, archive)'
+            });
+          }
+          
+          const targetFolder = folder.toUpperCase();
+          updateQuery = { 
+            $set: { 
+              folder: targetFolder,
+              trash: false 
+            } 
+          };
+          message = `emails moved to ${folder}`;
+          break;
+          
+        default:
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid action'
+          });
+      }
+      
+      // Execute batch update
+      let updateResult;
+      if (action !== 'toggle-star' && action !== 'toggle-important' && action !== 'toggle-read' && action !== 'unarchive' && action !== 'delete') {
+        updateResult = await Mail.updateMany(
+          { 
+            mailId: { $in: emailIds }, 
+            owner: userEmail 
+          },
+          updateQuery
+        );
+      }
+      
+      res.json({
+        success: true,
+        message: `${message}`,
+        count: updateResult?.modifiedCount || 0,
+        action: action,
+        folder: folder || null
+      });
+      
+    } catch (error) {
+      console.error('Batch update error:', error);
+      res.status(500).json({
+        success: false,
+        message: `Failed to batch update emails: ${error.message}`
+      });
+    }
+  }
+);
+
+// ------------------ MOVE EMAILS TO FOLDER ------------------
+app.post('/api/mail/move-to-folder', 
+  [
+    verifyToken,
+    body('emailIds').isArray({ min: 1 }).withMessage('emailIds must be a non-empty array'),
+    body('targetFolder').isIn(['inbox', 'sent', 'archive', 'trash']).withMessage('Valid targetFolder is required (inbox, sent, archive, trash)'),
+  ],
+  async (req, res) => {
+    try {
+      const { emailIds, targetFolder } = req.body;
+      const userEmail = req.user.email;
+      
+      console.log(`📂 Moving ${emailIds.length} emails to ${targetFolder} for user: ${userEmail}`);
+      
+      if (!Array.isArray(emailIds) || emailIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide email IDs to move'
+        });
+      }
+      
+      let updateQuery = {};
+      let message = '';
+      
+      if (targetFolder === 'trash') {
+        updateQuery = { $set: { trash: true } };
+        message = 'emails moved to trash';
+      } else {
+        const folderUpper = targetFolder.toUpperCase();
+        updateQuery = { 
+          $set: { 
+            folder: folderUpper,
+            trash: false
+          } 
+        };
+        message = `emails moved to ${targetFolder}`;
+      }
+      
+      // Execute the move
+      const updateResult = await Mail.updateMany(
+        { 
+          mailId: { $in: emailIds }, 
+          owner: userEmail 
+        },
+        updateQuery
+      );
+      
+      res.json({
+        success: true,
+        message: `${updateResult.modifiedCount} ${message}`,
+        count: updateResult.modifiedCount,
+        targetFolder: targetFolder
+      });
+      
+    } catch (error) {
+      console.error('Move emails error:', error);
+      res.status(500).json({
+        success: false,
+        message: `Failed to move emails: ${error.message}`
+      });
+    }
+  }
+);
+
+// ------------------ SEARCH EMAILS ------------------
+app.post('/api/mail/search', verifyToken, async (req, res) => {
+  try {
+    const { query, folder, limit = 50 } = req.body;
+    const userEmail = req.user.email;
+    
+    console.log(`🔍 Searching emails for: ${userEmail}, query: ${query}, folder: ${folder}`);
+    
+    if (!query || query.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query is required'
+      });
+    }
+    
+    // Build search query
+    const searchQuery = {
+      owner: userEmail,
+      trash: false,
+      $or: [
+        { subject: { $regex: query, $options: 'i' } },
+        { body: { $regex: query, $options: 'i' } },
+        { from: { $regex: query, $options: 'i' } },
+        { to: { $regex: query, $options: 'i' } }
+      ]
+    };
+    
+    // Add folder filter if specified
+    if (folder && folder !== 'all') {
+      if (folder === 'trash') {
+        searchQuery.trash = true;
+      } else if (folder === 'starred') {
+        searchQuery.starred = true;
+      } else if (folder === 'important') {
+        searchQuery.important = true;
+      } else if (folder === 'archive') {
+        searchQuery.folder = 'ARCHIVE';
+      } else if (folder === 'sent') {
+        searchQuery.folder = 'SENT';
+      } else {
+        searchQuery.folder = 'INBOX';
+      }
+    }
+    
+    const mails = await Mail.find(searchQuery)
+      .select('-aesKey -aesIV')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+    
+    // Format emails for frontend
+    const formattedEmails = mails.map(mail => ({
+      id: mail.mailId,
+      uid: mail.mailId,
+      from: mail.from,
+      to: mail.to,
+      subject: mail.subject,
+      body: mail.body,
+      preview: mail.subject || 'No subject',
+      date: mail.createdAt,
+      originalDate: mail.createdAt,
+      read: mail.read,
+      starred: mail.starred,
+      important: mail.important,
+      draft: false,
+      sent: mail.folder === 'SENT',
+      trash: mail.trash,
+      spam: false,
+      archived: mail.folder === 'ARCHIVE',
+      folder: mail.folder.toLowerCase(),
+      encrypted: mail.encryption !== 'NONE',
+      encryptionLevel: mail.encryption === 'AES' ? 'aes256' : 
+                     mail.encryption === 'OTP' ? 'otp' : 'none',
+      requiresDecryption: mail.encryption !== 'NONE',
+      attachments: [],
+      size: mail.body ? mail.body.length : 0
+    }));
+    
+    res.json({
+      success: true,
+      emails: formattedEmails,
+      count: formattedEmails.length,
+      total: await Mail.countDocuments(searchQuery),
+      folder: folder || 'all',
+      query: query
+    });
+    
+  } catch (error) {
+    console.error('Search emails error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search emails',
       error: error.message
     });
   }
@@ -1449,10 +2286,10 @@ app.post('/api/decrypt',
       
       console.log(`🔓 Decrypt request for email: ${emailId} by user: ${userEmail}`);
       
-      // Find the email in MongoDB
-      const mail = await Mail.findOne({ 
+      // Find the email
+      const mail = await Mail.findOne({
         mailId: emailId,
-        owner: userEmail 
+        owner: userEmail
       });
       
       if (!mail) {
@@ -1554,79 +2391,6 @@ app.post('/api/decrypt',
   }
 );
 
-// ------------------ UPDATE EMAIL STATUS (STAR, IMPORTANT, DELETE) ------------------
-app.put('/api/mail/:mailId/status', 
-  [
-    verifyToken,
-    body('action').isIn(['star', 'unstar', 'important', 'unimportant', 'delete', 'restore']).withMessage('Invalid action'),
-  ],
-  async (req, res) => {
-    try {
-      const { mailId } = req.params;
-      const { action } = req.body;
-      const userEmail = req.user.email;
-      
-      console.log(`⚡ Updating status for email: ${mailId}, action: ${action}`);
-      
-      const mail = await Mail.findOne({ 
-        mailId: mailId,
-        owner: userEmail 
-      });
-      
-      if (!mail) {
-        return res.status(404).json({
-          success: false,
-          message: 'Email not found'
-        });
-      }
-      
-      let update = {};
-      
-      switch (action) {
-        case 'star':
-          update.starred = true;
-          break;
-        case 'unstar':
-          update.starred = false;
-          break;
-        case 'important':
-          update.important = true;
-          break;
-        case 'unimportant':
-          update.important = false;
-          break;
-        case 'delete':
-          update.trash = true;
-          break;
-        case 'restore':
-          update.trash = false;
-          break;
-      }
-      
-      mail.set(update);
-      await mail.save();
-      
-      res.json({
-        success: true,
-        message: `Email ${action.replace('un', '')}ed successfully`,
-        email: {
-          id: mail.mailId,
-          starred: mail.starred,
-          important: mail.important,
-          trash: mail.trash
-        }
-      });
-      
-    } catch (error) {
-      console.error('Update email status error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update email status'
-      });
-    }
-  }
-);
-
 // ------------------ LOGOUT ------------------
 app.post('/api/logout', verifyToken, (req, res) => {
   try {
@@ -1642,6 +2406,113 @@ app.post('/api/logout', verifyToken, (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+});
+
+// ------------------ GET FOLDER COUNTS ------------------
+app.get('/api/mail/folder-counts', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    const [inbox, sent, archive, trash, starred, important] = await Promise.all([
+      Mail.countDocuments({ owner: userEmail, folder: 'INBOX', trash: false }),
+      Mail.countDocuments({ owner: userEmail, folder: 'SENT', trash: false }),
+      Mail.countDocuments({ owner: userEmail, folder: 'ARCHIVE', trash: false }),
+      Mail.countDocuments({ owner: userEmail, trash: true }),
+      Mail.countDocuments({ owner: userEmail, starred: true, trash: false }),
+      Mail.countDocuments({ owner: userEmail, important: true, trash: false })
+    ]);
+    
+    const unreadCount = await Mail.countDocuments({ 
+      owner: userEmail, 
+      folder: 'INBOX', 
+      read: false, 
+      trash: false 
+    });
+    
+    res.json({
+      success: true,
+      counts: {
+        inbox: inbox,
+        sent: sent,
+        archive: archive,
+        trash: trash,
+        starred: starred,
+        important: important,
+        unread: unreadCount
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get folder counts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get folder counts',
+      error: error.message
+    });
+  }
+});
+
+// ------------------ FIX DATABASE INDEXES ------------------
+app.post('/api/fix-database-indexes', async (req, res) => {
+  try {
+    console.log('🛠️ Fixing database indexes...');
+    
+    // Drop the problematic unique index on mailId alone
+    try {
+      await Mail.collection.dropIndex('mailId_1');
+      console.log('✅ Dropped old unique index on mailId');
+    } catch (dropError) {
+      console.log('ℹ️ No old index to drop or already dropped');
+    }
+    
+    // Create compound unique index
+    await Mail.collection.createIndex({ mailId: 1, owner: 1 }, { unique: true });
+    console.log('✅ Created compound unique index on {mailId: 1, owner: 1}');
+    
+    // Create other useful indexes
+    await Mail.collection.createIndex({ owner: 1, folder: 1, trash: 1 });
+    await Mail.collection.createIndex({ owner: 1, starred: 1 });
+    await Mail.collection.createIndex({ owner: 1, important: 1 });
+    await Mail.collection.createIndex({ owner: 1, read: 1 });
+    await Mail.collection.createIndex({ createdAt: -1 });
+    
+    console.log('✅ Created all necessary indexes');
+    
+    // Get current indexes
+    const indexes = await Mail.collection.getIndexes();
+    
+    res.json({
+      success: true,
+      message: 'Database indexes fixed successfully',
+      indexes: Object.keys(indexes)
+    });
+    
+  } catch (error) {
+    console.error('Fix database indexes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix database indexes: ' + error.message
+    });
+  }
+});
+
+// ------------------ GET DATABASE INDEX INFO ------------------
+app.get('/api/database-indexes', async (req, res) => {
+  try {
+    const indexes = await Mail.collection.getIndexes();
+    
+    res.json({
+      success: true,
+      indexes: indexes
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get database indexes',
+      error: error.message
     });
   }
 });
@@ -1696,9 +2567,9 @@ app.post('/api/seed-test-data', async (req, res) => {
     const now = new Date();
     const testEmails = [];
     
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 20; i++) {
       const fromEmail = `sender${i}@qumail.com`;
-      const mailId = uuidv4();
+      const mailId = uuidv4(); // ✅ SAME mailId for both copies
       const body = `This is test email ${i} content. Welcome to QuMail!\n\nThis email contains test content to demonstrate the QuMail platform features. You can reply, forward, or delete this email.\n\nRegards,\nSender ${i}`;
       
       // Create sender account if not exists
@@ -1728,6 +2599,9 @@ app.post('/api/seed-test-data', async (req, res) => {
       let encryptedBody = body;
       let aesKey = null;
       let aesIV = null;
+      let folder = 'INBOX';
+      
+      if (i % 5 === 0) folder = 'ARCHIVE';
       
       if (isEncrypted && isAES) {
         // Create AES encrypted email
@@ -1738,11 +2612,12 @@ app.post('/api/seed-test-data', async (req, res) => {
         // Create OTP encrypted email
         const otpKey = generateOTPKey(body.length);
         encryptedBody = otpEncrypt(body, otpKey);
+        encryptedBody = `[otp|${otpKey}]:${encryptedBody}`;
       }
       
-      // Add to test user's inbox
+      // Add to test user's inbox (same mailId, owner: testUser)
       testEmails.push({
-        mailId: uuidv4(),
+        mailId: mailId,
         from: fromEmail,
         to: testUser,
         subject: isEncrypted ? `🔒 Encrypted Test Email ${i}` : `Test Email ${i}`,
@@ -1750,30 +2625,30 @@ app.post('/api/seed-test-data', async (req, res) => {
         encryption: isEncrypted ? (isAES ? 'AES' : 'OTP') : 'NONE',
         aesKey: aesKey,
         aesIV: aesIV,
-        folder: 'INBOX',
+        folder: folder,
         owner: testUser,
         read: i % 2 === 0,
         starred: i % 4 === 0,
         important: i % 5 === 0,
         createdAt: new Date(now.getTime() - (i * 3600000))
       });
-    }
-    
-    // Add sent emails
-    for (let i = 1; i <= 5; i++) {
-      const toEmail = `recipient${i}@qumail.com`;
       
+      // Add to sender's sent folder (same mailId, owner: fromEmail)
       testEmails.push({
-        mailId: uuidv4(),
-        from: testUser,
-        to: toEmail,
-        subject: `Sent Test Email ${i}`,
-        body: `This is a sent test email ${i} from the QuMail platform.\n\nThis demonstrates how sent emails appear in your sent folder.\n\nBest regards,\nTest User`,
+        mailId: mailId,
+        from: fromEmail,
+        to: testUser,
+        subject: `Test Email ${i}`,
+        body: body,
         encryption: 'NONE',
+        aesKey: null,
+        aesIV: null,
         folder: 'SENT',
-        owner: testUser,
+        owner: fromEmail,
         read: true,
-        createdAt: new Date(now.getTime() - (i * 7200000))
+        starred: false,
+        important: false,
+        createdAt: new Date(now.getTime() - (i * 3600000))
       });
     }
     
@@ -1787,8 +2662,9 @@ app.post('/api/seed-test-data', async (req, res) => {
         password: testPassword
       },
       counts: {
-        inbox: testEmails.filter(e => e.folder === 'INBOX').length,
-        sent: testEmails.filter(e => e.folder === 'SENT').length
+        inbox: testEmails.filter(e => e.folder === 'INBOX' && e.owner === testUser).length,
+        sent: testEmails.filter(e => e.folder === 'SENT' && e.owner === testUser).length,
+        archive: testEmails.filter(e => e.folder === 'ARCHIVE' && e.owner === testUser).length
       }
     });
     
@@ -1796,7 +2672,7 @@ app.post('/api/seed-test-data', async (req, res) => {
     console.error('Seed data error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to seed test data'
+      message: 'Failed to seed test data: ' + error.message
     });
   }
 });
@@ -1830,7 +2706,6 @@ const server = app.listen(PORT, () => {
   console.log(`🔐 Security: End-to-End Quantum-Resistant Encryption`);
   console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Database: ${dbStatus}`);
-  console.log(`📁 Upload Directory: ${path.join(__dirname, 'uploads')}`);
   console.log(`\n📋 Available Endpoints:`);
   console.log(`   POST /api/register              - Register new user`);
   console.log(`   POST /api/login                 - Login`);
@@ -1842,14 +2717,32 @@ const server = app.listen(PORT, () => {
   console.log(`   POST /api/send                 - Send email (supports OTP/AES/none)`);
   console.log(`   POST /api/mail/inbox           - Get inbox emails`);
   console.log(`   POST /api/mail/sent            - Get sent emails`);
+  console.log(`   POST /api/mail/archive         - Get archive emails`);
+  console.log(`   POST /api/mail/trash           - Get trash emails`);
   console.log(`   GET  /api/mail/:mailId         - Get single email`);
-  console.log(`   POST /api/decrypt              - Decrypt encrypted email`);
   console.log(`   PUT  /api/mail/:mailId/status  - Update email status`);
+  console.log(`   POST /api/mail/batch-update    - Batch update emails`);
+  console.log(`   POST /api/mail/move-to-folder  - Move emails to folder`);
+  console.log(`   POST /api/mail/search          - Search emails`);
+  console.log(`   GET  /api/mail/folder-counts   - Get folder counts`);
+  console.log(`   POST /api/decrypt              - Decrypt encrypted email`);
   console.log(`   POST /api/verify-token         - Verify JWT token`);
   console.log(`\n🔐 Encryption Support:`);
   console.log(`   • Standard Email (no encryption)`);
   console.log(`   • Quantum OTP (One-Time Pad)`);
   console.log(`   • Quantum AES-256-GCM`);
+  console.log(`\n🔧 CRITICAL FIXES APPLIED:`);
+  console.log(`   • Removed unique constraint from mailId field`);
+  console.log(`   • Added compound unique index: {mailId: 1, owner: 1}`);
+  console.log(`   • Same mailId for sender & receiver copies (different owners)`);
+  console.log(`   • Enhanced error handling in /api/send endpoint`);
+  console.log(`   • Added database index fixing endpoint: POST /api/fix-database-indexes`);
+  console.log(`   • Added database index info endpoint: GET /api/database-indexes`);
+  console.log(`\n⚠️  IMPORTANT: If you still get duplicate key errors:`);
+  console.log(`   1. Call POST /api/fix-database-indexes`);
+  console.log(`   2. Or manually fix indexes in MongoDB:`);
+  console.log(`      db.mails.dropIndex("mailId_1")`);
+  console.log(`      db.mails.createIndex({mailId:1, owner:1}, {unique: true})`);
   console.log(`========================================\n`);
 });
 

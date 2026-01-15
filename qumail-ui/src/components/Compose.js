@@ -35,7 +35,7 @@ export default function Compose({ open, onClose, onSend }) {
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [level, setLevel] = useState("aes");
+  const [level, setLevel] = useState("aes256");
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
   const [attachments, setAttachments] = useState([]);
@@ -43,6 +43,20 @@ export default function Compose({ open, onClose, onSend }) {
   const [showBCC, setShowBCC] = useState(false);
 
   const handleSend = () => {
+    // Validate required fields
+    if (!to.trim()) {
+      alert("Please enter a recipient email");
+      return;
+    }
+    if (!to.toLowerCase().endsWith("@qumail.com")) {
+      alert("Recipient must be a @qumail.com address");
+      return;
+    }
+    if (!body.trim()) {
+      alert("Please enter a message body");
+      return;
+    }
+    
     onSend(to, subject, body, level);
     onClose();
     resetForm();
@@ -52,7 +66,7 @@ export default function Compose({ open, onClose, onSend }) {
     setTo("");
     setSubject("");
     setBody("");
-    setLevel("aes");
+    setLevel("aes256");
     setCc("");
     setBcc("");
     setAttachments([]);
@@ -74,7 +88,7 @@ export default function Compose({ open, onClose, onSend }) {
 
   const securityLevels = {
     otp: { label: "Quantum OTP", color: "error", icon: "🔒", description: "Maximum Security" },
-    aes: { label: "Quantum AES", color: "success", icon: "⚡", description: "Fast & Secure" },
+    aes256: { label: "Quantum AES-256", color: "success", icon: "⚡", description: "Fast & Secure" },
     none: { label: "Standard", color: "default", icon: "✉️", description: "No Encryption" }
   };
 
@@ -119,7 +133,7 @@ export default function Compose({ open, onClose, onSend }) {
               fullWidth
               variant="outlined"
               size="small"
-              placeholder="recipient@example.com"
+              placeholder="recipient@qumail.com"
               value={to}
               onChange={(e) => setTo(e.target.value)}
               sx={{ ml: 1 }}
@@ -135,7 +149,7 @@ export default function Compose({ open, onClose, onSend }) {
                 fullWidth
                 variant="outlined"
                 size="small"
-                placeholder="cc@example.com"
+                placeholder="cc@qumail.com"
                 value={cc}
                 onChange={(e) => setCc(e.target.value)}
                 sx={{ ml: 1 }}
@@ -152,7 +166,7 @@ export default function Compose({ open, onClose, onSend }) {
                 fullWidth
                 variant="outlined"
                 size="small"
-                placeholder="bcc@example.com"
+                placeholder="bcc@qumail.com"
                 value={bcc}
                 onChange={(e) => setBcc(e.target.value)}
                 sx={{ ml: 1 }}
@@ -222,7 +236,7 @@ export default function Compose({ open, onClose, onSend }) {
             </FormControl>
             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
               {level === "otp" && "One-time pad encryption - Maximum security for sensitive messages"}
-              {level === "aes" && "AES-256 encryption - Perfect balance of speed and security"}
+              {level === "aes256" && "AES-256 encryption - Perfect balance of speed and security"}
               {level === "none" && "Standard email - No encryption applied"}
             </Typography>
           </Box>
