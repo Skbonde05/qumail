@@ -19,7 +19,9 @@ import {
   Typography,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  useTheme,
+  useMediaQuery
 } from "@mui/material";
 import {
   Close,
@@ -31,12 +33,16 @@ import {
   FormatListNumbered,
   InsertLink,
   InsertPhoto,
-  Security,
   Delete,
   Save,
-  Warning
+  Warning,
+  FlashOn as Zap,
+  Security as Shield,
+  Lock as LockKeyhole,
+  Mail
 } from "@mui/icons-material";
 import axios from "axios";
+
 import EmailService from "../services/EmailService";
 
 // API Base URL
@@ -58,6 +64,11 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [errors, setErrors] = useState({});
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // ... (keeping other useEffects and handlers same)
+  
   // Load draft if editing
   useEffect(() => {
     if (draftToEdit) {
@@ -252,19 +263,19 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     otp: { 
       label: "Quantum OTP", 
       color: "error", 
-      icon: "🔒", 
+      icon: <LockKeyhole />, 
       description: "Maximum Security - One-time pad encryption" 
     },
     aes256: { 
       label: "Quantum AES-256", 
       color: "success", 
-      icon: "⚡", 
+      icon: <Zap />, 
       description: "Fast & Secure - AES-256-GCM encryption" 
     },
     none: { 
       label: "Standard", 
       color: "default", 
-      icon: "✉️", 
+      icon: <Mail />, 
       description: "No Encryption - Standard email" 
     }
   };
@@ -310,8 +321,9 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
         onClose={handleClose}
         fullWidth
         maxWidth="md"
+        fullScreen={isMobile}
         PaperProps={{
-          sx: {
+          sx: isMobile ? {} : {
             height: "85vh",
             maxHeight: "700px",
             borderRadius: "12px"
@@ -438,14 +450,18 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   label="Security Level"
                   onChange={(e) => setLevel(e.target.value)}
                   startAdornment={
-                    <Security sx={{ mr: 1, color: securityLevels[level]?.color }} />
+                    <Box sx={{ mr: 1, display: "flex", color: securityLevels[level]?.color }}>
+                         <Shield size={20} />
+                    </Box>
                   }
                   disabled={sending}
                 >
                   {Object.entries(securityLevels).map(([key, value]) => (
                     <MenuItem key={key} value={key}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <span>{value.icon}</span>
+                        <Box sx={{ display: "flex", color: value.color }}>
+                          {value.icon}
+                        </Box>
                         <Box>
                           <Typography variant="body2">{value.label}</Typography>
                           <Typography variant="caption" color="text.secondary">
@@ -457,16 +473,19 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   ))}
                 </Select>
               </FormControl>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                {level === "otp" && "🔒 One-time pad encryption - Maximum security, quantum-resistant"}
-                {level === "aes256" && "⚡ AES-256-GCM encryption - Perfect balance of speed and security"}
-                {level === "none" && "✉️ Standard email - No encryption applied"}
-              </Typography>
+              <Box sx={{ mt: 0.5, display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Box sx={{ display: "flex", color: "text.secondary" }}>
+                     {securityLevels[level].icon}
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                    {securityLevels[level].description}
+                </Typography>
+              </Box>
             </Box>
 
             <Divider sx={{ my: 2 }} />
 
-            {/* Message Body */}
+            {/* Message Body ... same ... */}
             <Box sx={{ border: "1px solid #e0e0e0", borderRadius: 1 }}>
               {/* Formatting Toolbar */}
               <Box sx={{ 
@@ -548,7 +567,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                       key={index}
                       label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
                       onDelete={() => removeAttachment(index)}
-                      avatar={<Avatar><AttachFile fontSize="small" /></Avatar>}
+                      avatar={<Avatar sx={{ bgcolor: 'transparent' }}><AttachFile fontSize="small" color="action" /></Avatar>}
                       size="small"
                     />
                   ))}
@@ -595,9 +614,12 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                 {saving ? "Saving..." : "Save Draft"}
               </Button>
               
-              <Box sx={{ ml: 2, display: "flex", alignItems: "center" }}>
+              <Box sx={{ ml: 2, display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Box sx={{ display: "flex", color: "text.secondary" }}>
+                     {securityLevels[level].icon}
+                </Box>
                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                  {securityLevels[level].icon} {securityLevels[level].label}
+                  {securityLevels[level].label}
                 </Typography>
                 {draftId && (
                   <Chip
@@ -644,3 +666,4 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     </>
   );
 }
+

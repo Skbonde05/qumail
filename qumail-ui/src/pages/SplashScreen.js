@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, LinearProgress, Fade, Container } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { Security as LockKeyhole } from '@mui/icons-material';
 
 const SplashContainer = styled(Box)(({ theme }) => ({
   position: 'fixed',
@@ -29,7 +30,6 @@ const Content = styled(Container)(({ theme }) => ({
 }));
 
 const Logo = styled(Box)(({ theme }) => ({
-  fontSize: '4rem',
   marginBottom: theme.spacing(2),
   animation: 'pulse 2s infinite',
   '@keyframes pulse': {
@@ -80,10 +80,10 @@ const SplashScreen = ({ onFinish }) => {
       });
     }, 200);
 
-    // Auto navigate after 3 seconds
+    // Auto navigate after 5 seconds
     const finishTimer = setTimeout(() => {
       clearInterval(timer);
-      onFinish();
+      if (onFinish) onFinish();
     }, 5000);
 
     return () => {
@@ -96,7 +96,9 @@ const SplashScreen = ({ onFinish }) => {
     <SplashContainer>
       <Fade in={true} timeout={1000}>
         <Content maxWidth="sm">
-          <Logo>🔐</Logo>
+          <Logo>
+            <LockKeyhole sx={{ fontSize: 64, color: "#90e0ef" }} />
+          </Logo>
           <Title variant="h1">QuMail</Title>
           <Subtitle variant="h5">Quantum-Secure Email Platform</Subtitle>
           
@@ -124,4 +126,4 @@ const SplashScreen = ({ onFinish }) => {
   );
 };
 
-export default SplashScreen;
+export default SplashScreen;

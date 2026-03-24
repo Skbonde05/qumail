@@ -1,11 +1,20 @@
-// Encryption utilities for QuMail
+import React from 'react';
+import { 
+  Lock, 
+  Security as ShieldCheck, 
+  Mail, 
+  FlashOn as Zap 
+} from '@mui/icons-material';
+import { Box } from '@mui/material';
+
+
 export const getEncryptionLabel = (encryptionLevel) => {
   switch (encryptionLevel) {
     case 'aes256':
       return {
         text: 'AES',
         color: 'blue',
-        icon: '🔒',
+        icon: Lock,
         description: 'Quantum AES-256 Encrypted',
         badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
         textColor: 'text-blue-600 dark:text-blue-400'
@@ -14,7 +23,7 @@ export const getEncryptionLabel = (encryptionLevel) => {
       return {
         text: 'OTP',
         color: 'red',
-        icon: '🔐',
+        icon: ShieldCheck,
         description: 'Quantum OTP Encrypted',
         badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
         textColor: 'text-red-600 dark:text-red-400'
@@ -24,7 +33,7 @@ export const getEncryptionLabel = (encryptionLevel) => {
       return {
         text: 'STANDARD',
         color: 'gray',
-        icon: '✉️',
+        icon: Mail,
         description: 'Standard Email',
         badgeClass: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
         textColor: 'text-gray-600 dark:text-gray-400'
@@ -33,6 +42,8 @@ export const getEncryptionLabel = (encryptionLevel) => {
 };
 
 export const formatEncryptionPreview = (encryptionLevel, body) => {
+  if (!body || typeof body !== 'string') return '';
+
   if (encryptionLevel === 'none' || !encryptionLevel) {
     // Show normal preview for standard emails
     const plainText = body.replace(/<[^>]*>/g, '');
@@ -40,9 +51,16 @@ export const formatEncryptionPreview = (encryptionLevel, body) => {
   } else {
     // Show encrypted preview for OTP/AES
     const label = getEncryptionLabel(encryptionLevel);
-    return `${label.icon} ${label.description}`;
+    const Icon = label.icon;
+    return (
+      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+        <Icon sx={{ fontSize: 14 }} />
+        {label.description}
+      </Box>
+    );
   }
 };
+
 
 export const shouldShowDecryptButton = (email) => {
   // Show decrypt button for encrypted emails that haven't been decrypted

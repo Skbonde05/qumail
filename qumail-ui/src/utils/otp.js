@@ -292,7 +292,7 @@ export async function testOTP() {
     
     // Verify
     const success = decrypted === originalText;
-    console.log('Test', success ? 'PASSED ✓' : 'FAILED ✗');
+    console.log('Test', success ? 'PASSED' : 'FAILED');
     
     return success;
   } catch (error) {

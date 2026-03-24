@@ -56,9 +56,12 @@ import {
   ContentCopy as ContentCopyIcon,
   Print as PrintIcon,
   Key as KeyIcon,
-  CopyAll as CopyAllIcon
+  CopyAll as CopyAllIcon,
+  Lock as LucideLock
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+
+
 
 // Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -419,13 +422,25 @@ export default function EmailViewer({
       setDecryptedContent(body || '');
     } else if (securityLevel === 'aes') {
       // For AES, we might need to decrypt
-      setDecryptedContent('🔒 Encrypted content - Click decrypt to view');
+      setDecryptedContent(
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <LucideLock sx={{ fontSize: 16 }} />
+          <span>Encrypted content - Click decrypt to view</span>
+        </Box>
+      );
     } else if (securityLevel === 'otp') {
       // For OTP, definitely encrypted
-      setDecryptedContent('🔒 OTP Encrypted content - Requires key to decrypt');
+      setDecryptedContent(
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <LucideLock sx={{ fontSize: 16 }} />
+          <span>OTP Encrypted content - Requires key to decrypt</span>
+        </Box>
+      );
+
     } else {
       setDecryptedContent(body || '');
     }
+
     
     setIsStarred(starred || flags?.includes('starred') || false);
     setIsImportant(important || flags?.includes('important') || false);

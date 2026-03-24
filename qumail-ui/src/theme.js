@@ -287,3 +287,6 @@ export const getTheme = (mode) =>
       }
     }
   });
+
+export const lightTheme = getTheme('light');
+export const darkTheme = getTheme('dark');

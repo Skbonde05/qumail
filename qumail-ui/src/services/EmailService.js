@@ -23,7 +23,7 @@ const getAuthHeaders = () => {
   const token = getToken();
   
   if (!token) {
-    console.error('❌ No authentication token found');
+    console.error('[AUTH] No authentication token found');
     throw new Error('No authentication token. Please login.');
   }
   
@@ -33,7 +33,7 @@ const getAuthHeaders = () => {
   };
 };
 
-// 🔧 CRITICAL: Enhanced fetch wrapper with 401 handling
+// [CRITICAL] Enhanced fetch wrapper with 401 handling
 const fetchWithAuth = async (url, options = {}) => {
   try {
     const token = getToken();
@@ -49,9 +49,9 @@ const fetchWithAuth = async (url, options = {}) => {
     const config = { ...options, headers };
     let response = await fetch(url, config);
 
-    // 🔐 Handle token expiration (401 Unauthorized)
+    // [AUTH] Handle token expiration (401 Unauthorized)
     if (response.status === 401) {
-      console.warn(`🔐 401 Unauthorized at ${url}. Attempting token refresh...`);
+      console.warn(`[AUTH] 401 Unauthorized at ${url}. Attempting token refresh...`);
       
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
@@ -66,7 +66,7 @@ const fetchWithAuth = async (url, options = {}) => {
             const refreshData = await refreshRes.json();
             const newToken = refreshData.accessToken || refreshData.token;
 
-            console.log("✅ Token refreshed successfully");
+            console.log("[SUCCESS] Token refreshed successfully");
             localStorage.setItem('token', newToken);
             localStorage.setItem('qumail_token', newToken);
 
@@ -74,7 +74,7 @@ const fetchWithAuth = async (url, options = {}) => {
             config.headers['Authorization'] = `Bearer ${newToken}`;
             response = await fetch(url, config);
           } else {
-            console.error("❌ Token refresh failed");
+            console.error("[ERROR] Token refresh failed");
             removeToken();
             if (window.location.pathname !== '/login') {
               window.location.href = '/login';
@@ -82,7 +82,7 @@ const fetchWithAuth = async (url, options = {}) => {
             throw new Error('Session expired. Please login again.');
           }
         } catch (refreshErr) {
-          console.error("❌ Error during token refresh:", refreshErr);
+          console.error("[ERROR] Error during token refresh:", refreshErr);
           removeToken();
           if (window.location.pathname !== '/login') {
             window.location.href = '/login';
@@ -106,7 +106,7 @@ const fetchWithAuth = async (url, options = {}) => {
 };
 
 class EmailService {
-  // ✅ Test connection
+  // [TEST] Test connection
   static async testConnection() {
     try {
       const response = await fetch(`${API_BASE}/health`, {
@@ -125,10 +125,10 @@ class EmailService {
     }
   }
 
-  // ✅ Register user
+  // [REGISTER] Register user
   static async register(name, email, password, confirmPassword) {
     try {
-      console.log("📝 Registering user:", email);
+      console.log("[INFO] Registering user:", email);
       
       const response = await fetch(`${API_BASE}/register`, {
         method: 'POST',
@@ -151,10 +151,10 @@ class EmailService {
     }
   }
 
-  // ✅ Login user
+  // [AUTH] Login user
  static async login(email, password) {
   try {
-    console.log("🔐 Logging in user:", email);
+    console.log("[AUTH] Logging in user:", email);
 
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
@@ -171,12 +171,16 @@ class EmailService {
       };
     }
 
-    // ✅ Store tokens (NEW SYSTEM)
+    // [AUTH] Store tokens (NEW SYSTEM)
     if (data.accessToken && data.refreshToken) {
 
       // Save tokens
-      localStorage.setItem("token", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
+      const token = data.accessToken || data.token;
+      const refreshToken = data.refreshToken;
+      localStorage.setItem("token", token);
+      localStorage.setItem("qumail_token", token);
+      localStorage.setItem("refreshToken", refreshToken);
+      localStorage.setItem("qumail_refresh_token", refreshToken);
 
       // Save user info
       localStorage.setItem("userEmail", email);
@@ -205,7 +209,7 @@ class EmailService {
   }
 }
 
-  // ✅ Verify token
+  // [AUTH] Verify token
   static async verifyToken() {
     try {
       const token = getToken();
@@ -245,10 +249,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get user profile
+  // [PROFILE] Get user profile
   static async getProfile() {
     try {
-      console.log("👤 Getting user profile...");
+      console.log("[INFO] Getting user profile...");
       
       const response = await fetchWithAuth(`${API_BASE}/profile`);
 
@@ -261,7 +265,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Profile loaded for: ${data.user.email}`);
+        console.log(`[SUCCESS] Profile loaded for: ${data.user.email}`);
         return data;
       }
       
@@ -272,10 +276,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get inbox emails
+  // [INBOX] Get inbox emails
   static async getInboxEmails(limit = 50, page = 1) {
     try {
-      console.log(`📥 Fetching inbox emails, page: ${page}, limit: ${limit}`);
+      console.log(`[INBOX] Fetching inbox emails, page: ${page}, limit: ${limit}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/inbox`, {
         method: "POST",
@@ -291,7 +295,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got ${data.emails.length} inbox emails (total: ${data.total})`);
+        console.log(`[SUCCESS] Got ${data.emails.length} inbox emails (total: ${data.total})`);
         return data;
       }
       
@@ -302,10 +306,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get sent emails
+  // [SENT] Get sent emails
   static async getSentEmails(limit = 50, page = 1) {
     try {
-      console.log(`📤 Fetching sent emails, page: ${page}, limit: ${limit}`);
+      console.log(`[SENT] Fetching sent emails, page: ${page}, limit: ${limit}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/sent`, {
         method: "POST",
@@ -321,7 +325,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got ${data.emails.length} sent emails (total: ${data.total})`);
+        console.log(`[SUCCESS] Got ${data.emails.length} sent emails (total: ${data.total})`);
         return data;
       }
       
@@ -332,10 +336,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get archive emails
+  // [ARCHIVE] Get archive emails
   static async getArchiveEmails(limit = 50, page = 1) {
     try {
-      console.log(`📁 Fetching archive emails, page: ${page}, limit: ${limit}`);
+      console.log(`[ARCHIVE] Fetching archive emails, page: ${page}, limit: ${limit}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/archive`, {
         method: "POST",
@@ -351,7 +355,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got ${data.emails.length} archive emails (total: ${data.total})`);
+        console.log(`[SUCCESS] Got ${data.emails.length} archive emails (total: ${data.total})`);
         return data;
       }
       
@@ -362,10 +366,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get trash emails
+  // [TRASH] Get trash emails
   static async getTrashEmails(limit = 50, page = 1) {
     try {
-      console.log(`🗑️ Fetching trash emails, page: ${page}, limit: ${limit}`);
+      console.log(`[TRASH] Fetching trash emails, page: ${page}, limit: ${limit}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/trash`, {
         method: "POST",
@@ -381,7 +385,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got ${data.emails.length} trash emails (total: ${data.total})`);
+        console.log(`[SUCCESS] Got ${data.emails.length} trash emails (total: ${data.total})`);
         return data;
       }
       
@@ -392,10 +396,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get starred emails
+  // [STAR] Get starred emails
   static async getStarredEmails(limit = 50, page = 1) {
     try {
-      console.log(`⭐ Fetching starred emails, page: ${page}, limit: ${limit}`);
+      console.log(`[STAR] Fetching starred emails, page: ${page}, limit: ${limit}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/search`, {
         method: "POST",
@@ -415,7 +419,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got ${data.emails.length} starred emails (total: ${data.total})`);
+        console.log(`[SUCCESS] Got ${data.emails.length} starred emails (total: ${data.total})`);
         return data;
       }
       
@@ -426,10 +430,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get important emails
+  // [IMPORTANT] Get important emails
   static async getImportantEmails(limit = 50, page = 1) {
     try {
-      console.log(`🔴 Fetching important emails, page: ${page}, limit: ${limit}`);
+      console.log(`[IMPORTANT] Fetching important emails, page: ${page}, limit: ${limit}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/search`, {
         method: "POST",
@@ -449,7 +453,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got ${data.emails.length} important emails (total: ${data.total})`);
+        console.log(`[SUCCESS] Got ${data.emails.length} important emails (total: ${data.total})`);
         return data;
       }
       
@@ -460,10 +464,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get single email by ID
+  // [PAGE] Get single email by ID
   static async getEmailById(emailId) {
     try {
-      console.log(`📄 Fetching email: ${emailId}`);
+      console.log(`[PAGE] Fetching email: ${emailId}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/${emailId}`);
       
@@ -476,7 +480,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got email: ${emailId}`);
+        console.log(`[SUCCESS] Got email: ${emailId}`);
         return data;
       }
       
@@ -487,10 +491,10 @@ class EmailService {
     }
   }
 
-  // ✅ Update single email status (star, important, etc.)
+  // [ACTION] Update single email status (star, important, etc.)
   static async updateEmailStatus(emailId, action, folder = null, snoozeDate = null) {
     try {
-      console.log(`⚡ Updating email ${emailId} with action: ${action}`);
+      console.log(`[ACTION] Updating email ${emailId} with action: ${action}`);
       
       const body = { action };
       if (folder) body.folder = folder;
@@ -510,7 +514,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Status update successful: ${data.message}`);
+        console.log(`[SUCCESS] Status update successful: ${data.message}`);
         return data;
       }
       
@@ -522,10 +526,10 @@ class EmailService {
     }
   }
 
-  // ✅ MOVE EMAILS TO FOLDER
+  // [MOVE] MOVE EMAILS TO FOLDER
   static async moveEmailsToFolder(emailIds, targetFolder) {
     try {
-      console.log(`📂 Moving ${emailIds.length} emails to ${targetFolder}:`, emailIds);
+      console.log(`[MOVE] Moving ${emailIds.length} emails to ${targetFolder}:`, emailIds);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/move-to-folder`, {
         method: "POST",
@@ -544,7 +548,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Move successful: ${data.message}`);
+        console.log(`[SUCCESS] Move successful: ${data.message}`);
         return data;
       }
       
@@ -556,10 +560,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get drafts
+  // [DRAFTS] Get drafts
   static async getDrafts() {
     try {
-      console.log(`📝 Fetching drafts...`);
+      console.log(`[INFO] Fetching drafts...`);
       const response = await fetchWithAuth(`${API_BASE}/mail/drafts`, {
         method: "POST"
       });
@@ -576,10 +580,10 @@ class EmailService {
     }
   }
 
-  // ✅ Save draft (handles both create and update)
+  // [DRAFTS] Save draft (handles both create and update)
   static async saveDraft(draftId, to, subject, body, encryptionLevel = 'none') {
     try {
-      console.log(`💾 Saving draft... ${draftId ? 'Update: ' + draftId : 'New'}`);
+      console.log(`[SAVE] Saving draft... ${draftId ? 'Update: ' + draftId : 'New'}`);
       
       const payload = {
         to: to || '',
@@ -607,10 +611,10 @@ class EmailService {
     }
   }
 
-  // ✅ Delete draft
+  // [DRAFTS] Delete draft
   static async deleteDraft(draftId) {
     try {
-      console.log(`🗑️ Deleting draft: ${draftId}`);
+      console.log(`[TRASH] Deleting draft: ${draftId}`);
       const response = await fetchWithAuth(`${API_BASE}/mail/drafts/${draftId}`, {
         method: "DELETE"
       });
@@ -626,10 +630,10 @@ class EmailService {
     }
   }
 
-  // ✅ Batch update emails
+  // [ACTION] Batch update emails
   static async batchUpdateEmails(emailIds, action, folder = null) {
     try {
-      console.log(`⚡ Batch updating ${emailIds.length} emails with action: ${action}`);
+      console.log(`[ACTION] Batch updating ${emailIds.length} emails with action: ${action}`);
       
       const body = { 
         emailIds: Array.isArray(emailIds) ? emailIds : [emailIds],
@@ -651,7 +655,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Batch update successful: ${data.message}`);
+        console.log(`[SUCCESS] Batch update successful: ${data.message}`);
         return data;
       }
       
@@ -663,14 +667,14 @@ class EmailService {
     }
   }
 
-  // ✅ Send email - FIXED VERSION (handles both 'aes' and 'aes256')
+  // [SEND] Send email - FIXED VERSION (handles both 'aes' and 'aes256')
   static async sendEmail(to, subject, body, encryptionLevel = 'none') {
     try {
-      console.log(`📤 Sending email to: ${to} with encryption: ${encryptionLevel}`);
+      console.log(`[SEND] Sending email to: ${to} with encryption: ${encryptionLevel}`);
       console.log(`   Subject: ${subject}`);
       console.log(`   Body length: ${body ? body.length : 0} characters`);
       
-      // ✅ FIX: Convert 'aes' to 'aes256' for backend compatibility
+      // [FIX] Convert 'aes' to 'aes256' for backend compatibility
       const normalizedEncryptionLevel = encryptionLevel === 'aes' ? 'aes256' : encryptionLevel;
       
       // Validate required fields
@@ -695,7 +699,7 @@ class EmailService {
         encryptionLevel: normalizedEncryptionLevel  // ✅ Use normalized value
       };
       
-      console.log('📤 Sending payload:', payload);
+      console.log('[INFO] Sending payload:', payload);
       
       const response = await fetchWithAuth(`${API_BASE}/send`, {
         method: "POST",
@@ -717,7 +721,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Email sent successfully: ${data.messageId}`);
+        console.log(`[SUCCESS] Email sent successfully: ${data.messageId}`);
         return data;
       }
       
@@ -729,10 +733,10 @@ class EmailService {
     }
   }
 
-  // ✅ Get folder counts
+  // [INFO] Get folder counts
   static async getFolderCounts() {
     try {
-      console.log(`📊 Getting folder counts...`);
+      console.log(`[INFO] Getting folder counts...`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/folder-counts`);
       
@@ -745,7 +749,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Got folder counts`);
+        console.log(`[SUCCESS] Got folder counts`);
         return data;
       }
       
@@ -757,10 +761,10 @@ class EmailService {
     }
   }
 
-  // ✅ Update user profile
+  // [PROFILE] Update user profile
   static async updateProfile(name, settings) {
     try {
-      console.log(`📝 Updating profile...`);
+      console.log(`[INFO] Updating profile...`);
       
       const body = {};
       if (name) body.name = name;
@@ -780,7 +784,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Profile updated: ${data.message}`);
+        console.log(`[SUCCESS] Profile updated: ${data.message}`);
         return data;
       }
       
@@ -792,10 +796,10 @@ class EmailService {
     }
   }
 
-  // ✅ Decrypt email
+  // [AUTH] Decrypt email
   static async decryptEmail(emailId, encryptionKey = null) {
     try {
-      console.log(`🔓 Decrypting email: ${emailId}`);
+      console.log(`[AUTH] Decrypting email: ${emailId}`);
       
       const payload = { emailId };
       if (encryptionKey) {
@@ -816,7 +820,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Email decrypted successfully`);
+        console.log(`[SUCCESS] Email decrypted successfully`);
         return data;
       }
       
@@ -828,10 +832,10 @@ class EmailService {
     }
   }
 
-  // ✅ Search emails
+  // [SEARCH] Search emails
   static async searchEmails(query, folder = 'all', limit = 50) {
     try {
-      console.log(`🔍 Searching emails for: ${query} in folder: ${folder}`);
+      console.log(`[INFO] Searching emails for: ${query} in folder: ${folder}`);
       
       const response = await fetchWithAuth(`${API_BASE}/mail/search`, {
         method: "POST",
@@ -851,7 +855,7 @@ class EmailService {
       const data = await response.json();
       
       if (data.success) {
-        console.log(`✅ Found ${data.emails.length} emails for query: ${query}`);
+        console.log(`[SUCCESS] Found ${data.emails.length} emails for query: ${query}`);
         return data;
       }
       
@@ -863,7 +867,7 @@ class EmailService {
     }
   }
 
-  // ✅ Logout
+  // [AUTH] Logout
   static async logout() {
     try {
       const token = getToken();

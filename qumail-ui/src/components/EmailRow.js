@@ -20,6 +20,9 @@ import {
 } from '@mui/material';
 
 // Encryption label helper
+import { Lock, Security as ShieldCheck, Mail } from '@mui/icons-material';
+
+
 const getEncryptionLabel = (encryptionLevel) => {
   switch (encryptionLevel) {
     case 'aes256':
@@ -27,7 +30,7 @@ const getEncryptionLabel = (encryptionLevel) => {
         text: 'AES',
         color: 'primary',
         badgeColor: 'primary',
-        icon: '🔒',
+        icon: Lock,
         description: 'Quantum AES-256 Encrypted'
       };
     case 'otp':
@@ -35,7 +38,7 @@ const getEncryptionLabel = (encryptionLevel) => {
         text: 'OTP',
         color: 'error',
         badgeColor: 'error',
-        icon: '🔐',
+        icon: ShieldCheck,
         description: 'Quantum OTP Encrypted'
       };
     case 'none':
@@ -44,7 +47,7 @@ const getEncryptionLabel = (encryptionLevel) => {
         text: 'STANDARD',
         color: 'default',
         badgeColor: 'default',
-        icon: '✉️',
+        icon: Mail,
         description: 'Standard Email'
       };
   }
@@ -61,9 +64,16 @@ const formatEncryptionPreview = (encryptionLevel, body) => {
   } else {
     // Show encrypted preview for OTP/AES
     const label = getEncryptionLabel(encryptionLevel);
-    return `${label.icon} ${label.description}`;
+    const Icon = label.icon;
+    return (
+      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+        <Icon sx={{ fontSize: 14 }} />
+        {label.description}
+      </Box>
+    );
   }
 };
+
 
 const EmailRow = ({
   email,
