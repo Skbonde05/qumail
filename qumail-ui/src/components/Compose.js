@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -16,7 +16,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Typography
+  Typography,
+  Alert,
+  Snackbar,
+  CircularProgress
 } from "@mui/material";
 import {
   Close,
@@ -28,10 +31,18 @@ import {
   FormatListNumbered,
   InsertLink,
   InsertPhoto,
-  Security
+  Security,
+  Delete,
+  Save,
+  Warning
 } from "@mui/icons-material";
+import axios from "axios";
+import EmailService from "../services/EmailService";
 
-export default function Compose({ open, onClose, onSend }) {
+// API Base URL
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
+export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -41,25 +52,158 @@ export default function Compose({ open, onClose, onSend }) {
   const [attachments, setAttachments] = useState([]);
   const [showCC, setShowCC] = useState(false);
   const [showBCC, setShowBCC] = useState(false);
+  const [draftId, setDraftId] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [errors, setErrors] = useState({});
 
-  const handleSend = () => {
+  // Load draft if editing
+  useEffect(() => {
+    if (draftToEdit) {
+      setTo(draftToEdit.to || "");
+      setSubject(draftToEdit.subject || "");
+      setBody(draftToEdit.body || "");
+      setLevel(draftToEdit.encryptionLevel || "aes256");
+      setCc(draftToEdit.cc || "");
+      setBcc(draftToEdit.bcc || "");
+      setDraftId(draftToEdit.id || null);
+      
+      if (draftToEdit.cc) setShowCC(true);
+      if (draftToEdit.bcc) setShowBCC(true);
+    }
+  }, [draftToEdit]);
+
+  // Auto-save draft every 5 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((subject || body) && !sending) {
+        handleSaveDraft();
+      }
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [subject, body, to, cc, bcc, level]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      resetForm();
+    }
+  }, [open]);
+
+  const handleSend = async () => {
     // Validate required fields
+    const validationErrors = {};
+    
     if (!to.trim()) {
-      alert("Please enter a recipient email");
-      return;
-    }
-    if (!to.toLowerCase().endsWith("@qumail.com")) {
-      alert("Recipient must be a @qumail.com address");
-      return;
-    }
-    if (!body.trim()) {
-      alert("Please enter a message body");
-      return;
+      validationErrors.to = "Please enter a recipient email";
+    } else if (!to.toLowerCase().endsWith("@qumail.com")) {
+      validationErrors.to = "Recipient must be a @qumail.com address";
     }
     
-    onSend(to, subject, body, level);
-    onClose();
-    resetForm();
+    if (!body.trim()) {
+      validationErrors.body = "Please enter a message body";
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setSnackbar({
+        open: true,
+        message: "Please fix the validation errors",
+        severity: "error"
+      });
+      return;
+    }
+
+    setSending(true);
+    
+    try {
+      // Use standard EmailService
+      const result = await EmailService.sendEmail(
+        to.trim(),
+        subject.trim() || "(No Subject)",
+        body.trim(),
+        level
+      );
+
+      if (result.success) {
+        setSnackbar({
+          open: true,
+          message: `Email sent successfully with ${level === "none" ? "no encryption" : level === "otp" ? "quantum OTP" : "quantum AES-256"} encryption`,
+          severity: "success"
+        });
+
+        // If this was a draft, delete it
+        if (draftId) {
+          try {
+            await EmailService.deleteDraft(draftId);
+          } catch (e) {
+            console.error("Error deleting draft:", e);
+          }
+        }
+
+        // Call the onSend callback
+        if (onSend) {
+          onSend(to, subject, body, level, result.messageId);
+        }
+
+        // Close dialog and reset
+        setTimeout(() => {
+          onClose();
+          resetForm();
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Send error:", error);
+      
+      setSnackbar({
+        open: true,
+        message: error.message || "Failed to send email",
+        severity: "error"
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    // Don't save empty drafts
+    if (!subject.trim() && !body.trim() && !to.trim()) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        return;
+      }
+
+      const result = await EmailService.saveDraft(
+        draftId,
+        to.trim(),
+        subject.trim() || "(No Subject)",
+        body.trim(),
+        level
+      );
+
+      if (result.success) {
+        setDraftId(result.draftId);
+        
+        setSnackbar({
+          open: true,
+          message: "Draft saved",
+          severity: "success"
+        });
+      }
+    } catch (error) {
+      console.error("Save draft error:", error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -70,16 +214,34 @@ export default function Compose({ open, onClose, onSend }) {
     setCc("");
     setBcc("");
     setAttachments([]);
+    setShowCC(false);
+    setShowBCC(false);
+    setDraftId(null);
+    setErrors({});
   };
 
   const handleClose = () => {
-    onClose();
-    resetForm();
+    // If there's content, ask before discarding
+    if ((subject || body || to) && !sending) {
+      if (window.confirm("You have unsaved changes. Discard draft?")) {
+        onClose();
+        resetForm();
+      }
+    } else {
+      onClose();
+      resetForm();
+    }
   };
 
   const handleAttachment = (e) => {
     const files = Array.from(e.target.files);
     setAttachments([...attachments, ...files]);
+    
+    setSnackbar({
+      open: true,
+      message: `${files.length} file(s) attached`,
+      severity: "info"
+    });
   };
 
   const removeAttachment = (index) => {
@@ -87,289 +249,398 @@ export default function Compose({ open, onClose, onSend }) {
   };
 
   const securityLevels = {
-    otp: { label: "Quantum OTP", color: "error", icon: "🔒", description: "Maximum Security" },
-    aes256: { label: "Quantum AES-256", color: "success", icon: "⚡", description: "Fast & Secure" },
-    none: { label: "Standard", color: "default", icon: "✉️", description: "No Encryption" }
+    otp: { 
+      label: "Quantum OTP", 
+      color: "error", 
+      icon: "🔒", 
+      description: "Maximum Security - One-time pad encryption" 
+    },
+    aes256: { 
+      label: "Quantum AES-256", 
+      color: "success", 
+      icon: "⚡", 
+      description: "Fast & Secure - AES-256-GCM encryption" 
+    },
+    none: { 
+      label: "Standard", 
+      color: "default", 
+      icon: "✉️", 
+      description: "No Encryption - Standard email" 
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const insertFormat = (format) => {
+    const textarea = document.querySelector('textarea');
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = body.substring(start, end);
+    
+    let formattedText = '';
+    
+    switch(format) {
+      case 'bold':
+        formattedText = `**${selectedText}**`;
+        break;
+      case 'italic':
+        formattedText = `*${selectedText}*`;
+        break;
+      case 'link':
+        const url = prompt('Enter URL:', 'https://');
+        if (url) {
+          formattedText = selectedText ? `[${selectedText}](${url})` : url;
+        }
+        break;
+      default:
+        return;
+    }
+    
+    setBody(body.substring(0, start) + formattedText + body.substring(end));
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="md"
-      PaperProps={{
-        sx: {
-          height: "85vh",
-          maxHeight: "700px",
-          borderRadius: "12px"
-        }
-      }}
-    >
-      <DialogTitle sx={{ 
-        bgcolor: "primary.main", 
-        color: "white",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        py: 1.5
-      }}>
-        <Typography variant="h6" fontWeight="600">
-          New Message
-        </Typography>
-        <IconButton onClick={handleClose} sx={{ color: "white" }}>
-          <Close />
-        </IconButton>
-      </DialogTitle>
+    <>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        fullWidth
+        maxWidth="md"
+        PaperProps={{
+          sx: {
+            height: "85vh",
+            maxHeight: "700px",
+            borderRadius: "12px"
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: "primary.main", 
+          color: "white",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          py: 1.5
+        }}>
+          <Typography variant="h6" fontWeight="600">
+            {draftId ? "Edit Draft" : "New Message"}
+            {saving && <CircularProgress size={20} sx={{ ml: 2, color: "white" }} />}
+          </Typography>
+          <IconButton onClick={handleClose} sx={{ color: "white" }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
 
-      <DialogContent sx={{ p: 0 }}>
-        <Box sx={{ p: 2.5 }}>
-          {/* Recipients */}
-          <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-            <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
-              To
-            </Typography>
-            <TextField
-              fullWidth
-              variant="outlined"
-              size="small"
-              placeholder="recipient@qumail.com"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              sx={{ ml: 1 }}
-            />
-          </Box>
-
-          {showCC && (
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
-                Cc
+        <DialogContent sx={{ p: 0 }}>
+          <Box sx={{ p: 2.5 }}>
+            {/* Recipients */}
+            <Box sx={{ display: "flex", alignItems: "flex-start", mb: 1 }}>
+              <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem", pt: 1 }}>
+                To
               </Typography>
-              <TextField
-                fullWidth
-                variant="outlined"
-                size="small"
-                placeholder="cc@qumail.com"
-                value={cc}
-                onChange={(e) => setCc(e.target.value)}
-                sx={{ ml: 1 }}
-              />
-            </Box>
-          )}
-
-          {showBCC && (
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
-                Bcc
-              </Typography>
-              <TextField
-                fullWidth
-                variant="outlined"
-                size="small"
-                placeholder="bcc@qumail.com"
-                value={bcc}
-                onChange={(e) => setBcc(e.target.value)}
-                sx={{ ml: 1 }}
-              />
-            </Box>
-          )}
-
-          <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
-            <Button
-              size="small"
-              onClick={() => setShowCC(!showCC)}
-              sx={{ fontSize: "0.75rem" }}
-            >
-              {showCC ? "Hide Cc" : "Cc"}
-            </Button>
-            <Button
-              size="small"
-              onClick={() => setShowBCC(!showBCC)}
-              sx={{ fontSize: "0.75rem" }}
-            >
-              {showBCC ? "Hide Bcc" : "Bcc"}
-            </Button>
-          </Box>
-
-          {/* Subject */}
-          <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-            <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
-              Subject
-            </Typography>
-            <TextField
-              fullWidth
-              variant="outlined"
-              size="small"
-              placeholder="Subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              sx={{ ml: 1 }}
-            />
-          </Box>
-
-          {/* Security Level */}
-          <Box sx={{ mb: 2 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Security Level</InputLabel>
-              <Select
-                value={level}
-                label="Security Level"
-                onChange={(e) => setLevel(e.target.value)}
-                startAdornment={
-                  <Security sx={{ mr: 1, color: securityLevels[level].color }} />
-                }
-              >
-                {Object.entries(securityLevels).map(([key, value]) => (
-                  <MenuItem key={key} value={key}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <span>{value.icon}</span>
-                      <Box>
-                        <Typography variant="body2">{value.label}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {value.description}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-              {level === "otp" && "One-time pad encryption - Maximum security for sensitive messages"}
-              {level === "aes256" && "AES-256 encryption - Perfect balance of speed and security"}
-              {level === "none" && "Standard email - No encryption applied"}
-            </Typography>
-          </Box>
-
-          <Divider sx={{ my: 2 }} />
-
-          {/* Message Body */}
-          <Box sx={{ border: "1px solid #e0e0e0", borderRadius: 1 }}>
-            {/* Formatting Toolbar */}
-            <Box sx={{ 
-              bgcolor: "#f8f9fa", 
-              borderBottom: "1px solid #e0e0e0",
-              p: 1,
-              display: "flex",
-              gap: 0.5
-            }}>
-              <Tooltip title="Bold">
-                <IconButton size="small">
-                  <FormatBold fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Italic">
-                <IconButton size="small">
-                  <FormatItalic fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Divider orientation="vertical" flexItem />
-              <Tooltip title="Bulleted List">
-                <IconButton size="small">
-                  <FormatListBulleted fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Numbered List">
-                <IconButton size="small">
-                  <FormatListNumbered fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Divider orientation="vertical" flexItem />
-              <Tooltip title="Insert Link">
-                <IconButton size="small">
-                  <InsertLink fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Insert Image">
-                <IconButton size="small">
-                  <InsertPhoto fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-
-            {/* Message Text Area */}
-            <TextField
-              fullWidth
-              multiline
-              rows={12}
-              variant="standard"
-              InputProps={{ disableUnderline: true }}
-              placeholder="Type your message here..."
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              sx={{ p: 2 }}
-            />
-          </Box>
-
-          {/* Attachments */}
-          {attachments.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                Attachments ({attachments.length})
-              </Typography>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                {attachments.map((file, index) => (
-                  <Chip
-                    key={index}
-                    label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
-                    onDelete={() => removeAttachment(index)}
-                    avatar={<Avatar><AttachFile fontSize="small" /></Avatar>}
-                    size="small"
-                  />
-                ))}
+              <Box sx={{ flex: 1, ml: 1 }}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  placeholder="recipient@qumail.com"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  error={!!errors.to}
+                  helperText={errors.to}
+                  disabled={sending}
+                />
               </Box>
             </Box>
-          )}
-        </Box>
-      </DialogContent>
 
-      <DialogActions sx={{ 
-        p: 2, 
-        bgcolor: "#f8f9fa",
-        borderTop: "1px solid #e0e0e0"
-      }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-          <Box>
-            <input
-              accept="*"
-              style={{ display: 'none' }}
-              id="attachment-button"
-              type="file"
-              multiple
-              onChange={handleAttachment}
-            />
-            <label htmlFor="attachment-button">
+            {showCC && (
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
+                  Cc
+                </Typography>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  placeholder="cc@qumail.com"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  sx={{ ml: 1 }}
+                  disabled={sending}
+                />
+              </Box>
+            )}
+
+            {showBCC && (
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
+                  Bcc
+                </Typography>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  placeholder="bcc@qumail.com"
+                  value={bcc}
+                  onChange={(e) => setBcc(e.target.value)}
+                  sx={{ ml: 1 }}
+                  disabled={sending}
+                />
+              </Box>
+            )}
+
+            <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
               <Button
-                startIcon={<AttachFile />}
-                component="span"
                 size="small"
+                onClick={() => setShowCC(!showCC)}
+                sx={{ fontSize: "0.75rem" }}
+                disabled={sending}
               >
-                Attach
+                {showCC ? "Hide Cc" : "Cc"}
               </Button>
-            </label>
-            <Typography variant="caption" sx={{ ml: 2, color: "text.secondary" }}>
-              {securityLevels[level].icon} {securityLevels[level].label}
-            </Typography>
+              <Button
+                size="small"
+                onClick={() => setShowBCC(!showBCC)}
+                sx={{ fontSize: "0.75rem" }}
+                disabled={sending}
+              >
+                {showBCC ? "Hide Bcc" : "Bcc"}
+              </Button>
+            </Box>
+
+            {/* Subject */}
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+              <Typography sx={{ width: 70, color: "text.secondary", fontSize: "0.875rem" }}>
+                Subject
+              </Typography>
+              <TextField
+                fullWidth
+                variant="outlined"
+                size="small"
+                placeholder="Subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                sx={{ ml: 1 }}
+                disabled={sending}
+              />
+            </Box>
+
+            {/* Security Level */}
+            <Box sx={{ mb: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Security Level</InputLabel>
+                <Select
+                  value={level}
+                  label="Security Level"
+                  onChange={(e) => setLevel(e.target.value)}
+                  startAdornment={
+                    <Security sx={{ mr: 1, color: securityLevels[level]?.color }} />
+                  }
+                  disabled={sending}
+                >
+                  {Object.entries(securityLevels).map(([key, value]) => (
+                    <MenuItem key={key} value={key}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <span>{value.icon}</span>
+                        <Box>
+                          <Typography variant="body2">{value.label}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {value.description}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                {level === "otp" && "🔒 One-time pad encryption - Maximum security, quantum-resistant"}
+                {level === "aes256" && "⚡ AES-256-GCM encryption - Perfect balance of speed and security"}
+                {level === "none" && "✉️ Standard email - No encryption applied"}
+              </Typography>
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            {/* Message Body */}
+            <Box sx={{ border: "1px solid #e0e0e0", borderRadius: 1 }}>
+              {/* Formatting Toolbar */}
+              <Box sx={{ 
+                bgcolor: "#f8f9fa", 
+                borderBottom: "1px solid #e0e0e0",
+                p: 1,
+                display: "flex",
+                gap: 0.5,
+                flexWrap: "wrap"
+              }}>
+                <Tooltip title="Bold (Ctrl+B)">
+                  <IconButton size="small" onClick={() => insertFormat('bold')} disabled={sending}>
+                    <FormatBold fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Italic (Ctrl+I)">
+                  <IconButton size="small" onClick={() => insertFormat('italic')} disabled={sending}>
+                    <FormatItalic fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Divider orientation="vertical" flexItem />
+                <Tooltip title="Bulleted List">
+                  <IconButton size="small" disabled={sending}>
+                    <FormatListBulleted fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Numbered List">
+                  <IconButton size="small" disabled={sending}>
+                    <FormatListNumbered fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Divider orientation="vertical" flexItem />
+                <Tooltip title="Insert Link (Ctrl+K)">
+                  <IconButton size="small" onClick={() => insertFormat('link')} disabled={sending}>
+                    <InsertLink fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Insert Image">
+                  <IconButton size="small" disabled={sending}>
+                    <InsertPhoto fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+
+              {/* Message Text Area */}
+              <TextField
+                fullWidth
+                multiline
+                rows={12}
+                variant="standard"
+                InputProps={{ 
+                  disableUnderline: true,
+                  readOnly: sending
+                }}
+                placeholder="Type your message here..."
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                error={!!errors.body}
+                helperText={errors.body}
+                sx={{ 
+                  p: 2,
+                  "& .MuiInputBase-root": {
+                    fontSize: "0.95rem",
+                    lineHeight: 1.6
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Attachments */}
+            {attachments.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Attachments ({attachments.length})
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  {attachments.map((file, index) => (
+                    <Chip
+                      key={index}
+                      label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
+                      onDelete={() => removeAttachment(index)}
+                      avatar={<Avatar><AttachFile fontSize="small" /></Avatar>}
+                      size="small"
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
           </Box>
-          
-          <Box>
-            <Button
-              onClick={handleClose}
-              sx={{ mr: 1 }}
-            >
-              Discard
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<Send />}
-              onClick={handleSend}
-              disabled={!to.trim()}
-            >
-              Send
-            </Button>
+        </DialogContent>
+
+        <DialogActions sx={{ 
+          p: 2, 
+          bgcolor: "#f8f9fa",
+          borderTop: "1px solid #e0e0e0"
+        }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <input
+                accept="*"
+                style={{ display: 'none' }}
+                id="attachment-button"
+                type="file"
+                multiple
+                onChange={handleAttachment}
+                disabled={sending}
+              />
+              <label htmlFor="attachment-button">
+                <Button
+                  startIcon={<AttachFile />}
+                  component="span"
+                  size="small"
+                  disabled={sending}
+                >
+                  Attach
+                </Button>
+              </label>
+              
+              <Button
+                startIcon={<Save />}
+                size="small"
+                onClick={handleSaveDraft}
+                disabled={sending || (!subject && !body && !to)}
+                sx={{ ml: 1 }}
+              >
+                {saving ? "Saving..." : "Save Draft"}
+              </Button>
+              
+              <Box sx={{ ml: 2, display: "flex", alignItems: "center" }}>
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                  {securityLevels[level].icon} {securityLevels[level].label}
+                </Typography>
+                {draftId && (
+                  <Chip
+                    label="Draft"
+                    size="small"
+                    color="info"
+                    sx={{ ml: 1, height: 20, fontSize: "0.65rem" }}
+                  />
+                )}
+              </Box>
+            </Box>
+            
+            <Box>
+              <Button
+                onClick={handleClose}
+                sx={{ mr: 1 }}
+                disabled={sending}
+              >
+                Discard
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={sending ? <CircularProgress size={20} color="inherit" /> : <Send />}
+                onClick={handleSend}
+                disabled={sending || !to.trim() || !body.trim()}
+              >
+                {sending ? "Sending..." : "Send"}
+              </Button>
+            </Box>
           </Box>
-        </Box>
-      </DialogActions>
-    </Dialog>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: "100%" }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 }

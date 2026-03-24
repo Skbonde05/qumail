@@ -8,6 +8,7 @@ import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import { SnackbarProvider, useSnackbar } from "notistack";
 import { cacheKey, getValidKey, clearKeyCache } from "./utils/keyStore";
 import { otpEncrypt, otpDecrypt, generateOTPKey } from "./utils/otp";
+import "./services/axiosInstance";
 
 // Helper functions
 const determineSecurityLevel = (body) => {
@@ -143,6 +144,7 @@ const QuMailService = {
       const data = await response.json();
       
       if (data.success && data.token) {
+        localStorage.setItem('token', data.token);
         localStorage.setItem('qumail_token', data.token);
         localStorage.setItem('qumail_email', email);
         localStorage.setItem('qumail_name', name);
@@ -175,6 +177,7 @@ const QuMailService = {
       const data = await response.json();
       
       if (data.success && data.token) {
+        localStorage.setItem('token', data.token);
         localStorage.setItem('qumail_token', data.token);
         localStorage.setItem('qumail_email', email);
         localStorage.setItem('qumail_name', data.name || email.split('@')[0]);
@@ -800,16 +803,15 @@ const AppContent = () => {
   };
 
   // Load emails - FIXED VERSION
-  const loadEmails = async (folder = 'inbox') => {
+  const loadEmails = async (folder = 'inbox', silent = false) => {
     try {
-      console.log(`📥 Loading ${folder} emails for: ${userEmail}`);
+      if (!silent) console.log(`📥 Loading ${folder} emails for: ${userEmail}`);
       
       const emails = await QuMailService.fetchEmails(folder, 50);
-      console.log(`✅ Received ${Array.isArray(emails) ? emails.length : 0} emails`);
       
       if (!Array.isArray(emails)) {
         console.error('Invalid email data received:', emails);
-        enqueueSnackbar('Received invalid email data', { variant: 'error' });
+        if (!silent) enqueueSnackbar('Received invalid email data', { variant: 'error' });
         setAllEmails([]);
         return;
       }
@@ -839,21 +841,23 @@ const AppContent = () => {
       
       setAllEmails(processedEmails);
       
-      if (processedEmails.length > 0) {
-        enqueueSnackbar(`Loaded ${processedEmails.length} emails`, { 
-          variant: 'success',
-          autoHideDuration: 3000 
-        });
-      } else {
-        enqueueSnackbar(`No emails in ${folder}`, { 
-          variant: 'info',
-          autoHideDuration: 2000 
-        });
+      if (!silent) {
+        if (processedEmails.length > 0) {
+          enqueueSnackbar(`Loaded ${processedEmails.length} emails`, { 
+            variant: 'success',
+            autoHideDuration: 3000 
+          });
+        } else {
+          enqueueSnackbar(`No emails in ${folder}`, { 
+            variant: 'info',
+            autoHideDuration: 2000 
+          });
+        }
       }
       
     } catch (error) {
       console.error('Error loading emails:', error);
-      enqueueSnackbar(`Failed to load emails: ${error.message}`, { variant: 'error' });
+      if (!silent) enqueueSnackbar(`Failed to load emails: ${error.message}`, { variant: 'error' });
       setAllEmails([]);
     }
   };
@@ -929,73 +933,85 @@ const AppContent = () => {
   };
 
   // Handle QuMail login
-  const handleLogin = async (email, password) => {
-    if (!email || !password) {
-      enqueueSnackbar("Please enter your QuMail email and password", { variant: "error" });
-      return;
+ const handleLogin = async (email, password) => {
+  if (!email || !password) {
+    enqueueSnackbar("Please enter your QuMail email and password", { variant: "error" });
+    return;
+  }
+
+  if (!email.toLowerCase().endsWith('@qumail.com')) {
+    enqueueSnackbar("Only @qumail.com addresses are supported", {
+      variant: "warning",
+      autoHideDuration: 5000
+    });
+    return;
+  }
+
+  setLoading(true);
+  setLoadingProgress({ current: 10, total: 100, message: "Logging in to QuMail..." });
+
+  try {
+    console.log("🔐 Logging in to QuMail:", email);
+
+    // 1️⃣ Test backend connection
+    setLoadingProgress({ current: 20, total: 100, message: "Testing connection..." });
+    const isConnected = await QuMailService.testConnection();
+    if (!isConnected) {
+      throw new Error("QuMail server is not running. Please start the backend server.");
     }
-    
-    // Validate @qumail.com address
-    if (!email.toLowerCase().endsWith('@qumail.com')) {
-      enqueueSnackbar("Only @qumail.com addresses are supported", { 
-        variant: "warning",
-        autoHideDuration: 5000 
-      });
-      return;
-    }
-    
-    setLoading(true);
-    setLoadingProgress({ current: 10, total: 100, message: "Logging in to QuMail..." });
-    
-    try {
-      console.log("🔐 Logging in to QuMail:", email);
-      
-      // Test connection first
-      setLoadingProgress({ current: 20, total: 100, message: "Testing connection..." });
-      const isConnected = await QuMailService.testConnection();
-      if (!isConnected) {
-        throw new Error("QuMail server is not running. Please start the backend server.");
-      }
-      
-      // Login
-      setLoadingProgress({ current: 40, total: 100, message: "Authenticating..." });
-      const result = await QuMailService.login(email, password);
-      
+
+    // 2️⃣ Authenticate
+    setLoadingProgress({ current: 40, total: 100, message: "Authenticating..." });
+
+    const result = await QuMailService.login(email, password);
+
       if (result.success) {
-        setUserEmail(email);
-        setUserName(result.name || email.split('@')[0]);
-        setLoggedIn(true);
-        
-        setLoadingProgress({ current: 70, total: 100, message: "Login successful!" });
-        
-        enqueueSnackbar("Welcome back to QuMail!", { 
-          variant: "success",
-          autoHideDuration: 3000 
-        });
-        
-        // Clear old key cache
-        clearKeyCache(email);
-        
-        // Load data
-        setTimeout(() => {
-          loadUserData();
-        }, 500);
-        
-      } else {
-        enqueueSnackbar(result.message || "Login failed", { variant: "error" });
-      }
-    } catch (err) {
-      console.error("Login error:", err);
-      enqueueSnackbar(err.message || "Network error. Please check your connection.", { 
-        variant: "error" 
+
+        // 🔥 IMPORTANT — STORE TOKENS HERE (Standardized)
+        localStorage.setItem("token", result.token || result.accessToken);
+        localStorage.setItem("qumail_token", result.token || result.accessToken);
+        localStorage.setItem("refreshToken", result.refreshToken);
+
+        // Store user info
+        localStorage.setItem("userEmail", email);
+        localStorage.setItem("qumail_email", email);
+
+      setUserEmail(email);
+      setUserName(result.name || email.split('@')[0]);
+      setLoggedIn(true);
+
+      setLoadingProgress({ current: 70, total: 100, message: "Login successful!" });
+
+      enqueueSnackbar("Welcome back to QuMail!", {
+        variant: "success",
+        autoHideDuration: 3000
       });
-    } finally {
+
+      // Clear old key cache
+      clearKeyCache(email);
+
+      // Load user data
       setTimeout(() => {
-        setLoading(false);
-        setLoadingProgress({ current: 0, total: 100, message: "" });
+        loadUserData();
       }, 500);
+
+    } else {
+      enqueueSnackbar(result.message || "Login failed", { variant: "error" });
     }
-  };
+
+  } catch (err) {
+    console.error("Login error:", err);
+    enqueueSnackbar(err.message || "Network error. Please check your connection.", {
+      variant: "error"
+    });
+
+  } finally {
+    setTimeout(() => {
+      setLoading(false);
+      setLoadingProgress({ current: 0, total: 100, message: "" });
+    }, 500);
+  }
+};
 
   // Handle folder change
   const handleFolderChange = (folder) => {
@@ -1055,16 +1071,20 @@ const AppContent = () => {
       
       const email = allEmails.find(e => e.uid === uid);
       if (!email) return;
+
+      // Update local state immediately for responsiveness
+      setAllEmails(prev => prev.map(e => 
+        e.uid === uid ? { ...e, [action]: value } : e
+      ));
       
       // Update on server
-      const result = await QuMailService.updateEmail(uid, { [action]: value });
+      const backendAction = action === 'starred' ? 'toggle-star' : 
+                           action === 'important' ? 'toggle-important' :
+                           action === 'read' ? 'mark-read' : action;
+      
+      const result = await EmailService.updateEmailStatus(uid, backendAction);
       
       if (result.success) {
-        // Update local state
-        setAllEmails(prev => prev.map(email => 
-          email.uid === uid ? { ...email, [action]: value } : email
-        ));
-        
         const actionText = {
           starred: value ? 'starred' : 'unstarred',
           important: value ? 'marked as important' : 'unmarked as important',
@@ -1076,12 +1096,20 @@ const AppContent = () => {
         
         enqueueSnackbar(`Email ${actionText}`, { variant: 'success' });
       } else {
-        throw new Error('Update failed');
+        throw new Error(result.message || 'Update failed');
       }
       
     } catch (error) {
       console.error('Update email error:', error);
       enqueueSnackbar(`Failed to update email: ${error.message}`, { variant: 'error' });
+      
+      // Revert local state on failure
+      const email = allEmails.find(e => e.uid === uid);
+      if (email) {
+        setAllEmails(prev => prev.map(e => 
+          e.uid === uid ? { ...e, [action]: !value } : e
+        ));
+      }
     }
   };
 
@@ -1418,15 +1446,15 @@ const AppContent = () => {
   };
 
   // Handle refresh
-  const handleRefresh = async () => {
-    setLoading(true);
+  const handleRefresh = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      await loadEmails(activeFolder);
-      enqueueSnackbar("Emails refreshed", { variant: "success" });
+      await loadEmails(activeFolder, silent);
+      if (!silent) enqueueSnackbar("Emails refreshed", { variant: "success" });
     } catch (error) {
-      enqueueSnackbar("Failed to refresh emails", { variant: "error" });
+      if (!silent) enqueueSnackbar("Failed to refresh emails", { variant: "error" });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

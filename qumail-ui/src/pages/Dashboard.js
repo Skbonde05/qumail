@@ -578,12 +578,12 @@ export default function Dashboard({
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (silent = false) => {
     try {
-      showSnackbar("Refreshing emails...", "info");
+      if (!silent) showSnackbar("Refreshing emails...", "info");
       
       if (onRefresh) {
-        await onRefresh();
+        await onRefresh(silent);
       } else {
         // Direct refresh logic
         const result = await EmailService.getFolderCounts();
@@ -592,18 +592,20 @@ export default function Dashboard({
         }
       }
       
-      showSnackbar("Inbox refreshed", "success");
-      setCurrentPage(1);
+      if (!silent) {
+        showSnackbar("Inbox refreshed", "success");
+        setCurrentPage(1);
       
-      addNotification({
-        type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
-        title: 'Inbox Refreshed',
-        message: 'Your emails have been synced',
-        priority: 'low'
-      });
+        addNotification({
+          type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
+          title: 'Inbox Refreshed',
+          message: 'Your emails have been synced',
+          priority: 'low'
+        });
+      }
     } catch (error) {
       console.error('Error refreshing inbox:', error);
-      showSnackbar(`Failed to refresh inbox: ${error.message}`, "error");
+      if (!silent) showSnackbar(`Failed to refresh inbox: ${error.message}`, "error");
     }
   };
 
@@ -623,8 +625,8 @@ export default function Dashboard({
           priority: 'medium'
         });
         
-        // Refresh emails after sending
-        await handleRefresh();
+        // Refresh emails after sending (silently to avoid double notification)
+        await handleRefresh(true);
       } else {
         showSnackbar(`Failed to send email: ${result.message}`, "error");
       }
@@ -766,8 +768,7 @@ export default function Dashboard({
           console.log(`✅ Email ${backendId} ${field} updated successfully`);
           showSnackbar(`Email ${field === 'star' ? 'starred' : field} updated`, "success");
           
-          // Refresh emails to get updated data from server
-          await handleRefresh();
+          // Refresh emails handled by optimistic local state
         } else {
           console.error(`❌ Failed to update email ${backendId}:`, result.message);
           showSnackbar(`Failed to update email: ${result.message}`, "error");
@@ -833,17 +834,20 @@ export default function Dashboard({
       try {
         let result;
         
-        if (action === 'delete' || action === 'archive' || action === 'move') {
-          const targetFolder = action === 'delete' ? 'trash' : 
-                             action === 'archive' ? 'archive' : value;
-          
-          result = await EmailService.moveEmailsToFolder(backendIds, targetFolder);
-          
-          if (result.success && action === 'delete') {
+        if (action === 'delete') {
+          if (activeSection === 'trash') {
+            result = await EmailService.batchUpdateEmails(backendIds, 'delete');
+          } else {
+            result = await EmailService.moveEmailsToFolder(backendIds, 'trash');
+          }
+          if (result.success) {
             setStarredEmails(prev => prev.filter(id => !backendIds.includes(id)));
             setImportantEmails(prev => prev.filter(id => !backendIds.includes(id)));
             setSnoozedEmails(prev => prev.filter(id => !backendIds.includes(id)));
           }
+        } else if (action === 'archive' || action === 'move') {
+          const targetFolder = action === 'archive' ? 'archive' : value;
+          result = await EmailService.moveEmailsToFolder(backendIds, targetFolder);
         } else {
           result = await EmailService.batchUpdateEmails(backendIds, action);
         }
@@ -852,8 +856,8 @@ export default function Dashboard({
           console.log(`✅ Bulk action successful`);
           showSnackbar(`${backendIds.length} emails updated`, "success");
           
-          // Refresh emails
-          await handleRefresh();
+          // Refresh emails SILENTLY
+          await handleRefresh(true);
           
           addNotification({
             type: NOTIFICATION_TYPES.EMAIL_MOVED,
@@ -942,20 +946,26 @@ export default function Dashboard({
 
       // Make API call
       try {
-        const result = await EmailService.moveEmailsToFolder([backendId], 'trash');
+        let result;
+        if (activeSection === 'trash') {
+          // Permanently delete if already in trash
+           result = await EmailService.batchUpdateEmails([backendId], 'delete');
+        } else {
+           result = await EmailService.moveEmailsToFolder([backendId], 'trash');
+        }
         
         if (result.success) {
-          showSnackbar('Email moved to trash', 'success');
+          showSnackbar(activeSection === 'trash' ? 'Email permanently deleted' : 'Email moved to trash', 'success');
           
           addNotification({
             type: NOTIFICATION_TYPES.EMAIL_DELETED,
             title: 'Email Deleted',
-            message: 'Email has been moved to trash',
+            message: activeSection === 'trash' ? 'Email has been permanently deleted' : 'Email has been moved to trash',
             priority: 'medium'
           });
           
-          // Refresh emails
-          await handleRefresh();
+          // Refresh emails SILENTLY
+          await handleRefresh(true);
         } else {
           console.error('Delete failed:', result.message);
           showSnackbar('Failed to delete email', 'error');
@@ -990,18 +1000,23 @@ export default function Dashboard({
 
       // Make API call
       try {
-        const result = await EmailService.moveEmailsToFolder(backendIds, folder);
+        let result;
+        if (folder === 'trash' && activeSection === 'trash') {
+            result = await EmailService.batchUpdateEmails(backendIds, 'delete');
+        } else {
+            result = await EmailService.moveEmailsToFolder(backendIds, folder);
+        }
         
         if (result.success) {
-          showSnackbar(`${backendIds.length} emails moved to ${folder}`, "success");
+          showSnackbar(folder === 'trash' && activeSection === 'trash' ? `${backendIds.length} emails permanently deleted` : `${backendIds.length} emails moved to ${folder}`, "success");
           
-          // Refresh emails
-          await handleRefresh();
+          // Refresh emails SILENTLY
+          await handleRefresh(true);
           
           addNotification({
             type: NOTIFICATION_TYPES.EMAIL_MOVED,
             title: 'Emails Moved',
-            message: `${backendIds.length} emails moved to ${folder}`,
+            message: folder === 'trash' && activeSection === 'trash' ? `${backendIds.length} emails permanently deleted` : `${backendIds.length} emails moved to ${folder}`,
             priority: 'medium'
           });
         } else {
@@ -1016,6 +1031,7 @@ export default function Dashboard({
       console.error('Error moving emails:', error);
       showSnackbar(`Failed to move emails: ${error.message}`, "error");
     }
+
   };
 
   // UPDATED: Open decrypt modal

@@ -19,18 +19,11 @@ const removeToken = () => {
   localStorage.removeItem('qumail_email');
 };
 
-// 🔧 CRITICAL: Enhanced getAuthHeaders with token validation
 const getAuthHeaders = () => {
   const token = getToken();
   
   if (!token) {
     console.error('❌ No authentication token found');
-    // Redirect to login if no token
-    if (window.location.pathname !== '/login') {
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 100);
-    }
     throw new Error('No authentication token. Please login.');
   }
   
@@ -43,49 +36,71 @@ const getAuthHeaders = () => {
 // 🔧 CRITICAL: Enhanced fetch wrapper with 401 handling
 const fetchWithAuth = async (url, options = {}) => {
   try {
-    const headers = getAuthHeaders();
-    const config = {
-      ...options,
-      headers: {
-        ...headers,
-        ...options.headers
-      }
+    const token = getToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
     };
-    
-    const response = await fetch(url, config);
-    
-    // Handle 401 Unauthorized
-    if (response.status === 401) {
-      console.error('🔐 401 Unauthorized - Invalid or expired token');
-      
-      // Clear tokens
-      removeToken();
-      
-      // Show user-friendly message
-      if (typeof window !== 'undefined' && window.showAuthError) {
-        window.showAuthError('Session expired. Please login again.');
-      }
-      
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-      
-      throw new Error('Authentication failed. Please login again.');
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
+    const config = { ...options, headers };
+    let response = await fetch(url, config);
+
+    // 🔐 Handle token expiration (401 Unauthorized)
+    if (response.status === 401) {
+      console.warn(`🔐 401 Unauthorized at ${url}. Attempting token refresh...`);
+      
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const refreshRes = await fetch(`${API_BASE}/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+          });
+
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            const newToken = refreshData.accessToken || refreshData.token;
+
+            console.log("✅ Token refreshed successfully");
+            localStorage.setItem('token', newToken);
+            localStorage.setItem('qumail_token', newToken);
+
+            // Retry the original request with the new token
+            config.headers['Authorization'] = `Bearer ${newToken}`;
+            response = await fetch(url, config);
+          } else {
+            console.error("❌ Token refresh failed");
+            removeToken();
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+            throw new Error('Session expired. Please login again.');
+          }
+        } catch (refreshErr) {
+          console.error("❌ Error during token refresh:", refreshErr);
+          removeToken();
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          throw new Error('Session expired. Please login again.');
+        }
+      } else {
+        removeToken();
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        throw new Error('Session expired. Please login again.');
+      }
+    }
+
     return response;
   } catch (error) {
-    // If it's an auth error, rethrow it
-    if (error.message.includes('Authentication') || error.message.includes('token')) {
-      throw error;
-    }
-    
-    // For network errors
-    if (error.message.includes('Failed to fetch')) {
-      throw new Error('Network error. Please check your connection.');
-    }
-    
+    console.error(`Fetch error at ${url}:`, error);
     throw error;
   }
 };
@@ -137,30 +152,58 @@ class EmailService {
   }
 
   // ✅ Login user
-  static async login(email, password) {
-    try {
-      console.log("🔐 Logging in user:", email);
-      
-      const response = await fetch(`${API_BASE}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
+ static async login(email, password) {
+  try {
+    console.log("🔐 Logging in user:", email);
 
-      const data = await response.json();
-      
-      if (data.success && data.token) {
-        setToken(data.token);
-        localStorage.setItem('userEmail', email);
-        localStorage.setItem('userName', data.name || email.split('@')[0]);
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, message: 'Network error' };
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.message || "Login failed"
+      };
     }
+
+    // ✅ Store tokens (NEW SYSTEM)
+    if (data.accessToken && data.refreshToken) {
+
+      // Save tokens
+      localStorage.setItem("token", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
+
+      // Save user info
+      localStorage.setItem("userEmail", email);
+      localStorage.setItem(
+        "userName",
+        data.name || email.split("@")[0]
+      );
+
+      // Optional: set token in memory (if you use setToken)
+      setToken?.(data.accessToken);
+    }
+
+    return {
+      success: true,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      name: data.name
+    };
+
+  } catch (error) {
+    console.error("Login error:", error);
+    return {
+      success: false,
+      message: "Network error. Please try again."
+    };
   }
+}
 
   // ✅ Verify token
   static async verifyToken() {
@@ -509,6 +552,76 @@ class EmailService {
       throw new Error(data.message || 'Failed to move emails');
     } catch (error) {
       console.error("Move emails error:", error.message);
+      throw error;
+    }
+  }
+
+  // ✅ Get drafts
+  static async getDrafts() {
+    try {
+      console.log(`📝 Fetching drafts...`);
+      const response = await fetchWithAuth(`${API_BASE}/mail/drafts`, {
+        method: "POST"
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.success ? data.drafts : [];
+    } catch (error) {
+      console.error('Get drafts error:', error);
+      return [];
+    }
+  }
+
+  // ✅ Save draft (handles both create and update)
+  static async saveDraft(draftId, to, subject, body, encryptionLevel = 'none') {
+    try {
+      console.log(`💾 Saving draft... ${draftId ? 'Update: ' + draftId : 'New'}`);
+      
+      const payload = {
+        to: to || '',
+        subject: subject || '',
+        body: body || '',
+        encryptionLevel: encryptionLevel === 'aes' ? 'aes256' : encryptionLevel
+      };
+      
+      const url = draftId ? `${API_BASE}/mail/drafts/${draftId}` : `${API_BASE}/mail/drafts`;
+      const method = draftId ? "PUT" : "POST";
+      
+      const response = await fetchWithAuth(url, {
+        method: method,
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Save draft error:', error);
+      throw error;
+    }
+  }
+
+  // ✅ Delete draft
+  static async deleteDraft(draftId) {
+    try {
+      console.log(`🗑️ Deleting draft: ${draftId}`);
+      const response = await fetchWithAuth(`${API_BASE}/mail/drafts/${draftId}`, {
+        method: "DELETE"
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Delete draft error:', error);
       throw error;
     }
   }

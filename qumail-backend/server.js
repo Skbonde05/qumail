@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -28,9 +29,14 @@ app.use(express.json({ limit: '10mb' }));  // Increase from default 100kb to 10M
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ================================================================
 
+app.use("/api/auth", authRoutes);
+
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'qumail-quantum-secure-key-2024';
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const REFRESH_SECRET = process.env.REFRESH_SECRET || 'qumail-refresh-secret-2024';
+const ACCESS_EXPIRE = process.env.ACCESS_EXPIRE || '1d';
+const REFRESH_EXPIRE = process.env.REFRESH_EXPIRE || '7d';
 
 // Validate environment variables
 console.log('🔧 Environment Configuration:');
@@ -73,198 +79,11 @@ const isMongoConnected = () => {
 };
 
 // ================== MONGODB MODELS ==================
-const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
-  },
-  password: {
-    type: String,
-    required: true
-  },
-  avatar: {
-    type: String,
-    default: ''
-  },
-  settings: {
-    emailNotifications: {
-      type: Boolean,
-      default: true
-    },
-    autoSaveDrafts: {
-      type: Boolean,
-      default: true
-    },
-    signature: {
-      type: String,
-      default: ''
-    },
-    twoFactorEnabled: {
-      type: Boolean,
-      default: false
-    },
-    language: {
-      type: String,
-      default: 'en'
-    },
-    timezone: {
-      type: String,
-      default: 'UTC'
-    }
-  },
-  encryptionKeys: {
-    otp: { type: String, default: null },
-    aes256: { type: String, default: null }
-  },
-  storageUsed: {
-    type: Number,
-    default: 0
-  },
-  storageLimit: {
-    type: Number,
-    default: 10 * 1024 * 1024 * 1024 // 10GB
-  },
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-  role: {
-    type: String,
-    enum: ['user', 'admin', 'moderator'],
-    default: 'user'
-  },
-  lastLogin: {
-    type: Date,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+const User = require('./models/User');
 
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-const User = mongoose.model('User', userSchema);
-
-// Mail Schema - FIXED: Removed unique constraint from mailId
-const mailSchema = new mongoose.Schema({
-  mailId: {
-    type: String,
-    required: true,
-    // CRITICAL FIX: Removed unique: true - allows same mailId for different owners
-  },
-  from: {
-    type: String,
-    required: true,
-    lowercase: true,
-    trim: true
-  },
-  to: {
-    type: String,
-    required: true,
-    lowercase: true,
-    trim: true
-  },
-  subject: {
-    type: String,
-    required: true,
-    default: "(No Subject)"
-  },
-  body: {
-    type: String,
-    required: true
-  },
-  encryption: {
-    type: String,
-    enum: ["NONE", "OTP", "AES"],
-    default: "NONE"
-  },
-  aesKey: {
-    type: String,
-    default: null
-  },
-  aesIV: {
-    type: String,
-    default: null
-  },
-  folder: {
-    type: String,
-    enum: ["INBOX", "SENT", "ARCHIVE", "DRAFTS", "TRASH"],
-    required: true
-  },
-  owner: {
-    type: String,
-    required: true,
-    lowercase: true,
-    trim: true
-  },
-  read: {
-    type: Boolean,
-    default: false
-  },
-  starred: {
-    type: Boolean,
-    default: false
-  },
-  important: {
-    type: Boolean,
-    default: false
-  },
-  trash: {
-    type: Boolean,
-    default: false
-  },
-  snoozed: {
-    type: Date,
-    default: null
-  },
-  labels: [{
-    type: String,
-    default: []
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-// CRITICAL FIX: Compound index for mailId + owner to ensure uniqueness per user
-// This allows same mailId for different owners
-mailSchema.index({ mailId: 1, owner: 1 }, { unique: true });
-
-// Add other indexes for better performance
-mailSchema.index({ owner: 1, folder: 1, trash: 1 });
-mailSchema.index({ owner: 1, starred: 1 });
-mailSchema.index({ owner: 1, important: 1 });
-mailSchema.index({ owner: 1, read: 1 });
-mailSchema.index({ createdAt: -1 });
-
-mailSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-const Mail = mongoose.model('Mail', mailSchema);
+// =========== IMPORT MAIL MODEL FROM EXTERNAL FILE ===========
+// Make sure this path is correct relative to your server.js
+const Mail = require('./models/Mail');
 
 // ================== HELPER FUNCTIONS ==================
 
@@ -273,7 +92,7 @@ const validateQumailEmail = (email) => {
   return email.toLowerCase().endsWith('@qumail.com');
 };
 
-// Generate JWT token
+// Generate JWT access token
 const generateToken = (user) => {
   return jwt.sign(
     { 
@@ -281,11 +100,22 @@ const generateToken = (user) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      timestamp: Date.now(),
       type: 'qumail'
     },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: ACCESS_EXPIRE }
+  );
+};
+
+// Generate JWT refresh token
+const generateRefreshToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user._id,
+      type: 'qumail-refresh'
+    },
+    REFRESH_SECRET,
+    { expiresIn: REFRESH_EXPIRE }
   );
 };
 
@@ -514,7 +344,8 @@ app.post('/api/register',
   [
     body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters'),
     body('email').isEmail().withMessage('Valid email required').custom(validateQumailEmail).withMessage('Only @qumail.com addresses allowed'),
-    body('password').isLength({ min: 12 }).withMessage('Password must be at least 12 characters'),
+    // In the /api/register route validation array
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('confirmPassword').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match')
   ],
   async (req, res) => {
@@ -560,9 +391,14 @@ app.post('/api/register',
           aes256: aesKey
         }
       });
-      
-      // Generate token
+
+      // Generate tokens
       const token = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
+      
+      // Save refresh token to user
+      user.refreshToken = refreshToken;
+      await user.save();
       
       console.log(`✅ User registered: ${lowerEmail} (${name})`);
       
@@ -577,7 +413,9 @@ app.post('/api/register',
           createdAt: user.createdAt,
           settings: user.settings
         },
-        token: token
+        token: token,
+        accessToken: token,
+        refreshToken: refreshToken
       });
       
     } catch (error) {
@@ -630,12 +468,14 @@ app.post('/api/login',
         });
       }
       
-      // Update last login
+      // Generate tokens
+      const token = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
+      
+      // Update user with refresh token
+      user.refreshToken = refreshToken;
       user.lastLogin = new Date();
       await user.save();
-      
-      // Generate token
-      const token = generateToken(user);
       
       console.log(`✅ Login successful: ${lowerEmail}`);
       
@@ -664,6 +504,8 @@ app.post('/api/login',
           lastLogin: user.lastLogin
         },
         token: token,
+        accessToken: token,
+        refreshToken: refreshToken,
         folderCounts: {
           inbox: inboxCount,
           sent: sentCount,
@@ -1057,7 +899,7 @@ app.post('/api/send',
   ],
   async (req, res) => {
     console.log("📧 SEND REQUEST RECEIVED ==================================");
-    console.log("Body:", req.body);
+    console.log("Body:", JSON.stringify(req.body, null, 2));
     console.log("========================================================");
     
     const session = await mongoose.startSession();
@@ -1162,7 +1004,7 @@ app.post('/api/send',
       
       try {
         // Sent mail for sender (owner: from)
-        await Mail.create([{
+        const sentMail = new Mail({
           mailId: mailId,
           from: from,
           to: lowerTo,
@@ -1176,12 +1018,13 @@ app.post('/api/send',
           read: true,
           createdAt: timestamp,
           updatedAt: timestamp
-        }], { session });
+        });
         
+        await sentMail.save({ session });
         console.log(`✅ Sender's SENT email created for: ${from}`);
         
         // Inbox mail for recipient (owner: lowerTo)
-        await Mail.create([{
+        const inboxMail = new Mail({
           mailId: mailId,
           from: from,
           to: lowerTo,
@@ -1195,8 +1038,9 @@ app.post('/api/send',
           read: false,
           createdAt: timestamp,
           updatedAt: timestamp
-        }], { session });
+        });
         
+        await inboxMail.save({ session });
         console.log(`✅ Recipient's INBOX email created for: ${lowerTo}`);
         
         await session.commitTransaction();
@@ -1209,10 +1053,22 @@ app.post('/api/send',
         
         // Check if it's a duplicate key error
         if (dbError.code === 11000) {
+          // Try to get more info about the duplicate
+          try {
+            const existingMails = await Mail.findAllCopies(mailId);
+            console.error('Existing mails with same mailId:', existingMails.map(m => ({
+              mailId: m.mailId,
+              owner: m.owner,
+              folder: m.folder
+            })));
+          } catch (e) {
+            console.error('Error checking existing mails:', e);
+          }
+          
           return res.status(500).json({
             success: false,
-            message: 'Database constraint violation. Please try again with a new email.',
-            error: 'Duplicate key error. The server needs to fix its database indexes.'
+            message: 'Duplicate key error. Please try sending again.',
+            error: 'Duplicate key error (mailId + owner combination already exists).'
           });
         }
         
@@ -1563,7 +1419,7 @@ app.get('/api/mail/:mailId', verifyToken, async (req, res) => {
     const mail = await Mail.findOne({
       mailId: mailId,
       owner: userEmail
-    });
+    }).select('+aesKey +aesIV'); // Include AES keys when needed
     
     if (!mail) {
       return res.status(404).json({
@@ -2290,7 +2146,7 @@ app.post('/api/decrypt',
       const mail = await Mail.findOne({
         mailId: emailId,
         owner: userEmail
-      });
+      }).select('+aesKey +aesIV'); // Include AES keys for decryption
       
       if (!mail) {
         return res.status(404).json({
@@ -2391,6 +2247,54 @@ app.post('/api/decrypt',
   }
 );
 
+// ------------------ REFRESH TOKEN ------------------
+app.post('/api/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        message: 'Refresh token required'
+      });
+    }
+    
+    // Verify refresh token
+    const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
+    
+    // Find user
+    const user = await User.findById(decoded.id);
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid or expired refresh token'
+      });
+    }
+    
+    // Generate new access token
+    const accessToken = generateToken(user);
+    
+    res.json({
+      success: true,
+      accessToken: accessToken,
+      token: accessToken // For compatibility with both naming schemes
+    });
+    
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(403).json({
+      success: false,
+      message: 'Token verification failed'
+    });
+  }
+});
+
+// Alias for auth/refresh if needed
+app.post('/api/auth/refresh', async (req, res) => {
+  req.url = '/api/refresh';
+  return app._router.handle(req, res);
+});
+
 // ------------------ LOGOUT ------------------
 app.post('/api/logout', verifyToken, (req, res) => {
   try {
@@ -2440,7 +2344,8 @@ app.get('/api/mail/folder-counts', verifyToken, async (req, res) => {
         trash: trash,
         starred: starred,
         important: important,
-        unread: unreadCount
+        unread: unreadCount,
+        drafts: await Mail.countDocuments({ owner: userEmail, folder: 'DRAFTS', trash: false })
       }
     });
     
@@ -2454,46 +2359,207 @@ app.get('/api/mail/folder-counts', verifyToken, async (req, res) => {
   }
 });
 
+// ------------------ DRAFT ROUTES ------------------
+
+// Get all drafts
+app.post('/api/mail/drafts', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const drafts = await Mail.find({ 
+      owner: userEmail, 
+      folder: 'DRAFTS', 
+      trash: false 
+    }).sort({ updatedAt: -1 });
+    
+    // Format drafts for frontend
+    const formattedDrafts = drafts.map(draft => ({
+      id: draft._id,
+      mailId: draft.mailId,
+      to: draft.to,
+      subject: draft.subject,
+      body: draft.body,
+      date: draft.updatedAt,
+      encryptionLevel: draft.encryptionLevel || 'none'
+    }));
+    
+    res.json({ success: true, drafts: formattedDrafts });
+  } catch (error) {
+    console.error('Get drafts error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Create draft
+app.post('/api/mail/drafts/create', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { to, subject, body, encryptionLevel = 'none' } = req.body;
+    
+    const mailId = uuidv4();
+    const draft = new Mail({
+      mailId,
+      from: userEmail,
+      to: to || '',
+      subject: subject || '',
+      body: body || '',
+      encryptionLevel,
+      folder: 'DRAFTS',
+      owner: userEmail,
+      read: true
+    });
+    
+    await draft.save();
+    console.log(`📝 Draft created: ${mailId} for ${userEmail}`);
+    
+    res.status(201).json({ 
+      success: true, 
+      draftId: draft._id, 
+      mailId: mailId,
+      message: 'Draft saved'
+    });
+  } catch (error) {
+    console.error('Create draft error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Alias for create/update compatibility
+app.post('/api/mail/drafts', verifyToken, async (req, res) => {
+  // If we have an ID in body, it's an update, but usually it's a new one if POST to /drafts
+  // Let's redirect to create
+  req.url = '/api/mail/drafts/create';
+  return app._router.handle(req, res);
+});
+
+// Update draft
+app.put('/api/mail/drafts/:id', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { to, subject, body, encryptionLevel = 'none' } = req.body;
+    
+    const draft = await Mail.findOneAndUpdate(
+      { _id: req.params.id, owner: userEmail, folder: 'DRAFTS' },
+      { 
+        to: to || '', 
+        subject: subject || '', 
+        body: body || '', 
+        encryptionLevel,
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
+    
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+    
+    console.log(`📝 Draft updated: ${draft.mailId}`);
+    
+    res.json({ 
+      success: true, 
+      draftId: draft._id,
+      message: 'Draft updated' 
+    });
+  } catch (error) {
+    console.error('Update draft error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete draft
+app.delete('/api/mail/drafts/:id', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    // We can either permanently delete or move to trash. Usually drafts are permanently deleted.
+    const draft = await Mail.findOneAndDelete({ 
+      _id: req.params.id, 
+      owner: userEmail, 
+      folder: 'DRAFTS' 
+    });
+    
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+    
+    console.log(`🗑️ Draft deleted: ${draft.mailId}`);
+    
+    res.json({ success: true, message: 'Draft deleted successfully' });
+  } catch (error) {
+    console.error('Delete draft error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ------------------ FIX DATABASE INDEXES ------------------
 app.post('/api/fix-database-indexes', async (req, res) => {
   try {
     console.log('🛠️ Fixing database indexes...');
     
-    // Drop the problematic unique index on mailId alone
-    try {
-      await Mail.collection.dropIndex('mailId_1');
-      console.log('✅ Dropped old unique index on mailId');
-    } catch (dropError) {
-      console.log('ℹ️ No old index to drop or already dropped');
-    }
-    
-    // Create compound unique index
-    await Mail.collection.createIndex({ mailId: 1, owner: 1 }, { unique: true });
-    console.log('✅ Created compound unique index on {mailId: 1, owner: 1}');
-    
-    // Create other useful indexes
-    await Mail.collection.createIndex({ owner: 1, folder: 1, trash: 1 });
-    await Mail.collection.createIndex({ owner: 1, starred: 1 });
-    await Mail.collection.createIndex({ owner: 1, important: 1 });
-    await Mail.collection.createIndex({ owner: 1, read: 1 });
-    await Mail.collection.createIndex({ createdAt: -1 });
-    
-    console.log('✅ Created all necessary indexes');
+    // Get the actual collection
+    const collection = Mail.collection;
     
     // Get current indexes
-    const indexes = await Mail.collection.getIndexes();
+    const indexes = await collection.getIndexes();
+    console.log('Current indexes:', Object.keys(indexes));
+    
+    // Check if old mailId_1 index exists
+    if (indexes.mailId_1) {
+      try {
+        await collection.dropIndex('mailId_1');
+        console.log('✅ Dropped old unique index on mailId');
+      } catch (dropError) {
+        console.log('ℹ️ Could not drop mailId_1 index:', dropError.message);
+      }
+    }
+    
+    // Check if compound index already exists
+    const compoundIndexExists = Object.values(indexes).some(index => 
+      index.key && index.key.mailId === 1 && index.key.owner === 1
+    );
+    
+    if (!compoundIndexExists) {
+      await collection.createIndex({ mailId: 1, owner: 1 }, { unique: true, name: 'unique_mail_per_user' });
+      console.log('✅ Created compound unique index on {mailId: 1, owner: 1}');
+    } else {
+      console.log('✅ Compound index already exists');
+    }
+    
+    // Create other useful indexes if they don't exist
+    const otherIndexes = [
+      { owner: 1, folder: 1, trash: 1, createdAt: -1 },
+      { owner: 1, starred: 1, createdAt: -1 },
+      { owner: 1, important: 1, createdAt: -1 },
+      { owner: 1, read: 1, createdAt: -1 },
+      { owner: 1, trash: 1, createdAt: -1 }
+    ];
+    
+    for (const indexDef of otherIndexes) {
+      const exists = Object.values(indexes).some(index => 
+        JSON.stringify(index.key) === JSON.stringify(indexDef)
+      );
+      if (!exists) {
+        await collection.createIndex(indexDef);
+        console.log(`✅ Created index: ${JSON.stringify(indexDef)}`);
+      }
+    }
+    
+    // Get updated indexes
+    const updatedIndexes = await collection.getIndexes();
     
     res.json({
       success: true,
       message: 'Database indexes fixed successfully',
-      indexes: Object.keys(indexes)
+      indexes: Object.keys(updatedIndexes),
+      details: updatedIndexes
     });
     
   } catch (error) {
     console.error('Fix database indexes error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fix database indexes: ' + error.message
+      message: 'Failed to fix database indexes: ' + error.message,
+      error: error.toString()
     });
   }
 });
@@ -2693,6 +2759,90 @@ app.use((req, res) => {
     success: false,
     message: `Endpoint ${req.method} ${req.path} not found`
   });
+})
+// ================== IMPORTANT: FIX INDEXES ON STARTUP ==================
+async function fixIndexesOnStartup() {
+  try {
+    console.log('🔍 Checking database indexes on startup...');
+    
+    // Wait for MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Waiting for MongoDB connection...');
+      await new Promise(resolve => {
+        mongoose.connection.once('connected', resolve);
+      });
+    }
+    
+    // Run the index fixer
+    const collection = Mail.collection;
+    const indexes = await collection.getIndexes();
+    
+    console.log('📊 Current indexes:');
+    Object.keys(indexes).forEach(key => {
+      console.log(`   - ${key}:`, indexes[key].key);
+    });
+    
+    // Check if compound index already exists (by key pattern)
+    const hasCompoundIndex = Object.values(indexes).some(index => 
+      JSON.stringify(index.key) === JSON.stringify({ mailId: 1, owner: 1 })
+    );
+    
+    if (!hasCompoundIndex) {
+      console.log('Creating compound index {mailId: 1, owner: 1}...');
+      try {
+        await collection.createIndex({ mailId: 1, owner: 1 }, { 
+          unique: true
+          // Remove the name parameter to let MongoDB auto-generate the name
+        });
+        console.log('✅ Created compound unique index');
+      } catch (createError) {
+        console.log('⚠️  Could not create index:', createError.message);
+      }
+    } else {
+      console.log('✅ Compound index already exists');
+      
+      // Check if it's unique
+      const compoundIndex = Object.values(indexes).find(index => 
+        JSON.stringify(index.key) === JSON.stringify({ mailId: 1, owner: 1 })
+      );
+      
+      if (compoundIndex && !compoundIndex.unique) {
+        console.log('⚠️  Compound index exists but is not unique. Dropping and recreating...');
+        try {
+          await collection.dropIndex(compoundIndex.name);
+          await collection.createIndex({ mailId: 1, owner: 1 }, { unique: true });
+          console.log('✅ Recreated compound index with unique constraint');
+        } catch (recreateError) {
+          console.log('⚠️  Could not recreate index:', recreateError.message);
+        }
+      }
+    }
+    
+    // Check for old standalone mailId index
+    const oldMailIdIndex = Object.values(indexes).find(index => 
+      JSON.stringify(index.key) === JSON.stringify({ mailId: 1 })
+    );
+    
+    if (oldMailIdIndex && oldMailIdIndex.unique) {
+      console.log('⚠️  Found old unique index on just mailId. Attempting to drop...');
+      try {
+        await collection.dropIndex(oldMailIdIndex.name);
+        console.log('✅ Dropped old unique mailId index');
+      } catch (dropError) {
+        console.log('⚠️  Could not drop old mailId index:', dropError.message);
+      }
+    }
+    
+    console.log('✅ Database indexes verified and fixed');
+  } catch (error) {
+    console.error('Error fixing indexes on startup:', error.message);
+  }
+}
+
+// Run index fixer after connection
+mongoose.connection.once('connected', () => {
+  console.log('✅ MongoDB connected successfully');
+  fixIndexesOnStartup();
 });
 
 // ------------------ START SERVER ------------------
@@ -2727,22 +2877,22 @@ const server = app.listen(PORT, () => {
   console.log(`   GET  /api/mail/folder-counts   - Get folder counts`);
   console.log(`   POST /api/decrypt              - Decrypt encrypted email`);
   console.log(`   POST /api/verify-token         - Verify JWT token`);
+  console.log(`   POST /api/fix-database-indexes - Fix database indexes (if duplicate key error)`);
+  console.log(`   GET  /api/database-indexes     - View current database indexes`);
+  console.log(`   POST /api/seed-test-data       - Seed test data`);
   console.log(`\n🔐 Encryption Support:`);
   console.log(`   • Standard Email (no encryption)`);
   console.log(`   • Quantum OTP (One-Time Pad)`);
   console.log(`   • Quantum AES-256-GCM`);
   console.log(`\n🔧 CRITICAL FIXES APPLIED:`);
-  console.log(`   • Removed unique constraint from mailId field`);
-  console.log(`   • Added compound unique index: {mailId: 1, owner: 1}`);
+  console.log(`   • Using external Mail model with proper compound index`);
   console.log(`   • Same mailId for sender & receiver copies (different owners)`);
   console.log(`   • Enhanced error handling in /api/send endpoint`);
+  console.log(`   • Added automatic index fixing on startup`);
   console.log(`   • Added database index fixing endpoint: POST /api/fix-database-indexes`);
-  console.log(`   • Added database index info endpoint: GET /api/database-indexes`);
-  console.log(`\n⚠️  IMPORTANT: If you still get duplicate key errors:`);
+  console.log(`\n⚠️  IMPORTANT: If you get duplicate key errors:`);
   console.log(`   1. Call POST /api/fix-database-indexes`);
-  console.log(`   2. Or manually fix indexes in MongoDB:`);
-  console.log(`      db.mails.dropIndex("mailId_1")`);
-  console.log(`      db.mails.createIndex({mailId:1, owner:1}, {unique: true})`);
+  console.log(`   2. Or restart the server (auto-fixes on startup)`);
   console.log(`========================================\n`);
 });
 

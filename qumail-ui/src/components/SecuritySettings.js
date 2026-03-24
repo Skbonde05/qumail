@@ -27,7 +27,8 @@ import {
   List,
   ListItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Snackbar
 } from '@mui/material';
 import {
   Security,
@@ -43,10 +44,79 @@ import {
   CheckCircle,
   Error as ErrorIcon,
   LockReset,
-  VpnKey, // Use VpnKey instead of Encrypted
-  History // For Recent Security Activity
+  VpnKey,
+  History
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+
+// Mock encryption service
+const mockEncryptionService = {
+  generateKey: async (algorithm, length = 32) => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-+=';
+    let key = '';
+    for (let i = 0; i < length; i++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    return {
+      key,
+      algorithm,
+      generatedAt: new Date().toISOString(),
+      length: key.length
+    };
+  },
+  
+  encryptData: async (data, key, algorithm) => {
+    // Simulate encryption
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return `encrypted_${algorithm}_${btoa(data).slice(0, 10)}`;
+  },
+  
+  decryptData: async (encryptedData, key, algorithm) => {
+    // Simulate decryption
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return 'Decrypted content would appear here';
+  }
+};
+
+// Mock user service
+const mockUserService = {
+  saveSecuritySettings: async (userId, settings) => {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Save to localStorage for demo
+    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    userData.settings = { ...userData.settings, ...settings };
+    localStorage.setItem('userData', JSON.stringify(userData));
+    
+    return { success: true, updatedAt: new Date().toISOString() };
+  },
+  
+  getSecurityLogs: async (userId) => {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    const logs = JSON.parse(localStorage.getItem('securityLogs') || '[]');
+    return logs.filter(log => log.userId === userId);
+  },
+  
+  addSecurityLog: async (log) => {
+    const logs = JSON.parse(localStorage.getItem('securityLogs') || '[]');
+    logs.unshift({
+      ...log,
+      id: Date.now(),
+      timestamp: new Date().toISOString()
+    });
+    
+    // Keep only last 50 logs
+    const trimmedLogs = logs.slice(0, 50);
+    localStorage.setItem('securityLogs', JSON.stringify(trimmedLogs));
+    
+    return { success: true };
+  }
+};
 
 const StyledCard = styled(Card)(({ theme }) => ({
   marginBottom: theme.spacing(3),
@@ -80,13 +150,21 @@ const SecurityBadge = styled(Chip)(({ theme, level }) => ({
   }),
 }));
 
-export default function SecuritySettings({ 
-  user, 
-  onGenerateKeys, 
-  onUpdateSecurity,
-  encryptionStatus,
-  loading = false 
-}) {
+const ActivityLog = styled(ListItem)(({ theme, type }) => ({
+  padding: theme.spacing(1.5),
+  borderLeft: `4px solid ${type === 'success' ? theme.palette.success.main : 
+    type === 'warning' ? theme.palette.warning.main : 
+    type === 'error' ? theme.palette.error.main : 
+    theme.palette.info.main}`,
+  marginBottom: theme.spacing(1),
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: theme.palette.background.paper,
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover,
+  },
+}));
+
+export default function SecuritySettings({ userId = 'user123' }) {
   const [showOTPKey, setShowOTPKey] = useState(false);
   const [showAESKey, setShowAESKey] = useState(false);
   const [regenerateDialog, setRegenerateDialog] = useState(false);
@@ -101,75 +179,272 @@ export default function SecuritySettings({
     suspiciousActivityAlerts: true
   });
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [loading, setLoading] = useState(false);
+  const [encryptionKeys, setEncryptionKeys] = useState({
+    otp: null,
+    aes256: null
+  });
+  const [securityLogs, setSecurityLogs] = useState([]);
+  const [showSnackbar, setShowSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
+  // Load data on component mount
   useEffect(() => {
-    if (user?.settings) {
-      setSecuritySettings({
-        defaultEncryption: user.settings.defaultEncryption || 'otp',
-        requireEncryption: user.settings.requireEncryption || false,
-        autoEncryptDrafts: user.settings.autoEncryptDrafts !== false,
-        sessionTimeout: user.settings.sessionTimeout || 30,
-        twoFactorEnabled: user.settings.twoFactorEnabled || false,
-        loginAlerts: user.settings.loginAlerts !== false,
-        suspiciousActivityAlerts: user.settings.suspiciousActivityAlerts !== false
-      });
+    loadUserData();
+    loadSecurityLogs();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      // Load from localStorage for demo
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      
+      if (userData.settings) {
+        setSecuritySettings(prev => ({
+          ...prev,
+          ...userData.settings
+        }));
+      }
+
+      // Load encryption keys
+      const storedKeys = JSON.parse(localStorage.getItem(`encryptionKeys_${userId}`) || '{}');
+      setEncryptionKeys(storedKeys);
+    } catch (error) {
+      console.error('Failed to load user data:', error);
     }
-  }, [user]);
+  };
+
+  const loadSecurityLogs = async () => {
+    try {
+      const logs = await mockUserService.getSecurityLogs(userId);
+      setSecurityLogs(logs);
+    } catch (error) {
+      console.error('Failed to load security logs:', error);
+    }
+  };
+
+  const addSecurityLog = async (action, details, type = 'info') => {
+    await mockUserService.addSecurityLog({
+      userId,
+      action,
+      details,
+      type
+    });
+    loadSecurityLogs(); // Refresh logs
+  };
 
   const handleRegenerateKey = async () => {
+    setLoading(true);
     try {
-      if (onGenerateKeys) {
-        await onGenerateKeys(selectedAlgorithm);
-        setMessage({ 
-          type: 'success', 
-          text: `${selectedAlgorithm.toUpperCase()} key regenerated successfully!` 
-        });
-        setRegenerateDialog(false);
-        
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      }
+      // Generate new key
+      const result = await mockEncryptionService.generateKey(
+        selectedAlgorithm,
+        selectedAlgorithm === 'otp' ? 64 : 32
+      );
+
+      // Save key to state and localStorage
+      const newKeys = {
+        ...encryptionKeys,
+        [selectedAlgorithm]: {
+          key: result.key,
+          algorithm: result.algorithm,
+          generatedAt: result.generatedAt,
+          length: result.length,
+          preview: '••••••••••••••••' // Never store full key in preview
+        }
+      };
+      
+      setEncryptionKeys(newKeys);
+      localStorage.setItem(`encryptionKeys_${userId}`, JSON.stringify(newKeys));
+
+      // Log the action
+      await addSecurityLog(
+        'KEY_REGENERATED',
+        `${selectedAlgorithm.toUpperCase()} key regenerated`,
+        'warning'
+      );
+
+      // Show success message
+      setMessage({ 
+        type: 'success', 
+        text: `${selectedAlgorithm.toUpperCase()} key regenerated successfully!` 
+      });
+      setRegenerateDialog(false);
+      setShowSnackbar(true);
+      setSnackbarMessage('Key regenerated successfully!');
+      
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to regenerate key' });
+      setSnackbarMessage('Failed to regenerate key');
+      setShowSnackbar(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateKey = async (algorithm) => {
+    setLoading(true);
+    try {
+      const result = await mockEncryptionService.generateKey(
+        algorithm,
+        algorithm === 'otp' ? 64 : 32
+      );
+
+      const newKeys = {
+        ...encryptionKeys,
+        [algorithm]: {
+          key: result.key,
+          algorithm: result.algorithm,
+          generatedAt: result.generatedAt,
+          length: result.length,
+          preview: '••••••••••••••••'
+        }
+      };
+      
+      setEncryptionKeys(newKeys);
+      localStorage.setItem(`encryptionKeys_${userId}`, JSON.stringify(newKeys));
+
+      await addSecurityLog(
+        'KEY_GENERATED',
+        `${algorithm.toUpperCase()} key generated`,
+        'success'
+      );
+
+      setMessage({ 
+        type: 'success', 
+        text: `${algorithm.toUpperCase()} key generated successfully!` 
+      });
+      setShowSnackbar(true);
+      setSnackbarMessage('Key generated successfully!');
+      
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Failed to generate key' });
+      setSnackbarMessage('Failed to generate key');
+      setShowSnackbar(true);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSaveSettings = async () => {
+    setLoading(true);
     try {
-      if (onUpdateSecurity) {
-        await onUpdateSecurity(securitySettings);
-        setMessage({ type: 'success', text: 'Security settings updated successfully!' });
-        
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      }
+      await mockUserService.saveSecuritySettings(userId, securitySettings);
+      
+      await addSecurityLog(
+        'SETTINGS_UPDATED',
+        'Security settings updated',
+        'info'
+      );
+
+      setMessage({ type: 'success', text: 'Security settings updated successfully!' });
+      setShowSnackbar(true);
+      setSnackbarMessage('Settings saved successfully!');
+      
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to update settings' });
+      setSnackbarMessage('Failed to save settings');
+      setShowSnackbar(true);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleCopyKey = (key) => {
-    navigator.clipboard.writeText(key)
-      .then(() => {
-        setMessage({ type: 'success', text: 'Key copied to clipboard!' });
-        setTimeout(() => setMessage({ type: '', text: '' }), 2000);
-      })
-      .catch(err => {
-        setMessage({ type: 'error', text: 'Failed to copy key' });
-      });
+  const handleCopyKey = async (key) => {
+    try {
+      await navigator.clipboard.writeText(key);
+      setSnackbarMessage('Key copied to clipboard!');
+      setShowSnackbar(true);
+      
+      await addSecurityLog(
+        'KEY_COPIED',
+        'Encryption key copied to clipboard',
+        'warning'
+      );
+    } catch (err) {
+      setSnackbarMessage('Failed to copy key');
+      setShowSnackbar(true);
+    }
+  };
+
+  const handleDeleteKey = async (algorithm) => {
+    if (!window.confirm(`Are you sure you want to delete your ${algorithm.toUpperCase()} key? All data encrypted with this key will become unreadable!`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const newKeys = { ...encryptionKeys };
+      delete newKeys[algorithm];
+      
+      setEncryptionKeys(newKeys);
+      localStorage.setItem(`encryptionKeys_${userId}`, JSON.stringify(newKeys));
+
+      await addSecurityLog(
+        'KEY_DELETED',
+        `${algorithm.toUpperCase()} key deleted`,
+        'error'
+      );
+
+      setMessage({ type: 'success', text: `${algorithm.toUpperCase()} key deleted successfully!` });
+      setShowSnackbar(true);
+      setSnackbarMessage('Key deleted successfully!');
+      
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Failed to delete key' });
+      setSnackbarMessage('Failed to delete key');
+      setShowSnackbar(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getSecurityScore = () => {
     let score = 0;
-    if (encryptionStatus?.hasOTPKey) score += 30;
-    if (encryptionStatus?.hasAESKey) score += 20;
+    if (encryptionKeys.otp) score += 30;
+    if (encryptionKeys.aes256) score += 20;
     if (securitySettings.requireEncryption) score += 20;
     if (securitySettings.twoFactorEnabled) score += 30;
     
-    if (score >= 80) return { level: 'high', label: 'Excellent' };
-    if (score >= 60) return { level: 'medium', label: 'Good' };
-    return { level: 'low', label: 'Needs Improvement' };
+    if (score >= 80) return { level: 'high', label: 'Excellent', score: 'A+' };
+    if (score >= 60) return { level: 'medium', label: 'Good', score: 'B' };
+    return { level: 'low', label: 'Needs Improvement', score: 'C' };
   };
 
+  const getEncryptionStatus = () => ({
+    hasOTPKey: !!encryptionKeys.otp,
+    hasAESKey: !!encryptionKeys.aes256,
+    otpKeyLength: encryptionKeys.otp?.length || 0,
+    aesKeyLength: encryptionKeys.aes256?.length || 0,
+    otpKeyPreview: encryptionKeys.otp?.preview,
+    aesKeyPreview: encryptionKeys.aes256?.preview
+  });
+
   const securityScore = getSecurityScore();
+  const encryptionStatus = getEncryptionStatus();
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getLogIcon = (type) => {
+    switch(type) {
+      case 'success': return <CheckCircle color="success" />;
+      case 'warning': return <Warning color="warning" />;
+      case 'error': return <ErrorIcon color="error" />;
+      default: return <Security color="info" />;
+    }
+  };
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
@@ -208,8 +483,7 @@ export default function SecuritySettings({
                 level={securityScore.level}
               />
               <Typography variant="h4" fontWeight="700">
-                {securityScore.level === 'high' ? 'A+' : 
-                 securityScore.level === 'medium' ? 'B' : 'C'}
+                {securityScore.score}
               </Typography>
             </Box>
           </SectionHeader>
@@ -222,14 +496,14 @@ export default function SecuritySettings({
               <List dense>
                 <ListItem>
                   <ListItemIcon>
-                    {encryptionStatus?.hasOTPKey ? 
+                    {encryptionStatus.hasOTPKey ? 
                       <CheckCircle color="success" /> : 
                       <ErrorIcon color="error" />
                     }
                   </ListItemIcon>
                   <ListItemText 
                     primary="OTP Key" 
-                    secondary={encryptionStatus?.hasOTPKey ? 
+                    secondary={encryptionStatus.hasOTPKey ? 
                       `Configured (${encryptionStatus.otpKeyLength || 0} chars)` : 
                       "Not configured"
                     }
@@ -237,14 +511,14 @@ export default function SecuritySettings({
                 </ListItem>
                 <ListItem>
                   <ListItemIcon>
-                    {encryptionStatus?.hasAESKey ? 
+                    {encryptionStatus.hasAESKey ? 
                       <CheckCircle color="success" /> : 
                       <ErrorIcon color="error" />
                     }
                   </ListItemIcon>
                   <ListItemText 
                     primary="AES-256 Key" 
-                    secondary={encryptionStatus?.hasAESKey ? 
+                    secondary={encryptionStatus.hasAESKey ? 
                       `Configured (${encryptionStatus.aesKeyLength || 0} chars)` : 
                       "Not configured"
                     }
@@ -258,7 +532,7 @@ export default function SecuritySettings({
                 Recommendations
               </Typography>
               <List dense>
-                {!encryptionStatus?.hasOTPKey && (
+                {!encryptionStatus.hasOTPKey && (
                   <ListItem>
                     <ListItemIcon>
                       <Warning color="warning" />
@@ -308,7 +582,10 @@ export default function SecuritySettings({
             <Tooltip title="Regenerate All Keys">
               <IconButton 
                 size="small" 
-                onClick={() => setRegenerateDialog(true)}
+                onClick={() => {
+                  setSelectedAlgorithm('otp');
+                  setRegenerateDialog(true);
+                }}
                 sx={{ ml: 'auto' }}
                 disabled={loading}
               >
@@ -325,7 +602,7 @@ export default function SecuritySettings({
                   p: 2, 
                   bgcolor: 'background.default',
                   border: '1px solid',
-                  borderColor: encryptionStatus?.hasOTPKey ? 'success.main' : 'divider',
+                  borderColor: encryptionStatus.hasOTPKey ? 'success.main' : 'divider',
                   borderRadius: 2
                 }}
               >
@@ -346,12 +623,12 @@ export default function SecuritySettings({
                   Perfect secrecy encryption. Each key is used only once.
                 </Typography>
 
-                {encryptionStatus?.hasOTPKey ? (
+                {encryptionStatus.hasOTPKey ? (
                   <>
                     <TextField
                       fullWidth
                       type={showOTPKey ? 'text' : 'password'}
-                      value={encryptionStatus.otpKeyPreview || '••••••••••••••••'}
+                      value={showOTPKey ? encryptionKeys.otp?.key || '' : encryptionStatus.otpKeyPreview}
                       InputProps={{
                         readOnly: true,
                         endAdornment: (
@@ -367,9 +644,18 @@ export default function SecuritySettings({
                             <Tooltip title="Copy">
                               <IconButton 
                                 size="small"
-                                onClick={() => handleCopyKey(encryptionStatus.otpKeyFull || '')}
+                                onClick={() => handleCopyKey(encryptionKeys.otp?.key || '')}
                               >
                                 <ContentCopy fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton 
+                                size="small"
+                                onClick={() => handleDeleteKey('otp')}
+                                color="error"
+                              >
+                                <Delete fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           </Box>
@@ -377,19 +663,24 @@ export default function SecuritySettings({
                       }}
                       size="small"
                     />
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      Key length: {encryptionStatus.otpKeyLength || 0} characters
-                    </Typography>
+                    <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Key length: {encryptionStatus.otpKeyLength} characters
+                      </Typography>
+                      {encryptionKeys.otp?.generatedAt && (
+                        <Typography variant="caption" color="text.secondary">
+                          Generated: {formatDate(encryptionKeys.otp.generatedAt)}
+                        </Typography>
+                      )}
+                    </Box>
                   </>
                 ) : (
                   <Button
                     variant="outlined"
                     startIcon={<Add />}
-                    onClick={() => {
-                      setSelectedAlgorithm('otp');
-                      setRegenerateDialog(true);
-                    }}
+                    onClick={() => handleGenerateKey('otp')}
                     sx={{ mt: 1 }}
+                    disabled={loading}
                   >
                     Generate OTP Key
                   </Button>
@@ -404,12 +695,12 @@ export default function SecuritySettings({
                   p: 2, 
                   bgcolor: 'background.default',
                   border: '1px solid',
-                  borderColor: encryptionStatus?.hasAESKey ? 'success.main' : 'divider',
+                  borderColor: encryptionStatus.hasAESKey ? 'success.main' : 'divider',
                   borderRadius: 2
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <VpnKey color="primary" /> {/* Changed from Encrypted to VpnKey */}
+                  <VpnKey color="primary" />
                   <Typography variant="subtitle1" fontWeight="600">
                     AES-256
                   </Typography>
@@ -425,12 +716,12 @@ export default function SecuritySettings({
                   Military-grade encryption. Fast performance for everyday use.
                 </Typography>
 
-                {encryptionStatus?.hasAESKey ? (
+                {encryptionStatus.hasAESKey ? (
                   <>
                     <TextField
                       fullWidth
                       type={showAESKey ? 'text' : 'password'}
-                      value={encryptionStatus.aesKeyPreview || '••••••••••••••••'}
+                      value={showAESKey ? encryptionKeys.aes256?.key || '' : encryptionStatus.aesKeyPreview}
                       InputProps={{
                         readOnly: true,
                         endAdornment: (
@@ -446,9 +737,18 @@ export default function SecuritySettings({
                             <Tooltip title="Copy">
                               <IconButton 
                                 size="small"
-                                onClick={() => handleCopyKey(encryptionStatus.aesKeyFull || '')}
+                                onClick={() => handleCopyKey(encryptionKeys.aes256?.key || '')}
                               >
                                 <ContentCopy fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton 
+                                size="small"
+                                onClick={() => handleDeleteKey('aes256')}
+                                color="error"
+                              >
+                                <Delete fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           </Box>
@@ -456,19 +756,24 @@ export default function SecuritySettings({
                       }}
                       size="small"
                     />
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      Key length: {encryptionStatus.aesKeyLength || 0} characters
-                    </Typography>
+                    <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Key length: {encryptionStatus.aesKeyLength} characters
+                      </Typography>
+                      {encryptionKeys.aes256?.generatedAt && (
+                        <Typography variant="caption" color="text.secondary">
+                          Generated: {formatDate(encryptionKeys.aes256.generatedAt)}
+                        </Typography>
+                      )}
+                    </Box>
                   </>
                 ) : (
                   <Button
                     variant="outlined"
                     startIcon={<Add />}
-                    onClick={() => {
-                      setSelectedAlgorithm('aes256');
-                      setRegenerateDialog(true);
-                    }}
+                    onClick={() => handleGenerateKey('aes256')}
                     sx={{ mt: 1 }}
+                    disabled={loading}
                   >
                     Generate AES Key
                   </Button>
@@ -628,21 +933,48 @@ export default function SecuritySettings({
       <StyledCard>
         <CardContent>
           <SectionHeader>
-            <History fontSize="small" /> {/* Changed from Security to History */}
+            <History fontSize="small" />
             <Typography variant="h6" fontWeight="600">
               Recent Security Activity
             </Typography>
           </SectionHeader>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Your account security events will appear here
-          </Typography>
-
-          <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-            <Typography variant="body2" color="text.secondary" align="center">
-              No security events to display
-            </Typography>
-          </Paper>
+          {securityLogs.length > 0 ? (
+            <List dense>
+              {securityLogs.slice(0, 5).map((log) => (
+                <ActivityLog key={log.id} type={log.type}>
+                  <ListItemIcon>
+                    {getLogIcon(log.type)}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={log.action.replace(/_/g, ' ')}
+                    secondary={
+                      <>
+                        <Typography component="span" variant="body2" color="text.primary">
+                          {log.details}
+                        </Typography>
+                        <br />
+                        <Typography component="span" variant="caption" color="text.secondary">
+                          {formatDate(log.timestamp)}
+                        </Typography>
+                      </>
+                    }
+                  />
+                </ActivityLog>
+              ))}
+            </List>
+          ) : (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Your account security events will appear here
+              </Typography>
+              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  No security events to display
+                </Typography>
+              </Paper>
+            </>
+          )}
         </CardContent>
       </StyledCard>
 
@@ -696,6 +1028,20 @@ export default function SecuritySettings({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={showSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setShowSnackbar(false)}
+        message={snackbarMessage}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 }
+
+// Optional: Add default props and propTypes
+SecuritySettings.defaultProps = {
+  userId: 'user123'
+};

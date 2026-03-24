@@ -62,21 +62,25 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
   const [forgotError, setForgotError] = useState("");
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    
-    if (!email || !password) {
-      setError("Please enter your QuMail email and password");
-      return;
-    }
-    
-    if (!email.toLowerCase().endsWith('@qumail.com')) {
-      setError("Only @qumail.com addresses are supported");
-      return;
-    }
-    
+  e.preventDefault();
+  setError("");
+
+  if (!email || !password) {
+    setError("Please enter your QuMail email and password");
+    return;
+  }
+
+  if (!email.toLowerCase().endsWith('@qumail.com')) {
+    setError("Only @qumail.com addresses are supported");
+    return;
+  }
+
+  try {
     await onLogin(email, password);
-  };
+  } catch (err) {
+    setError("Login failed. Please try again.");
+  }
+};
 
   const handleForgotPassword = async () => {
     setForgotError("");
@@ -90,7 +94,6 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
     setForgotLoading(true);
 
     try {
-      // Note: You'll need to implement this endpoint in your backend
       const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,10 +104,12 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
 
       if (data.success) {
         setForgotSuccess("Password reset instructions have been sent to your email.");
+        // Don't close immediately - let user read the message
         setTimeout(() => {
           setOpenForgot(false);
           setForgotEmail("");
-        }, 2000);
+          setForgotSuccess("");
+        }, 3000);
       } else {
         setForgotError(data.message || "Failed to send reset instructions.");
       }

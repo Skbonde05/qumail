@@ -119,6 +119,175 @@ router.post("/inbox", async (req, res) => {
   }
 });
 
+router.post("/draft", authMiddleware, async (req, res) => {
+  try {
+    const { draftId, recipient, subject, body } = req.body;
+
+    // If draftId exists → Update draft
+    if (draftId) {
+      const updatedDraft = await Mail.findOneAndUpdate(
+        { _id: draftId, sender: req.user.id, isDraft: true },
+        { recipient, subject, body },
+        { new: true }
+      );
+
+      return res.json({
+        message: "Draft updated successfully",
+        draft: updatedDraft,
+      });
+    }
+
+    // Else → Create new draft
+    const draft = new Mail({
+      sender: req.user.id,
+      recipient,
+      subject,
+      body,
+      isDraft: true,
+    });
+
+    await draft.save();
+
+    res.status(201).json({
+      message: "Draft saved successfully",
+      draft,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error saving draft" });
+  }
+});
+
+router.get("/drafts", authMiddleware, async (req, res) => {
+  try {
+    const drafts = await Mail.find({
+      sender: req.user.id,
+      isDraft: true,
+      isDeleted: false,
+    }).sort({ updatedAt: -1 });
+
+    res.json(drafts);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching drafts" });
+  }
+});
+
+router.delete("/draft/:id", authMiddleware, async (req, res) => {
+  try {
+    await Mail.findOneAndDelete({
+      _id: req.params.id,
+      sender: req.user.id,
+      isDraft: true,
+    });
+
+    res.json({ message: "Draft deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting draft" });
+  }
+});
+
+router.put("/trash/:id", authMiddleware, async (req, res) => {
+  try {
+    const mail = await Mail.findOne({
+      _id: req.params.id,
+      recipient: req.user.id,
+    });
+
+    if (!mail) {
+      return res.status(404).json({ message: "Mail not found" });
+    }
+
+    mail.isDeleted = true;
+    mail.deletedAt = new Date();
+
+    await mail.save();
+
+    res.json({ message: "Mail moved to Trash" });
+
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.put("/restore/:id", authMiddleware, async (req, res) => {
+  try {
+    const mail = await Mail.findOne({
+      _id: req.params.id,
+      recipient: req.user.id,
+      isDeleted: true,
+    });
+
+    if (!mail) {
+      return res.status(404).json({ message: "Mail not found" });
+    }
+
+    mail.isDeleted = false;
+    mail.deletedAt = null;
+
+    await mail.save();
+
+    res.json({ message: "Mail restored successfully" });
+
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.delete("/permanent/:id", authMiddleware, async (req, res) => {
+  try {
+    const mail = await Mail.findOneAndDelete({
+      _id: req.params.id,
+      recipient: req.user.id,
+      isDeleted: true,
+    });
+
+    if (!mail) {
+      return res.status(404).json({ message: "Mail not found" });
+    }
+
+    res.json({ message: "Mail permanently deleted" });
+
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.get("/trash", authMiddleware, async (req, res) => {
+  try {
+    const mails = await Mail.find({
+      recipient: req.user.id,
+      isDeleted: true,
+    }).sort({ deletedAt: -1 });
+
+    res.json(mails);
+
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.post("/send/:id", authMiddleware, async (req, res) => {
+  try {
+    const draft = await Mail.findOne({
+      _id: req.params.id,
+      sender: req.user.id,
+      isDraft: true,
+    });
+
+    if (!draft) {
+      return res.status(404).json({ message: "Draft not found" });
+    }
+
+    draft.isDraft = false;
+    draft.sentAt = new Date();
+
+    await draft.save();
+
+    res.json({ message: "Draft sent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error sending draft" });
+  }
+});
+
 /**
  * 📄 READ MAIL (decrypt safely)
  */

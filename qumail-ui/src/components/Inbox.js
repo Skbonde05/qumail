@@ -573,7 +573,6 @@ export default function Inbox({
         if (onMoveEmails) {
           onMoveEmails(selectedEmails, 'trash');
         }
-        showSnackbar(`Deleted ${selectedEmails.length} emails`, "success");
         setSelectedEmails([]);
         break;
       case "spam":
@@ -896,7 +895,6 @@ export default function Inbox({
           if (onMoveEmails) {
             onMoveEmails([emailId], 'trash');
           }
-          showSnackbar("Email moved to trash", "success");
           setSelectedEmail(null);
           if (isMobile) setShowEmailViewer(false);
         }}
@@ -904,7 +902,6 @@ export default function Inbox({
           if (onMoveEmails) {
             onMoveEmails([emailId], 'archive');
           }
-          showSnackbar("Email archived", "success");
         }}
         onStarToggle={(emailId, starred) => {
           toggleStar(emailId);

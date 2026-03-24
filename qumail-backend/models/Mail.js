@@ -1,8 +1,11 @@
+// models/Mail.js - Cleaned up version
+const mongoose = require('mongoose');
+
 const MailSchema = new mongoose.Schema({
   mailId: {
     type: String,
     required: true,
-    // REMOVED: unique: true  ← Don't make mailId unique alone
+    // Note: uniqueness is handled by a compound index (mailId + owner) below
   },
 
   from: {
@@ -30,13 +33,24 @@ const MailSchema = new mongoose.Schema({
     required: true
   },
 
+  preview: {
+    type: String,
+    default: ""
+  },
+
   encryption: {
     type: String,
     enum: ["NONE", "OTP", "AES"],
     default: "NONE"
   },
 
-  // 🔐 AES (backend-only)
+  encryptionLevel: {
+    type: String,
+    enum: ["none", "otp", "aes256"],
+    default: "none"
+  },
+
+  // 🔐 AES (backend-only fields)
   aesKey: {
     type: String,
     default: null
@@ -49,8 +63,9 @@ const MailSchema = new mongoose.Schema({
 
   folder: {
     type: String,
-    enum: ["INBOX", "SENT"],
-    required: true
+    enum: ["INBOX", "SENT", "ARCHIVE", "DRAFTS", "TRASH", "SPAM"],
+    required: true,
+    default: "INBOX"
   },
 
   owner: {
@@ -60,14 +75,63 @@ const MailSchema = new mongoose.Schema({
     trim: true
   },
 
-  createdAt: {
+  read: {
+    type: Boolean,
+    default: false
+  },
+
+  starred: {
+    type: Boolean,
+    default: false
+  },
+
+  important: {
+    type: Boolean,
+    default: false
+  },
+
+  trash: {
+    type: Boolean,
+    default: false
+  },
+
+  snoozed: {
+    type: Date,
+    default: null
+  },
+
+  labels: [{
+    type: String,
+    default: []
+  }],
+
+  // Metadata
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+
+  recipient: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+
+  sentAt: {
     type: Date,
     default: Date.now
   }
+}, { 
+  timestamps: true 
 });
 
-// Create a compound unique index instead
-// This allows the same mailId for different owners
+// CRITICAL: Compound unique index for mailId + owner
+// This allows the same mailId to exist for different users (sender vs recipient)
 MailSchema.index({ mailId: 1, owner: 1 }, { unique: true });
 
-export default mongoose.model("Mail", MailSchema);
+// Performance indexes
+MailSchema.index({ owner: 1, folder: 1, trash: 1, createdAt: -1 });
+MailSchema.index({ owner: 1, starred: 1 });
+MailSchema.index({ owner: 1, important: 1 });
+MailSchema.index({ owner: 1, read: 1 });
+
+module.exports = mongoose.model("Mail", MailSchema);
