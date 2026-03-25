@@ -96,7 +96,8 @@ const Sidebar = memo(({
   user = null
 }) => {
   const theme = useTheme();
-  const storageGB = (user?.storageLimit || 0) / (1024 * 1024 * 1024);
+  const limit = user?.storageLimit || (15 * 1024 * 1024 * 1024);
+  const storageGB = limit / (1024 * 1024 * 1024);
   const usedGB = (user?.storageUsed || 0) / (1024 * 1024 * 1024);
   const storagePercentage = storageGB > 0 ? (usedGB / storageGB) * 100 : 0;
 

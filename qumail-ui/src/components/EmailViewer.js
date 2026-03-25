@@ -204,7 +204,7 @@ const formatTime = (dateInput) => {
 const getSecurityConfig = (securityLevel, theme) => {
   const configs = {
     otp: {
-      label: 'Quantum OTP',
+      label: 'OTP Encrypted',
       icon: <LockIcon sx={{ fontSize: 16 }} />,
       color: 'error',
       description: 'One-Time Pad - Maximum Security',
@@ -213,7 +213,7 @@ const getSecurityConfig = (securityLevel, theme) => {
       alertIcon: <VerifiedUserIcon />,
     },
     aes: {
-      label: 'Quantum AES',
+      label: 'AES Encrypted',
       icon: <FlashOnIcon sx={{ fontSize: 16 }} />,
       color: 'success',
       description: 'AES-256 - Fast & Secure',
@@ -335,16 +335,15 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading }) => {
   );
 };
 
+const EMPTY_ARRAY = [];
+
 export default function EmailViewer({
   email,
   onBack,
   onReply,
   onReplyAll,
   onForward,
-  onDelete,
-  onArchive,
-  onToggleStar,
-  onToggleImportant,
+  onAction, // Added onAction
   onDecryptEmail,
   isLoading,
   isEncrypting = false,
@@ -356,7 +355,6 @@ export default function EmailViewer({
   const [expanded, setExpanded] = useState(false);
   const [decryptedContent, setDecryptedContent] = useState('');
   const [isDecrypting, setIsDecrypting] = useState(false);
-  const [attachments] = useState([]);
   const [isStarred, setIsStarred] = useState(false);
   const [isImportant, setIsImportant] = useState(false);
   const [showDecryptModal, setShowDecryptModal] = useState(false);
@@ -372,15 +370,17 @@ export default function EmailViewer({
     date = new Date(),
     body = '',
     encryptionLevel = 'none',
-    cc = [],
-    bcc = [],
-    flags = [],
+    cc = EMPTY_ARRAY,
+    bcc = EMPTY_ARRAY,
+    flags = EMPTY_ARRAY,
     starred = false,
     important = false,
     uid,
     read = false,
     requiresDecryption = false,
     decrypted: alreadyDecrypted = false,
+    otpKey = null,
+    attachments = EMPTY_ARRAY
   } = emailData;
 
   // Parse sender information safely
@@ -407,25 +407,52 @@ export default function EmailViewer({
   const formattedDate = formatDateSafe(date);
   const formattedTime = formatTime(date);
 
+  const handleDownload = (attachment) => {
+    if (!attachment.data) return;
+    
+    try {
+      const byteCharacters = atob(attachment.data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: attachment.contentType });
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
+
   // Initialize content and states
   useEffect(() => {
     if (!email) return;
 
     // Check if email is already decrypted
+    const isAES = securityLevel === 'aes' || securityLevel === 'aes256';
     const emailIsDecrypted = alreadyDecrypted || 
                             (securityLevel === 'none') || 
-                            (securityLevel === 'aes' && body && !body.includes('[') && !body.includes('ENCRYPTED'));
+                            (isAES && body && !body.trim().startsWith('{"iv":'));
     
-    setIsDecrypted(emailIsDecrypted);
+    // Only update if state actually changed
+    setIsDecrypted(prev => prev !== emailIsDecrypted ? emailIsDecrypted : prev);
     
     if (emailIsDecrypted) {
       setDecryptedContent(body || '');
-    } else if (securityLevel === 'aes') {
+    } else if (isAES) {
       // For AES, we might need to decrypt
       setDecryptedContent(
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <LucideLock sx={{ fontSize: 16 }} />
-          <span>Encrypted content - Click decrypt to view</span>
+          <span>AES Encrypted content - Click decrypt to view</span>
         </Box>
       );
     } else if (securityLevel === 'otp') {
@@ -442,8 +469,8 @@ export default function EmailViewer({
     }
 
     
-    setIsStarred(starred || flags?.includes('starred') || false);
-    setIsImportant(important || flags?.includes('important') || false);
+    setIsStarred(prev => prev !== (starred || flags?.includes('starred') || false) ? (starred || flags?.includes('starred') || false) : prev);
+    setIsImportant(prev => prev !== (important || flags?.includes('important') || false) ? (important || flags?.includes('important') || false) : prev);
   }, [email, body, securityLevel, alreadyDecrypted, starred, important, flags]);
 
   // Toggle expanded view
@@ -455,14 +482,14 @@ export default function EmailViewer({
   const handleStarToggle = () => {
     const newStarredState = !isStarred;
     setIsStarred(newStarredState);
-    if (onToggleStar && email?.uid) onToggleStar(email.uid, newStarredState);
+    if (onAction && email?.uid) onAction(email.uid, newStarredState ? 'star' : 'unstar');
   };
 
   // Handle important toggle
   const handleImportantToggle = () => {
     const newImportantState = !isImportant;
     setIsImportant(newImportantState);
-    if (onToggleImportant && email?.uid) onToggleImportant(email.uid, newImportantState);
+    if (onAction && email?.uid) onAction(email.uid, newImportantState ? 'important' : 'unimportant');
   };
 
   // Handle decrypt
@@ -559,12 +586,22 @@ export default function EmailViewer({
         <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
           <Box>
             <Typography variant="subtitle2" fontWeight="600">
-              {securityLevel === 'otp' ? 'OTP Encrypted Email' : 'AES Encrypted Email'}
+              {securityLevel === 'otp' ? 'OTP Encrypted' : 'AES Encrypted'}
             </Typography>
             <Typography variant="body2">
               This email is encrypted with {currentSecurity.description}.
-              {securityLevel === 'otp' ? ' You need the OTP key to decrypt it.' : ' Click "Decrypt" to view it.'}
+              {securityLevel === 'otp' ? ' Use the key provided by the sender to decrypt.' : ' Click "Decrypt" to view it.'}
             </Typography>
+            {otpKey && (
+              <Box sx={{ mt: 1, p: 1, bgcolor: 'rgba(0,0,0,0.05)', borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                  Key: {otpKey.substring(0, 16)}...
+                </Typography>
+                <Button size="small" onClick={() => navigator.clipboard.writeText(otpKey)} sx={{ fontSize: '0.65rem' }}>
+                  Copy Key
+                </Button>
+              </Box>
+            )}
           </Box>
           {shouldShowDecryptButton() && (
             <Button
@@ -616,7 +653,7 @@ export default function EmailViewer({
             <Box display="flex" alignItems="center" justifyContent="center" flexDirection="column" py={4}>
               <LockIcon sx={{ fontSize: 48, color: currentSecurity.badgeColor, mb: 2 }} />
               <Typography variant="h6" gutterBottom align="center">
-                {securityLevel === 'otp' ? 'OTP Encrypted Content' : 'AES Encrypted Content'}
+                {securityLevel === 'otp' ? 'OTP Encrypted' : 'AES Encrypted'}
               </Typography>
               <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
                 This message is encrypted with {currentSecurity.description}.
@@ -666,7 +703,7 @@ export default function EmailViewer({
 
   // Render attachments
   const renderAttachments = () => {
-    if (!attachments.length) return null;
+    if (!attachments || !attachments.length) return null;
 
     return (
       <Box sx={{ mt: 4 }}>
@@ -682,12 +719,12 @@ export default function EmailViewer({
                 </Badge>
               </ListItemIcon>
               <ListItemText
-                primary={attachment.name || `Attachment ${index + 1}`}
-                secondary={attachment.size || ''}
+                primary={attachment.filename || `Attachment ${index + 1}`}
+                secondary={attachment.size ? `${(attachment.size / 1024).toFixed(1)} KB` : ''}
                 primaryTypographyProps={{ fontWeight: 500 }}
               />
               <Tooltip title="Download">
-                <IconButton size="small">
+                <IconButton size="small" onClick={() => handleDownload(attachment)}>
                   <DownloadIcon />
                 </IconButton>
               </Tooltip>
@@ -914,7 +951,7 @@ export default function EmailViewer({
             <Button
               variant="outlined"
               startIcon={<ArchiveIcon />}
-              onClick={() => onArchive && email?.uid && onArchive(email.uid)}
+              onClick={() => onAction && email?.uid && onAction(email.uid, 'archive')}
               size="small"
               disabled={isDecrypting}
             >
@@ -923,12 +960,17 @@ export default function EmailViewer({
             <Button
               variant="outlined"
               startIcon={<DeleteIcon />}
-              onClick={() => onDelete && email?.uid && onDelete(email.uid)}
+              onClick={() => {
+                if (onAction && email?.uid) {
+                  const isTrash = email.trash || email.folder === 'trash';
+                  onAction(email.uid, isTrash ? 'delete' : 'trash');
+                }
+              }}
               size="small"
               color="error"
               disabled={isDecrypting}
             >
-              Delete
+              {email?.trash || email?.folder === 'trash' ? 'Delete Forever' : 'Delete'}
             </Button>
           </Stack>
         </HeaderContainer>
@@ -952,7 +994,7 @@ export default function EmailViewer({
           bgcolor: 'background.paper'
         }}>
           <Typography variant="caption" color="text.secondary">
-            Message ID: {email?.uid || 'N/A'} • {securityLevel.toUpperCase()}
+            Message ID: {email?.uid || 'N/A'} • {currentSecurity.label.toUpperCase()}
           </Typography>
           
           <Stack direction="row" spacing={1}>

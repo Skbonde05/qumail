@@ -20,7 +20,10 @@ router.post('/send',
     body('to').isEmail().withMessage('Valid recipient email required').custom(validateQumailEmail).withMessage('Can only send to @qumail.com addresses'),
     body('subject').optional().trim().isLength({ max: 200 }),
     body('body').trim().notEmpty().withMessage('Message body is required'),
-    body('encryptionLevel').optional().isIn(['none', 'otp', 'aes256', 'aes'])
+    body('encryptionLevel').optional().isIn(['none', 'otp', 'aes256', 'aes']),
+    body('cc').optional().isArray(),
+    body('bcc').optional().isArray(),
+    body('attachments').optional().isArray()
   ],
   async (req, res) => {
     const session = await mongoose.startSession();
@@ -34,31 +37,49 @@ router.post('/send',
         return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
       }
       
-      const { to, subject, body, encryptionLevel = 'none' } = req.body;
+      const { to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = [] } = req.body;
       const from = req.user.email;
       const normalizedEncryptionLevel = encryptionLevel === 'aes' ? 'aes256' : encryptionLevel;
       
       const lowerTo = to.toLowerCase().trim();
-      const recipient = await User.findOne({ email: lowerTo }).session(session);
-      if (!recipient) {
+      const lowerCc = Array.isArray(cc) ? cc.map(c => c.toLowerCase().trim()) : [];
+      const lowerBcc = Array.isArray(bcc) ? bcc.map(b => b.toLowerCase().trim()) : [];
+      
+      // Get all recipients (To + Cc + Bcc)
+      const allRecipientEmails = [...new Set([lowerTo, ...lowerCc, ...lowerBcc])];
+      const recipients = await User.find({ email: { $in: allRecipientEmails } }).session(session);
+      
+      if (recipients.length < allRecipientEmails.length) {
+        const foundEmails = recipients.map(r => r.email);
+        const missingEmails = allRecipientEmails.filter(e => !foundEmails.includes(e));
         await session.abortTransaction();
         session.endSession();
-        return res.status(404).json({ success: false, message: 'Recipient @qumail.com address not found' });
+        return res.status(404).json({ 
+          success: false, 
+          message: `Some recipients not found: ${missingEmails.join(', ')}` 
+        });
       }
       
       let encryptedBody = body;
       let encryptionType = 'NONE';
       let aesKey = null;
       let aesIV = null;
+      let otpKey = null;
       
       if (normalizedEncryptionLevel !== 'none') {
         if (normalizedEncryptionLevel === 'otp') {
           encryptionType = 'OTP';
           if (!body.startsWith('[otp|') || !body.includes(']:')) {
             const textLength = Buffer.from(body, 'utf8').length;
-            const otpKey = generateOTPKey(textLength);
-            encryptedBody = otpEncrypt(body, otpKey);
-            encryptedBody = `[otp|${otpKey}]:${encryptedBody}`;
+            const newOtpKey = generateOTPKey(textLength);
+            otpKey = newOtpKey;
+            encryptedBody = otpEncrypt(body, newOtpKey);
+            encryptedBody = `[otp|${newOtpKey}]:${encryptedBody}`;
+          } else {
+            // Extract existing key if it was manually provided
+            const match = body.match(/^\[otp\|([^\]]+)\]:(.*)$/);
+            if (match) otpKey = match[1];
+            encryptedBody = body;
           }
         } else if (normalizedEncryptionLevel === 'aes256') {
           encryptionType = 'AES';
@@ -75,32 +96,45 @@ router.post('/send',
       
       // Sent mail for sender
       const sentMail = new Mail({
-        mailId, from, to: lowerTo,
+        mailId, from, to: lowerTo, cc: lowerCc, bcc: lowerBcc,
         subject: subject || '(No Subject)',
-        body: body, encryption: 'NONE',
+        body: body, encryption: 'NONE', // Original text for sender
+        encryptionLevel: normalizedEncryptionLevel || 'none',
+        aesKey, aesIV, otpKey, // Store keys for sender's reference
         folder: 'SENT', owner: from, read: true,
+        attachments,
         createdAt: timestamp, updatedAt: timestamp
       });
       await sentMail.save({ session });
       
-      // Inbox mail for recipient
-      const inboxMail = new Mail({
-        mailId, from, to: lowerTo,
-        subject: encryptionType !== 'NONE' ? `🔒 ${subject || 'Encrypted Message'}` : (subject || '(No Subject)'),
-        body: encryptedBody, encryption: encryptionType,
-        aesKey, aesIV, folder: 'INBOX', owner: lowerTo, read: false,
-        createdAt: timestamp, updatedAt: timestamp
-      });
-      await inboxMail.save({ session });
-      
-      // Notify recipient
-      await Notification.create([{
-        userId: recipient._id,
-        title: 'New Message Received',
-        message: `From: ${from}`,
-        type: 'info',
-        icon: 'Mail'
-      }], { session });
+      // Inbox mail for all recipients
+      for (const recipientUser of recipients) {
+        const isBcc = lowerBcc.includes(recipientUser.email) && !lowerTo.includes(recipientUser.email) && !lowerCc.includes(recipientUser.email);
+        
+        const inboxMail = new Mail({
+          mailId, from, to: lowerTo, 
+          cc: lowerCc, 
+          bcc: lowerBcc.includes(recipientUser.email) ? [recipientUser.email] : [],
+          subject: encryptionType !== 'NONE' ? ` ${subject || 'Encrypted Message'}` : (subject || '(No Subject)'),
+          body: encryptedBody, 
+          encryption: encryptionType,
+          encryptionLevel: normalizedEncryptionLevel || 'none',
+          aesKey, aesIV, otpKey,
+          folder: 'INBOX', owner: recipientUser.email, read: false,
+          attachments,
+          createdAt: timestamp, updatedAt: timestamp
+        });
+        await inboxMail.save({ session });
+        
+        // Notify recipient
+        await Notification.create([{
+          userId: recipientUser._id,
+          title: 'New Message Received',
+          message: `From: ${from}`,
+          type: 'info',
+          icon: 'Mail'
+        }], { session });
+      }
       
       await session.commitTransaction();
       session.endSession();
@@ -145,8 +179,10 @@ const formatEmail = (mail) => ({
   encrypted: mail.encryption !== 'NONE',
   encryptionLevel: mail.encryption === 'AES' ? 'aes256' : mail.encryption === 'OTP' ? 'otp' : 'none',
   requiresDecryption: mail.encryption !== 'NONE',
-  attachments: [],
-  size: mail.body ? mail.body.length : 0
+  cc: mail.cc || [],
+  bcc: mail.bcc || [],
+  attachments: mail.attachments || [],
+  size: (mail.body ? mail.body.length : 0) + (mail.attachments ? mail.attachments.reduce((sum, a) => sum + (a.size || 0), 0) : 0)
 });
 
 // ------------------ GET FOLDERS ------------------
@@ -241,7 +277,7 @@ router.get('/:mailId', verifyToken, async (req, res) => {
     const mailId = req.params.mailId;
     const userEmail = req.user.email;
     
-    const mail = await Mail.findOne({ mailId, owner: userEmail }).select('+aesKey +aesIV');
+    const mail = await Mail.findOne({ mailId, owner: userEmail }).select('+aesKey +aesIV +otpKey');
     if (!mail) return res.status(404).json({ success: false, message: 'Email not found' });
     
     if (mail.folder === 'INBOX' && !mail.read) {
@@ -249,14 +285,17 @@ router.get('/:mailId', verifyToken, async (req, res) => {
       await mail.save();
     }
     
-    const response = { ...formatEmail(mail), aesKey: mail.aesKey, aesIV: mail.aesIV, snoozed: mail.snoozed, labels: mail.labels || [] };
+    const response = { ...formatEmail(mail), aesKey: mail.aesKey, aesIV: mail.aesIV, otpKey: mail.otpKey, snoozed: mail.snoozed, labels: mail.labels || [] };
     
-    if (mail.encryption === 'AES' && mail.aesKey && mail.aesIV) {
+    if (mail.encryption === 'AES' && mail.aesKey) {
       try {
-        response.body = aesDecrypt(JSON.parse(mail.body), mail.aesKey);
+        const encryptedData = JSON.parse(mail.body);
+        response.body = aesDecrypt(encryptedData, mail.aesKey);
         response.decrypted = true;
         response.requiresDecryption = false;
-      } catch (e) {}
+      } catch (e) {
+        console.error(`[DECRYPT] Automatic AES decryption failed for mail ${mailId}:`, e.message);
+      }
     }
     
     res.json({ success: true, email: response });
@@ -289,7 +328,13 @@ router.put('/:mailId/status', verifyToken, async (req, res) => {
       case 'toggle-read': update.read = !mail.read; break;
       case 'archive': update.folder = 'ARCHIVE'; update.trash = false; break;
       case 'unarchive': update.folder = mail.to === userEmail ? 'INBOX' : 'SENT'; update.trash = false; break;
-      case 'trash': update.trash = true; break;
+      case 'trash': 
+        if (mail.trash) {
+          await Mail.deleteOne({ mailId, owner: userEmail });
+          return res.json({ success: true, message: 'Email permanently deleted' });
+        }
+        update.trash = true; 
+        break;
       case 'restore': update.trash = false; break;
       case 'delete': 
         await Mail.deleteOne({ mailId, owner: userEmail });
@@ -394,54 +439,157 @@ router.post('/decrypt', verifyToken, async (req, res) => {
   try {
     const { emailId, encryptionKey } = req.body;
     const userEmail = req.user.email;
-    const mail = await Mail.findOne({ mailId: emailId, owner: userEmail }).select('+aesKey +aesIV');
+    
+    // Explicitly select keys as they are excluded by default
+    const mail = await Mail.findOne({ mailId: emailId, owner: userEmail }).select('+aesKey +aesIV +otpKey');
     if (!mail) return res.status(404).json({ success: false, message: 'Email not found' });
     
-    let decryptedBody;
+    let decryptedBody = mail.body;
+    let usedKey = encryptionKey;
+
     if (mail.encryption === 'AES') {
-      decryptedBody = aesDecrypt(JSON.parse(mail.body), mail.aesKey);
+      try {
+        const encryptedData = JSON.parse(mail.body);
+        decryptedBody = aesDecrypt(encryptedData, mail.aesKey);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'Invalid AES format: ' + e.message });
+      }
     } else if (mail.encryption === 'OTP') {
-      decryptedBody = otpDecrypt(mail.body, encryptionKey);
+      let ciphertext = mail.body;
+      let extractKey = encryptionKey;
+
+      // Handle auto-generated OTP key format: [otp|KEY]:CIPHERTEXT
+      if (mail.body.startsWith('[otp|') && mail.body.includes(']:')) {
+        const match = mail.body.match(/^\[otp\|([^\]]+)\]:(.*)$/);
+        if (match) {
+          extractKey = encryptionKey || match[1] || mail.otpKey; // Use provided key, embedded key, or stored key
+          ciphertext = match[2];
+        }
+      } else if (!extractKey && mail.otpKey) {
+        // Fallback for non-embedded keys that were stored in the database
+        extractKey = mail.otpKey;
+      }
+
+      if (!extractKey) {
+        return res.status(400).json({ success: false, message: 'OTP key is required for decryption' });
+      }
+
+      try {
+        decryptedBody = otpDecrypt(ciphertext, extractKey);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'OTP decryption failed: ' + e.message });
+      }
     } else {
       return res.json({ success: true, decrypted: mail.body, alreadyDecrypted: true });
     }
     
-    if (!mail.read) { mail.read = true; await mail.save(); }
-    res.json({ success: true, decrypted: decryptedBody, emailId: mail.mailId });
+    // Mark as read after success
+    if (!mail.read) { 
+      mail.read = true; 
+      await mail.save(); 
+    }
+    
+    res.json({ 
+      success: true, 
+      decrypted: decryptedBody, 
+      emailId: mail.mailId,
+      encryptionUsed: mail.encryption,
+      isJson: typeof decryptedBody === 'object' || (typeof decryptedBody === 'string' && decryptedBody.startsWith('{'))
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Decryption failed: ' + error.message });
+    console.error('Decryption route error:', error);
+    res.status(500).json({ success: false, message: 'Decryption encountered an error: ' + error.message });
   }
 });
 
 
 // ------------------ DRAFTS ------------------
-router.post('/drafts', verifyToken, async (req, res) => {
-  try {
-    const drafts = await Mail.find({ owner: req.user.email, folder: 'DRAFTS', trash: false }).sort({ updatedAt: -1 });
-    res.json({ success: true, drafts: drafts.map(d => ({ id: d._id, mailId: d.mailId, to: d.to, subject: d.subject, body: d.body, date: d.updatedAt })) });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.post('/drafts/create', verifyToken, async (req, res) => {
-  try {
-    const { to, subject, body } = req.body;
-    const draft = new Mail({ mailId: uuidv4(), from: req.user.email, to, subject, body, folder: 'DRAFTS', owner: req.user.email, read: true });
-    await draft.save();
-    res.json({ success: true, draft });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-router.delete('/drafts/:id', verifyToken, async (req, res) => {
+// List drafts (accommodating both GET and POST for listing)
+router.all('/drafts', verifyToken, async (req, res) => {
+  const isListing = req.method === 'GET' || (req.method === 'POST' && Object.keys(req.body).length === 0);
+  
+  if (isListing) {
     try {
-      await Mail.findOneAndDelete({ _id: req.params.id, owner: req.user.email });
-      res.json({ success: true, message: 'Draft deleted' });
+      const drafts = await Mail.find({ 
+        owner: req.user.email, 
+        folder: 'DRAFTS', 
+        trash: false 
+      }).sort({ updatedAt: -1 });
+      
+      return res.json({ 
+        success: true, 
+        drafts: drafts.map(formatEmail) 
+      });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      return res.status(500).json({ success: false, message: error.message });
     }
+  } 
+  
+  if (req.method === 'POST') {
+    // Create draft
+    try {
+      const { to, subject, body, cc = [], bcc = [], encryptionLevel = 'none', attachments = [] } = req.body;
+      const draft = new Mail({ 
+        mailId: uuidv4(), 
+        from: req.user.email, 
+        to: to || '', 
+        cc, bcc,
+        subject: subject || '', 
+        body: body || '', 
+        encryptionLevel,
+        attachments,
+        folder: 'DRAFTS', 
+        owner: req.user.email, 
+        read: true 
+      });
+      await draft.save();
+      return res.json({ success: true, draft: formatEmail(draft), draftId: draft._id });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+  
+  res.status(405).json({ message: 'Method not allowed' });
+});
+
+// Update draft
+router.put('/drafts/:id', verifyToken, async (req, res) => {
+  try {
+    const { to, subject, body, cc, bcc, encryptionLevel, attachments } = req.body;
+    const update = {};
+    if (to !== undefined) update.to = to;
+    if (subject !== undefined) update.subject = subject;
+    if (body !== undefined) update.body = body;
+    if (cc !== undefined) update.cc = cc;
+    if (bcc !== undefined) update.bcc = bcc;
+    if (encryptionLevel !== undefined) update.encryptionLevel = encryptionLevel;
+    if (attachments !== undefined) update.attachments = attachments;
+    
+    update.updatedAt = new Date();
+
+    const draft = await Mail.findOneAndUpdate(
+      { _id: req.params.id, owner: req.user.email, folder: 'DRAFTS' },
+      { $set: update },
+      { new: true }
+    );
+
+    if (!draft) return res.status(404).json({ success: false, message: 'Draft not found' });
+    
+    res.json({ success: true, draft: formatEmail(draft), draftId: draft._id });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete draft
+router.delete('/drafts/:id', verifyToken, async (req, res) => {
+  try {
+    const result = await Mail.findOneAndDelete({ _id: req.params.id, owner: req.user.email });
+    if (!result) return res.status(404).json({ success: false, message: 'Draft not found' });
+    res.json({ success: true, message: 'Draft deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 module.exports = router;

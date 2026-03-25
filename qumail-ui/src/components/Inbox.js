@@ -27,7 +27,7 @@ const EmailListItem = styled(ListItem, {
   cursor: 'pointer',
 }));
 
-const EmailRow = memo(({ email, onEmailClick, onAction }) => (
+const EmailRow = memo(({ email, onEmailClick, onAction, isTrash }) => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -91,8 +91,8 @@ const EmailRow = memo(({ email, onEmailClick, onAction }) => (
          <Tooltip title="Archive">
            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'archive'); }}><Archive fontSize="small" /></IconButton>
          </Tooltip>
-         <Tooltip title="Delete">
-           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'trash'); }}><Delete fontSize="small" /></IconButton>
+         <Tooltip title={isTrash ? "Delete Forever" : "Delete"}>
+           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, isTrash ? 'delete' : 'trash'); }}><Delete fontSize="small" /></IconButton>
          </Tooltip>
       </Box>
     </EmailListItem>
@@ -107,6 +107,7 @@ const Inbox = memo(({
   onAction,
   onRefresh
 }) => {
+  const isTrashFolder = folderName === 'trash';
 
   const renderedEmails = useMemo(() => {
     return emails.map((email) => (
@@ -115,9 +116,10 @@ const Inbox = memo(({
         email={email} 
         onEmailClick={onEmailClick} 
         onAction={onAction} 
+        isTrash={isTrashFolder}
       />
     ));
-  }, [emails, onEmailClick, onAction]);
+  }, [emails, onEmailClick, onAction, isTrashFolder]);
 
   if (loading && emails.length === 0) {
     return (

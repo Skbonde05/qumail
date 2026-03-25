@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
@@ -100,15 +101,17 @@ router.post('/register', authLimiter,
       const salt = await bcrypt.genSalt(12);
       const hashedPassword = await bcrypt.hash(password, salt);
       
-      // Generate encryption keys
+      // Generate encryption keys and recovery code
       const otpKey = generateOTPKey(256);
       const aesKey = generateAESKey();
+      const recoveryCode = `QU-${crypto.randomBytes(4).toString('hex').toUpperCase()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       
       // Create user
       const user = await User.create({
         name: name.trim(),
         email: lowerEmail,
         password: hashedPassword,
+        recoveryCode: recoveryCode,
         encryptionKeys: {
           otp: otpKey,
           aes256: aesKey
@@ -126,13 +129,16 @@ router.post('/register', authLimiter,
       res.status(201).json({
         success: true,
         message: 'Welcome to QuMail Quantum-Secure Email Platform!',
+        recoveryCode: recoveryCode, // Only shown once during registration
         user: {
           id: user._id,
           name: user.name,
           email: user.email,
           avatar: user.avatar,
           createdAt: user.createdAt,
-          settings: user.settings
+          settings: user.settings,
+          storageUsed: user.storageUsed,
+          storageLimit: user.storageLimit
         },
         token: token,
         accessToken: token,
@@ -160,6 +166,141 @@ router.post('/register', authLimiter,
     }
   }
 );
+
+// ------------------ FORGOT PASSWORD ------------------
+router.post('/forgot-password', authLimiter, [
+  body('email').isEmail().withMessage('Valid email required').custom(validateQumailEmail).withMessage('Only @qumail.com addresses allowed')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      // Don't reveal user existence in security sensitive paths
+      return res.json({ success: true, message: 'If that email is in our system, a reset link will be sent.' });
+    }
+
+    // Generate token
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    await user.save();
+
+    // In production, send email. Here we simulate it by logging to console/returning it for demo.
+    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
+    console.log(`[PASS_RESET] Reset link for ${email}: ${resetUrl}`);
+
+    res.json({ 
+      success: true, 
+      message: 'Reset link generated (check backend console in demo)',
+      resetUrl: process.env.NODE_ENV === 'development' ? resetUrl : undefined // For ease of testing in dev
+    });
+
+    await addLog(user._id, 'PASSWORD_RESET_REQUESTED', `Password reset requested for ${email}`, 'warning', req);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ------------------ VERIFY RECOVERY CODE ------------------
+router.post('/verify-recovery-code', authLimiter, [
+  body('email').isEmail().withMessage('Valid email required'),
+  body('recoveryCode').notEmpty().withMessage('Recovery code required')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+
+  const { email, recoveryCode } = req.body;
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || user.recoveryCode !== recoveryCode.trim().toUpperCase()) {
+      return res.status(401).json({ success: false, message: 'Invalid email or recovery code' });
+    }
+
+    // Generate temporary reset token
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Recovery code verified successfully',
+      resetToken: resetToken
+    });
+
+    await addLog(user._id, 'RECOVERY_CODE_USED', `Recovery code used for password reset by ${email}`, 'warning', req);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ------------------ RESET PASSWORD ------------------
+router.get('/verify-reset-token/:token', authLimiter, async (req, res) => {
+  try {
+    const resetPasswordToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
+    
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, valid: false, message: 'Invalid or expired reset token' });
+    }
+
+    res.json({ success: true, valid: true });
+  } catch (error) {
+    res.status(500).json({ success: false, valid: false, message: 'Internal server error' });
+  }
+});
+
+router.post('/reset-password', authLimiter, [
+  body('token').notEmpty().withMessage('Token required'),
+  body('password').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+
+  const { token, password } = req.body;
+
+  try {
+    const resetPasswordToken = crypto.createHash('sha256').update(token).digest('hex');
+    
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(12);
+    user.password = await bcrypt.hash(password, salt);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    res.json({ success: true, message: 'Password reset successful. Please login with your new password.' });
+
+    await addLog(user._id, 'PASSWORD_RESET_COMPLETED', `Password reset completed for ${user.email}`, 'info', req);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
 
 // ------------------ LOGIN ------------------
 router.post('/login', authLimiter,
@@ -371,7 +512,8 @@ router.put('/profile',
     body('settings.autoSaveDrafts').optional().isBoolean(),
     body('settings.signature').optional().trim().isLength({ max: 1000 }),
     body('settings.twoFactorEnabled').optional().isBoolean(),
-    body('settings.timezone').optional()
+    body('settings.timezone').optional(),
+    body('settings.language').optional()
   ],
   async (req, res) => {
     try {
@@ -383,7 +525,9 @@ router.put('/profile',
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
       
       if (name) user.name = name.trim();
-      if (settings) user.settings = { ...user.settings, ...settings };
+      if (settings) {
+        user.settings = { ...user.settings, ...settings };
+      }
       
       await user.save();
       
@@ -400,7 +544,7 @@ router.post('/change-password',
   [
     verifyToken,
     body('currentPassword').notEmpty(),
-    body('newPassword').isLength({ min: 12 }),
+    body('newPassword').isLength({ min: 8 }),
     body('confirmPassword').custom((value, { req }) => value === req.body.newPassword)
   ],
   async (req, res) => {

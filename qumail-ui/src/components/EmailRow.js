@@ -6,7 +6,8 @@ import {
   LabelImportantOutlined as ImportantOutlinedIcon,
   Delete as DeleteIcon,
   Archive as ArchiveIcon,
-  MoreVert as MoreVertIcon
+  MoreVert as MoreVertIcon,
+  AttachFile as AttachFileIcon
 } from '@mui/icons-material';
 import {
   IconButton,
@@ -27,7 +28,7 @@ const getEncryptionLabel = (encryptionLevel) => {
   switch (encryptionLevel) {
     case 'aes256':
       return {
-        text: 'AES',
+        text: 'AES Encrypted',
         color: 'primary',
         badgeColor: 'primary',
         icon: Lock,
@@ -35,7 +36,7 @@ const getEncryptionLabel = (encryptionLevel) => {
       };
     case 'otp':
       return {
-        text: 'OTP',
+        text: 'OTP Encrypted',
         color: 'error',
         badgeColor: 'error',
         icon: ShieldCheck,
@@ -44,7 +45,7 @@ const getEncryptionLabel = (encryptionLevel) => {
     case 'none':
     default:
       return {
-        text: 'STANDARD',
+        text: 'Standard',
         color: 'default',
         badgeColor: 'default',
         icon: Mail,
@@ -170,21 +171,24 @@ const EmailRow = ({
             </Typography>
             
             {/* Encryption Badge */}
-            {email?.encryptionLevel && email.encryptionLevel !== 'none' && (
-              <Chip
-                label={encryptionLabel.text}
-                size="small"
-                color={encryptionLabel.badgeColor}
-                variant="outlined"
-                sx={{
-                  fontWeight: 'bold',
-                  fontSize: '0.65rem',
-                  height: '20px',
-                  '& .MuiChip-label': {
-                    px: 0.75
-                  }
-                }}
-              />
+            <Chip
+              label={encryptionLabel.text}
+              size="small"
+              color={encryptionLabel.badgeColor}
+              variant="outlined"
+              sx={{
+                fontWeight: 'bold',
+                fontSize: '0.65rem',
+                height: '20px',
+                '& .MuiChip-label': {
+                  px: 0.75
+                }
+              }}
+            />
+
+            {/* Attachment Icon */}
+            {email?.attachments && email.attachments.length > 0 && (
+              <AttachFileIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(45deg)' }} />
             )}
             
             {/* Unread dot */}

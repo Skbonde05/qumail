@@ -56,7 +56,7 @@ const fetchWithAuth = async (url, options = {}) => {
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
-          const refreshRes = await fetch(`${API_BASE}/refresh`, {
+          const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken })
@@ -130,7 +130,7 @@ class EmailService {
     try {
       console.log("[INFO] Registering user:", email);
       
-      const response = await fetch(`${API_BASE}/register`, {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, confirmPassword })
@@ -254,7 +254,7 @@ class EmailService {
     try {
       console.log("[INFO] Getting user profile...");
       
-      const response = await fetchWithAuth(`${API_BASE}/profile`);
+      const response = await fetchWithAuth(`${API_BASE}/auth/profile`);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -581,15 +581,18 @@ class EmailService {
   }
 
   // [DRAFTS] Save draft (handles both create and update)
-  static async saveDraft(draftId, to, subject, body, encryptionLevel = 'none') {
+  static async saveDraft(draftId, to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = []) {
     try {
       console.log(`[SAVE] Saving draft... ${draftId ? 'Update: ' + draftId : 'New'}`);
       
       const payload = {
         to: to || '',
+        cc: Array.isArray(cc) ? cc : (cc ? cc.split(',').map(e => e.trim()).filter(e => e) : []),
+        bcc: Array.isArray(bcc) ? bcc : (bcc ? bcc.split(',').map(e => e.trim()).filter(e => e) : []),
         subject: subject || '',
         body: body || '',
-        encryptionLevel: encryptionLevel === 'aes' ? 'aes256' : encryptionLevel
+        encryptionLevel: encryptionLevel === 'aes' ? 'aes256' : encryptionLevel,
+        attachments: Array.isArray(attachments) ? attachments : []
       };
       
       const url = draftId ? `${API_BASE}/mail/drafts/${draftId}` : `${API_BASE}/mail/drafts`;
@@ -667,12 +670,11 @@ class EmailService {
     }
   }
 
-  // [SEND] Send email - FIXED VERSION (handles both 'aes' and 'aes256')
-  static async sendEmail(to, subject, body, encryptionLevel = 'none') {
+  // [SEND] Send email - FULL VERSION
+  static async sendEmail(to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = []) {
     try {
       console.log(`[SEND] Sending email to: ${to} with encryption: ${encryptionLevel}`);
-      console.log(`   Subject: ${subject}`);
-      console.log(`   Body length: ${body ? body.length : 0} characters`);
+      if (cc && cc.length) console.log(`   Cc: ${cc.join(', ')}`);
       
       // [FIX] Convert 'aes' to 'aes256' for backend compatibility
       const normalizedEncryptionLevel = encryptionLevel === 'aes' ? 'aes256' : encryptionLevel;
@@ -694,14 +696,17 @@ class EmailService {
       
       const payload = {
         to: normalizedTo,
+        cc: Array.isArray(cc) ? cc : [],
+        bcc: Array.isArray(bcc) ? bcc : [],
         subject: subject || '(No Subject)',
         body: body,
-        encryptionLevel: normalizedEncryptionLevel  // ✅ Use normalized value
+        encryptionLevel: normalizedEncryptionLevel,
+        attachments: Array.isArray(attachments) ? attachments : []
       };
       
       console.log('[INFO] Sending payload:', payload);
       
-      const response = await fetchWithAuth(`${API_BASE}/send`, {
+      const response = await fetchWithAuth(`${API_BASE}/mail/send`, {
         method: "POST",
         body: JSON.stringify(payload)
       });
@@ -770,7 +775,7 @@ class EmailService {
       if (name) body.name = name;
       if (settings) body.settings = settings;
       
-      const response = await fetchWithAuth(`${API_BASE}/profile`, {
+      const response = await fetchWithAuth(`${API_BASE}/auth/profile`, {
         method: "PUT",
         body: JSON.stringify(body)
       });
@@ -806,7 +811,7 @@ class EmailService {
         payload.encryptionKey = encryptionKey;
       }
       
-      const response = await fetchWithAuth(`${API_BASE}/decrypt`, {
+      const response = await fetchWithAuth(`${API_BASE}/mail/decrypt`, {
         method: "POST",
         body: JSON.stringify(payload)
       });

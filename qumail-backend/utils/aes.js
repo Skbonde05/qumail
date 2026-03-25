@@ -3,11 +3,11 @@ import crypto from "crypto";
 const ALGO = "aes-256-cbc";
 
 export function generateAESKey() {
-  return crypto.randomBytes(32).toString("hex"); // ✅ STRING
+  return crypto.randomBytes(32).toString("hex"); //  STRING
 }
 
 export function generateAESIV() {
-  return crypto.randomBytes(16).toString("hex"); // ✅ STRING
+  return crypto.randomBytes(16).toString("hex"); //  STRING
 }
 
 export function encryptAES(plainText, keyHex, ivHex) {

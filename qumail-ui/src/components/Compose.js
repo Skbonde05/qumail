@@ -61,6 +61,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [draftId, setDraftId] = useState(null);
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [processedAttachments, setProcessedAttachments] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [errors, setErrors] = useState({});
 
@@ -130,12 +131,19 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     setSending(true);
     
     try {
+      // Split CC/BCC into arrays
+      const ccArray = cc ? cc.split(',').map(e => e.trim()).filter(e => e) : [];
+      const bccArray = bcc ? bcc.split(',').map(e => e.trim()).filter(e => e) : [];
+
       // Use standard EmailService
       const result = await EmailService.sendEmail(
         to.trim(),
         subject.trim() || "(No Subject)",
         body.trim(),
-        level
+        level,
+        ccArray,
+        bccArray,
+        processedAttachments
       );
 
       if (result.success) {
@@ -198,7 +206,10 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
         to.trim(),
         subject.trim() || "(No Subject)",
         body.trim(),
-        level
+        level,
+        cc,
+        bcc,
+        processedAttachments
       );
 
       if (result.success) {
@@ -228,6 +239,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     setShowCC(false);
     setShowBCC(false);
     setDraftId(null);
+    setProcessedAttachments([]);
     setErrors({});
   };
 
@@ -244,10 +256,28 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     }
   };
 
-  const handleAttachment = (e) => {
+  const handleAttachment = async (e) => {
     const files = Array.from(e.target.files);
     setAttachments([...attachments, ...files]);
     
+    // Process to base64 for API
+    const newProcessed = await Promise.all(files.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          resolve({
+            filename: file.name,
+            contentType: file.type,
+            size: file.size,
+            data: ev.target.result.split(',')[1]
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    }));
+    
+    setProcessedAttachments(prev => [...prev, ...newProcessed]);
+
     setSnackbar({
       open: true,
       message: `${files.length} file(s) attached`,
@@ -257,6 +287,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
   const removeAttachment = (index) => {
     setAttachments(attachments.filter((_, i) => i !== index));
+    setProcessedAttachments(processedAttachments.filter((_, i) => i !== index));
   };
 
   const securityLevels = {

@@ -50,13 +50,19 @@ const MailSchema = new mongoose.Schema({
     default: "none"
   },
 
-  // 🔐 AES (backend-only fields)
+  //  AES (backend-only fields)
   aesKey: {
     type: String,
     default: null
   },
 
   aesIV: {
+    type: String,
+    default: null
+  },
+
+  //  OTP (Quantum Key)
+  otpKey: {
     type: String,
     default: null
   },
@@ -99,6 +105,32 @@ const MailSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+
+  cc: [{
+    type: String,
+    lowercase: true,
+    trim: true,
+    default: []
+  }],
+
+  bcc: [{
+    type: String,
+    lowercase: true,
+    trim: true,
+    default: []
+  }],
+
+  attachments: [{
+    filename: String,
+    contentType: String,
+    size: Number,
+    data: String, // Base64 encoded for simplicity in this version, OR a GridFS/S3 link
+    url: String,
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
 
   labels: [{
     type: String,

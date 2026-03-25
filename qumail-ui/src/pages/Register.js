@@ -11,7 +11,13 @@ import {
   IconButton,
   Alert,
   CircularProgress,
-  Link
+  Link,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText,
+  Tooltip
 } from "@mui/material";
 import {
   Visibility,
@@ -19,7 +25,9 @@ import {
   Mail,
   Lock,
   Person,
-  Security
+  Security,
+  ContentCopy,
+  Warning
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 
@@ -43,21 +51,31 @@ const GradientButton = styled(Button)(({ theme }) => ({
   },
 }));
 
-export default function Register() {
+export default function Register({ onRegister, loading, onToggleLogin }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  const [loading, setLoading] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const handleRegister = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccess("");
+
+    if (!name || !email || !password || !confirmPassword) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    if (!email.toLowerCase().endsWith("@qumail.com")) {
+      setError("Only @qumail.com addresses are supported");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -69,37 +87,21 @@ export default function Register() {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const res = await fetch("http://localhost:5000/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          confirmPassword,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        setSuccess("Account created successfully. You can now log in.");
-        setName("");
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
+    const result = await onRegister(name, email, password, confirmPassword);
+    if (result && result.success) {
+      if (result.recoveryCode) {
+        setRecoveryCode(result.recoveryCode);
+        setShowRecoveryDialog(true);
       } else {
-        setError(data.message || "Registration failed");
+        onToggleLogin(); // Fallback if no code
       }
-    } catch (err) {
-      console.error(err);
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(recoveryCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -137,16 +139,10 @@ export default function Register() {
           </Box>
 
           {/* Register Form */}
-          <form onSubmit={handleRegister}>
+          <form onSubmit={handleSubmit}>
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
-              </Alert>
-            )}
-
-            {success && (
-              <Alert severity="success" sx={{ mb: 2 }}>
-                {success}
               </Alert>
             )}
 
@@ -157,6 +153,7 @@ export default function Register() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              disabled={loading}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -170,10 +167,12 @@ export default function Register() {
               fullWidth
               label="Email"
               type="email"
+              placeholder="user@qumail.com"
               margin="normal"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -191,6 +190,7 @@ export default function Register() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={loading}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -215,6 +215,7 @@ export default function Register() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
+              disabled={loading}
             />
 
             <GradientButton
@@ -237,7 +238,7 @@ export default function Register() {
               Already have an account?{" "}
               <Link
                 component="button"
-                onClick={() => (window.location.href = "/")}
+                onClick={onToggleLogin}
               >
                 Sign in
               </Link>
@@ -245,6 +246,76 @@ export default function Register() {
           </Box>
         </StyledPaper>
       </Container>
+
+      {/* Recovery Code Dialog */}
+      <Dialog 
+        open={showRecoveryDialog} 
+        disableEscapeKeyDown
+        PaperProps={{
+          sx: { borderRadius: "16px", p: 1 }
+        }}
+        onClose={(e, reason) => {
+          if (reason !== 'backdropClick') setShowRecoveryDialog(false);
+        }}
+      >
+        <DialogTitle sx={{ textAlign: 'center', pb: 0 }}>
+          <Warning color="warning" sx={{ fontSize: 40, mb: 1 }} />
+          <Typography variant="h5" fontWeight="700">
+            Save Your Recovery Code
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center' }}>
+          <DialogContentText sx={{ mb: 3 }}>
+            This is the <strong>only way</strong> to recover your account if you forget your password.
+            QuMail is quantum-secure; we cannot reset it for you without this code.
+          </DialogContentText>
+          
+          <Box 
+            sx={{ 
+              backgroundColor: "#f5f5f5", 
+              p: 2, 
+              borderRadius: "12px", 
+              border: "2px dashed #1a73e8",
+              fontFamily: "monospace",
+              fontSize: "1.2rem",
+              letterSpacing: "2px",
+              fontWeight: "bold",
+              color: "#1a73e8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              cursor: "pointer",
+              "&:hover": { backgroundColor: "#eef2ff" }
+            }}
+            onClick={handleCopy}
+          >
+            {recoveryCode}
+            <Tooltip title={copied ? "Copied!" : "Copy Code"}>
+              <IconButton size="small">
+                <ContentCopy fontSize="small" color={copied ? "success" : "inherit"} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 0, justifyContent: 'center' }}>
+          <Button 
+            variant="contained" 
+            fullWidth
+            onClick={() => {
+              setShowRecoveryDialog(false);
+              onToggleLogin();
+            }}
+            sx={{ 
+              borderRadius: "24px",
+              background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+              py: 1.5
+            }}
+          >
+            I've Saved My Code - Sign In
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

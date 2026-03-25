@@ -117,7 +117,8 @@ export default function AccountSettings() {
     autoSaveDrafts: true,
     signature: '',
     twoFactorEnabled: false,
-    timezone: 'UTC'
+    timezone: 'UTC',
+    language: 'en'
   });
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -136,10 +137,10 @@ export default function AccountSettings() {
   const fetchProfile = async () => {
     try {
       setIsLoadingProfile(true);
-      console.log('🔄 Starting to fetch profile...');
+      console.log(' Starting to fetch profile...');
       
       const profileData = await getProfile();
-      console.log('✅ Profile data loaded:', profileData);
+      console.log(' Profile data loaded:', profileData);
       
       setUser(profileData);
       
@@ -152,7 +153,8 @@ export default function AccountSettings() {
         autoSaveDrafts: profileData.settings?.autoSaveDrafts ?? true,
         signature: profileData.settings?.signature || '',
         twoFactorEnabled: profileData.settings?.twoFactorEnabled || false,
-        timezone: profileData.settings?.timezone || 'UTC'
+        timezone: profileData.settings?.timezone || 'UTC',
+        language: profileData.settings?.language || 'en'
       }));
       
       // Set avatar preview
@@ -160,7 +162,7 @@ export default function AccountSettings() {
         setAvatarPreview(profileData.avatar);
       }
     } catch (error) {
-      console.error('❌ Failed to fetch profile:', error);
+      console.error(' Failed to fetch profile:', error);
       setMessage({ 
         type: 'error', 
         text: error.response?.data?.message || 'Failed to load profile. Please login again.' 
@@ -181,7 +183,8 @@ export default function AccountSettings() {
           autoSaveDrafts: data.autoSaveDrafts,
           signature: data.signature,
           twoFactorEnabled: data.twoFactorEnabled,
-          timezone: data.timezone
+          timezone: data.timezone,
+          language: data.language
         }
       });
       
@@ -193,6 +196,7 @@ export default function AccountSettings() {
       updatedUser.settings.signature = data.signature;
       updatedUser.settings.twoFactorEnabled = data.twoFactorEnabled;
       updatedUser.settings.timezone = data.timezone;
+      updatedUser.settings.language = data.language;
       setUser(updatedUser);
       
       setPreferencesChanged(false);
@@ -206,7 +210,7 @@ export default function AccountSettings() {
         setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       }
     } catch (error) {
-      console.error('❌ Save preferences error:', error);
+      console.error(' Save preferences error:', error);
       setMessage({ 
         type: 'error', 
         text: error.response?.data?.message || 'Failed to save preferences' 
@@ -302,7 +306,7 @@ export default function AccountSettings() {
     setMessage({ type: '', text: '' });
     
     try {
-      console.log('💾 Saving profile updates...');
+      console.log(' Saving profile updates...');
       
       // Update profile
       await updateProfile({
@@ -312,13 +316,14 @@ export default function AccountSettings() {
           autoSaveDrafts: formData.autoSaveDrafts,
           signature: formData.signature,
           twoFactorEnabled: formData.twoFactorEnabled,
-          timezone: formData.timezone
+          timezone: formData.timezone,
+          language: formData.language
         }
       });
       
       // Change password if provided
       if (formData.newPassword) {
-        console.log('🔐 Changing password...');
+        console.log(' Changing password...');
         await changePassword({
           currentPassword: formData.currentPassword,
           newPassword: formData.newPassword,
@@ -345,7 +350,7 @@ export default function AccountSettings() {
       
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
     } catch (error) {
-      console.error('❌ Save error:', error);
+      console.error(' Save error:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to update profile. Please try again.';
       setMessage({ 
         type: 'error', 
@@ -377,7 +382,7 @@ export default function AccountSettings() {
       reader.onloadend = async () => {
         const base64Image = reader.result;
 
-        // ✅ SEND TO BACKEND
+        //  SEND TO BACKEND
         await uploadAvatar(base64Image);
 
         setAvatarPreview(base64Image);
@@ -406,7 +411,8 @@ export default function AccountSettings() {
         autoSaveDrafts: user.settings?.autoSaveDrafts ?? true,
         signature: user.settings?.signature || '',
         twoFactorEnabled: user.settings?.twoFactorEnabled || false,
-        timezone: user.settings?.timezone || 'UTC'
+        timezone: user.settings?.timezone || 'UTC',
+        language: user.settings?.language || 'en'
       });
     }
     setErrors({});
@@ -434,7 +440,8 @@ export default function AccountSettings() {
   const GB = 1024 * 1024 * 1024;
 
   if (bytes >= GB) {
-    return `${(bytes / GB).toFixed(2)} GB`; // ✅ always 2 decimals
+    const val = (bytes / GB);
+    return `${val % 1 === 0 ? val : val.toFixed(2)} GB`;
   }
 
   const MB = 1024 * 1024;
@@ -876,6 +883,30 @@ export default function AccountSettings() {
 
           <Box sx={{ mt: 3 }}>
             <Typography variant="subtitle2" gutterBottom color="text.secondary">
+              Language
+            </Typography>
+            <FormControl fullWidth disabled={loading}>
+              <InputLabel id="language-label">Select Language</InputLabel>
+              <Select
+                labelId="language-label"
+                value={formData.language}
+                label="Select Language"
+                onChange={(e) => handlePreferenceChange('language', e.target.value)}
+              >
+                <MenuItem value="en">English (US)</MenuItem>
+                <MenuItem value="en-gb">English (UK)</MenuItem>
+                <MenuItem value="es">Español</MenuItem>
+                <MenuItem value="fr">Français</MenuItem>
+                <MenuItem value="de">Deutsch</MenuItem>
+                <MenuItem value="zh">中文 (Chinese)</MenuItem>
+                <MenuItem value="ja">日本語 (Japanese)</MenuItem>
+                <MenuItem value="ru">Русский (Russian)</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" gutterBottom color="text.secondary">
               Timezone
             </Typography>
             <FormControl fullWidth disabled={loading}>
@@ -950,7 +981,7 @@ export default function AccountSettings() {
                     color={storagePercentage > 90 ? 'error' : storagePercentage > 70 ? 'warning' : 'primary'}
                   />
                   <Typography variant="body2" fontWeight="500">
-                    {formatStorage(user?.storageUsed || 0)} / {formatStorage(user?.storageLimit || 0)}
+                    {formatStorage(user?.storageUsed || 0)} / {formatStorage(user?.storageLimit || (15 * 1024 * 1024 * 1024))}
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>

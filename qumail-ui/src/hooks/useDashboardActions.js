@@ -101,6 +101,15 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     }
   }, [fetchNotifications]);
 
+  const handleDecryptEmail = useCallback(async (emailId, encryptionKey) => {
+    try {
+      return await QuMailService.decryptEmail(emailId, encryptionKey);
+    } catch (error) {
+      enqueueSnackbar('Decryption failed', { variant: 'error' });
+      return { success: false, message: error.message };
+    }
+  }, [enqueueSnackbar]);
+
   return {
     emails,
     folderCounts,
@@ -110,6 +119,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     notifications,
     addNotification,
     handleAction,
+    handleDecryptEmail,
     markNotificationAsRead,
     deleteNotification,
     setNotifications,

@@ -40,11 +40,11 @@ api.interceptors.response.use(
   }
 );
 
-// [PROFILE] GET PROFILE - This endpoint exists in server.js
+// [PROFILE] GET PROFILE - Use /api/auth/profile
 export const getProfile = async () => {
   try {
-    console.log("[PAGE] Fetching profile from /api/profile...");
-    const res = await api.get("/api/profile");
+    console.log("[PAGE] Fetching profile from /api/auth/profile...");
+    const res = await api.get("/api/auth/profile");
     console.log("[OK] Profile response:", res.data);
     return res.data.user;
   } catch (error) {
@@ -53,11 +53,11 @@ export const getProfile = async () => {
   }
 };
 
-// [PROFILE] UPDATE PROFILE - Use PUT /api/profile instead of POST /api/profile/update
+// [PROFILE] UPDATE PROFILE - Use PUT /api/auth/profile
 export const updateProfile = async (data) => {
   try {
-    console.log("[INFO] Updating profile via PUT /api/profile...", data);
-    const res = await api.put("/api/profile", data);
+    console.log("[INFO] Updating profile via PUT /api/auth/profile...", data);
+    const res = await api.put("/api/auth/profile", data);
     console.log("[OK] Profile updated:", res.data);
     return res.data;
   } catch (error) {
@@ -66,11 +66,11 @@ export const updateProfile = async (data) => {
   }
 };
 
-// [AUTH] CHANGE PASSWORD - Use /api/change-password instead of /api/profile/change-password
+// [AUTH] CHANGE PASSWORD - Use /api/auth/change-password
 export const changePassword = async (payload) => {
   try {
-    console.log("[AUTH] Changing password via /api/change-password...");
-    const res = await api.post("/api/change-password", payload);
+    console.log("[AUTH] Changing password via /api/auth/change-password...");
+    const res = await api.post("/api/auth/change-password", payload);
     console.log("[OK] Password changed:", res.data);
     return res.data;
   } catch (error) {
@@ -79,18 +79,14 @@ export const changePassword = async (payload) => {
   }
 };
 
-// [UPLOAD] UPLOAD AVATAR (Base64) - Use /api/upload-avatar instead of /api/profile/upload-avatar
+// [UPLOAD] UPLOAD AVATAR - Use /api/auth/upload-avatar
 export const uploadAvatar = async (base64Avatar) => {
   try {
-    console.log("[INFO] Uploading avatar to /api/upload-avatar...");
-    console.log("Base64 length:", base64Avatar?.length);
-    
-    const res = await api.post("/api/upload-avatar", {
+    console.log("[INFO] Uploading avatar to /api/auth/upload-avatar...");
+    const res = await api.post("/api/auth/upload-avatar", {
       avatar: base64Avatar
     });
-
     console.log("[OK] Avatar upload response:", res.data);
-    
     return res.data;
   } catch (error) {
     console.error("[ERROR] Avatar upload error:", error);

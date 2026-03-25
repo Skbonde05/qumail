@@ -24,9 +24,17 @@ import {
   VisibilityOff,
   Mail,
   Lock,
-  Security
+  Security,
+  VpnKey,
+  History
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
+import { useNavigate } from "react-router-dom";
+
+import { 
+  Tabs, 
+  Tab 
+} from "@mui/material";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -54,9 +62,13 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   
+  const navigate = useNavigate();
+
   // Forgot password state
   const [openForgot, setOpenForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [resetMode, setResetMode] = useState(0); // 0 for email, 1 for recovery code
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState("");
   const [forgotError, setForgotError] = useState("");
@@ -91,27 +103,44 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
       return;
     }
 
+    if (resetMode === 1 && !recoveryCode) {
+      setForgotError("Please enter your recovery code");
+      return;
+    }
+
     setForgotLoading(true);
 
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/forgot-password`, {
+      const endpoint = resetMode === 0 ? "forgot-password" : "verify-recovery-code";
+      const body = resetMode === 0 
+        ? { email: forgotEmail } 
+        : { email: forgotEmail, recoveryCode: recoveryCode };
+
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setForgotSuccess("Password reset instructions have been sent to your email.");
-        // Don't close immediately - let user read the message
-        setTimeout(() => {
-          setOpenForgot(false);
-          setForgotEmail("");
-          setForgotSuccess("");
-        }, 3000);
+        if (resetMode === 1) {
+          setForgotSuccess("Code verified! Redirecting to password reset...");
+          setTimeout(() => {
+            setOpenForgot(false);
+            navigate(`/reset-password/${data.resetToken}`);
+          }, 1500);
+        } else {
+          setForgotSuccess("If that email is in our system, a reset link will be sent.");
+          setTimeout(() => {
+            setOpenForgot(false);
+            setForgotEmail("");
+            setForgotSuccess("");
+          }, 3000);
+        }
       } else {
-        setForgotError(data.message || "Failed to send reset instructions.");
+        setForgotError(data.message || "Request failed. Please check your details.");
       }
     } catch (err) {
       setForgotError("Network error. Please try again.");
@@ -276,8 +305,20 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
           </Typography>
         </DialogTitle>
         <DialogContent>
+          <Tabs 
+            value={resetMode} 
+            onChange={(e, val) => setResetMode(val)} 
+            variant="fullWidth" 
+            sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab icon={<Mail />} label="Email Link" />
+            <Tab icon={<VpnKey />} label="Recovery Code" />
+          </Tabs>
+
           <DialogContentText sx={{ mb: 2 }}>
-            Enter your @qumail.com address to receive password reset instructions.
+            {resetMode === 0 
+              ? "Enter your @qumail.com address to receive a reset link."
+              : "Use your secure recovery code to reset your password immediately."}
           </DialogContentText>
           
           {forgotError && (
@@ -299,6 +340,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
             value={forgotEmail}
             onChange={(e) => setForgotEmail(e.target.value)}
             placeholder="yourname@qumail.com"
+            sx={{ mb: resetMode === 1 ? 2 : 0 }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -307,6 +349,24 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               ),
             }}
           />
+
+          {resetMode === 1 && (
+            <TextField
+              fullWidth
+              label="Recovery Code"
+              variant="outlined"
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+              placeholder="QU-XXXX-XXXX"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <History />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 0 }}>
           <Button 

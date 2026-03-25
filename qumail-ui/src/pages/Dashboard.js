@@ -35,6 +35,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
     notifications,
     addNotification,
     handleAction,
+    handleDecryptEmail,
     markNotificationAsRead,
     deleteNotification,
     setNotifications,
@@ -60,14 +61,12 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
     setSelectedEmailId(null);
   }, [isMobile]);
 
-  const handleSendEmail = useCallback(async (to, subject, body, level) => {
-    const res = await QuMailService.sendEmail(to, subject, body, level);
-    if (res.success) {
-      setComposeOpen(false);
-      fetchEmails();
-      addNotification('Email Sent', `To: ${to}`, 'success', 'CheckCircle');
-    }
-    return res;
+  const handleSendEmail = useCallback((to, subject, body, level, messageId) => {
+    // The actual sending is handled inside the Compose component.
+    // This callback is for refreshing the UI and notifying the user.
+    setComposeOpen(false);
+    fetchEmails();
+    addNotification('Email Sent', `To: ${to}`, 'success', 'CheckCircle');
   }, [fetchEmails, addNotification]);
 
   const filteredEmails = useMemo(() => {
@@ -88,6 +87,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
           email={selectedEmail} 
           onBack={() => setSelectedEmailId(null)} 
           onAction={handleAction}
+          onDecryptEmail={handleDecryptEmail}
         />
       );
     }

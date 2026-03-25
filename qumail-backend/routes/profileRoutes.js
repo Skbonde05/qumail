@@ -6,7 +6,7 @@ import authMiddleware from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 /**
- * 🔐 GET USER PROFILE
+ *  GET USER PROFILE
  */
 router.get("/", authMiddleware, async (req, res) => {
   try {
@@ -40,7 +40,7 @@ router.get("/", authMiddleware, async (req, res) => {
 });
 
 /**
- * 🖼️ UPLOAD AVATAR (Base64)
+ *  UPLOAD AVATAR (Base64)
  * POST /api/profile/upload-avatar
  */
 router.post("/upload-avatar", authMiddleware, async (req, res) => {
@@ -80,7 +80,7 @@ router.post("/upload-avatar", authMiddleware, async (req, res) => {
 });
 
 /**
- * ✏️ UPDATE PROFILE (name, email)
+ *  UPDATE PROFILE (name, email)
  */
 router.post("/update", authMiddleware, async (req, res) => {
   const { name, email } = req.body;
@@ -98,7 +98,7 @@ router.post("/update", authMiddleware, async (req, res) => {
 });
 
 /**
- * ⚙️ UPDATE SETTINGS
+ *  UPDATE SETTINGS
  */
 router.post("/settings", authMiddleware, async (req, res) => {
   const { settings } = req.body;
@@ -115,7 +115,7 @@ router.post("/settings", authMiddleware, async (req, res) => {
 });
 
 /**
- * 🔑 CHANGE PASSWORD
+ *  CHANGE PASSWORD
  */
 router.post("/change-password", authMiddleware, async (req, res) => {
   const { currentPassword, newPassword } = req.body;

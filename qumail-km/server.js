@@ -74,7 +74,7 @@ setInterval(() => {
   });
   
   if (process.env.LOG_LEVEL === 'debug') {
-    console.log(`🧹 Cleaned expired keys. Total users: ${Object.keys(keyStore).length}`);
+    console.log(` Cleaned expired keys. Total users: ${Object.keys(keyStore).length}`);
   }
 }, 300000); // Every 5 minutes
 
@@ -263,7 +263,7 @@ app.post("/new-key", (req, res) => {
     });
 
     if (process.env.LOG_LEVEL === 'debug') {
-      console.log(`🔑 New key generated for ${email}`);
+      console.log(` New key generated for ${email}`);
     }
 
     return res.status(201).json({
@@ -336,7 +336,7 @@ app.post("/get-key", (req, res) => {
       keyIndex = keyStore[email].length - 1;
       
       if (process.env.LOG_LEVEL === 'debug') {
-        console.log(`🔑 Auto-generated key for ${email}`);
+        console.log(` Auto-generated key for ${email}`);
       }
     } else {
       // Mark existing key as used
@@ -515,17 +515,17 @@ app.use((req, res) => {
 
 /* -------------------- SERVER -------------------- */
 app.listen(PORT, () => {
-  console.log(`🔐 Quantum Key Manager running on port ${PORT}`);
-  console.log(`📊 Key Size: ${KEY_SIZE * 8} bits (${KEY_SIZE} bytes)`);
-  console.log(`📝 Key Format: ${KEY_FORMAT}`);
-  console.log(`⏰ Key Expiry: ${KEY_EXPIRY_HOURS} hours`);
-  console.log(`🔑 Max Keys/User: ${MAX_KEYS_PER_USER}`);
-  console.log(`🔒 API Key Required: ${REQUIRE_API_KEY}`);
-  console.log(`🔐 AES Endpoint: ${AES_KEY && AES_IV ? 'Available' : 'Not configured'}`);
+  console.log(` Quantum Key Manager running on port ${PORT}`);
+  console.log(` Key Size: ${KEY_SIZE * 8} bits (${KEY_SIZE} bytes)`);
+  console.log(` Key Format: ${KEY_FORMAT}`);
+  console.log(` Key Expiry: ${KEY_EXPIRY_HOURS} hours`);
+  console.log(` Max Keys/User: ${MAX_KEYS_PER_USER}`);
+  console.log(` API Key Required: ${REQUIRE_API_KEY}`);
+  console.log(` AES Endpoint: ${AES_KEY && AES_IV ? 'Available' : 'Not configured'}`);
   
   if (process.env.NODE_ENV === 'development') {
-    console.log(`🚀 Development mode enabled`);
-    console.log(`📡 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔑 AES Keys: http://localhost:${PORT}/api/keys/aes`);
+    console.log(` Development mode enabled`);
+    console.log(` Health check: http://localhost:${PORT}/health`);
+    console.log(` AES Keys: http://localhost:${PORT}/api/keys/aes`);
   }
 });

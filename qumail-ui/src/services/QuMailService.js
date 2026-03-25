@@ -88,12 +88,6 @@ const QuMailService = {
   register: async (name, email, password, confirmPassword) => {
     try {
       const response = await axiosInstance.post('/api/auth/register', { name, email, password, confirmPassword });
-      if (response.data.success && response.data.token) {
-        localStorage.setItem('qumail_token', response.data.token);
-        localStorage.setItem('qumail_refresh_token', response.data.refreshToken);
-        localStorage.setItem('qumail_email', email);
-        localStorage.setItem('qumail_name', name);
-      }
       return response.data;
     } catch (error) {
       return error.response?.data || { success: false, message: 'Registration failed' };

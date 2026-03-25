@@ -1,22 +1,23 @@
 // App.js - QUMAIL CLEAN ENTRY POINT
 import React, { useState, useEffect } from "react";
-import SplashScreen from './pages/SplashScreen';
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import ResetPassword from "./pages/ResetPassword";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { SnackbarProvider, useSnackbar } from "notistack";
 import QuMailService from "./services/QuMailService";
 import { lightTheme, darkTheme } from "./theme";
 
 const AppContent = () => {
-  const [showSplash, setShowSplash] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('qumail_dark_mode') === 'true');
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
 
   // Load user profile if token exists
   useEffect(() => {
@@ -36,15 +37,9 @@ const AppContent = () => {
           console.error('Auth check failed:', error);
         }
       }
-      // Give splash screen a bit of time
-      // The splash screen now calls handleSplashFinish instead of a hardcoded timer here
     };
     checkAuth();
   }, [enqueueSnackbar]);
-
-  const handleSplashFinish = () => {
-    setShowSplash(false);
-  };
 
   const handleLogin = async (email, password) => {
     setLoading(true);
@@ -53,6 +48,7 @@ const AppContent = () => {
       if (result.success) {
         setUser(result.user);
         setLoggedIn(true);
+        navigate("/");
         enqueueSnackbar(result.message, { variant: 'success' });
       } else {
         enqueueSnackbar(result.message, { variant: 'error' });
@@ -69,14 +65,15 @@ const AppContent = () => {
     try {
       const result = await QuMailService.register(name, email, password, confirmPassword);
       if (result.success) {
-        setUser(result.user);
-        setLoggedIn(true);
-        enqueueSnackbar(result.message, { variant: 'success' });
+        enqueueSnackbar('Account created successfully!', { variant: 'success' });
+        return result; // Return so Register.js can show recovery code
       } else {
         enqueueSnackbar(result.message, { variant: 'error' });
+        return result;
       }
     } catch (error) {
       enqueueSnackbar('Network error during registration', { variant: 'error' });
+      return { success: false };
     } finally {
       setLoading(false);
     }
@@ -86,6 +83,7 @@ const AppContent = () => {
     await QuMailService.logout();
     setLoggedIn(false);
     setUser(null);
+    navigate("/login");
     enqueueSnackbar('Logged out successfully', { variant: 'info' });
   };
 
@@ -94,41 +92,63 @@ const AppContent = () => {
     localStorage.setItem('qumail_dark_mode', !darkMode);
   };
 
-  if (showSplash) return <SplashScreen onFinish={handleSplashFinish} />;
-
   return (
     <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
       <CssBaseline />
-      {!loggedIn ? (
-        showRegister ? (
-          <Register 
-            onRegister={handleRegister} 
-            loading={loading} 
-            onToggleLogin={() => setShowRegister(false)} 
-          />
-        ) : (
-          <Login 
-            onLogin={handleLogin} 
-            loading={loading} 
-            onToggleRegister={() => setShowRegister(true)} 
-          />
-        )
-      ) : (
-        <Dashboard 
-          user={user} 
-          onLogout={handleLogout} 
-          darkMode={darkMode} 
-          onToggleTheme={toggleTheme} 
-        />
-      )}
+      <Routes>
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/login" element={
+          loggedIn ? <Navigate to="/" /> : (
+            <Login 
+              onLogin={handleLogin} 
+              loading={loading} 
+              onSwitchToRegister={() => {
+                setShowRegister(true);
+                navigate("/register");
+              }} 
+            />
+          )
+        } />
+        <Route path="/register" element={
+          loggedIn ? <Navigate to="/" /> : (
+            <Register 
+              onRegister={handleRegister} 
+              loading={loading} 
+              onToggleLogin={() => {
+                setShowRegister(false);
+                navigate("/login");
+              }} 
+            />
+          )
+        } />
+        <Route path="/" element={
+          !loggedIn ? (
+            showRegister ? (
+              <Navigate to="/register" />
+            ) : (
+              <Navigate to="/login" />
+            )
+          ) : (
+            <Dashboard 
+              user={user} 
+              onLogout={handleLogout} 
+              darkMode={darkMode} 
+              onToggleTheme={toggleTheme} 
+            />
+          )
+        } />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
     </ThemeProvider>
   );
 };
 
 const App = () => (
-  <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-    <AppContent />
-  </SnackbarProvider>
+  <Router>
+    <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+      <AppContent />
+    </SnackbarProvider>
+  </Router>
 );
 
 export default App;

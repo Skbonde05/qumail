@@ -291,7 +291,7 @@ export default function AboutQuMail() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="body2" color="text.secondary">
-          © {new Date().getFullYear()} QuMail Inc. All rights reserved.
+           {new Date().getFullYear()} QuMail Inc. All rights reserved.
           <br />
           <Link href="#" color="inherit">Privacy Policy</Link> • 
           <Link href="#" color="inherit" sx={{ mx: 1 }}>Terms of Service</Link> • 

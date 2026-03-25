@@ -37,7 +37,7 @@ const getEncryptionLabel = (encryptionLevel) => {
       return {
         text: 'AES',
         color: 'primary',
-        icon: '🔒',
+        icon: '',
         description: 'Quantum AES-256 Encrypted',
         fullName: 'Advanced Encryption Standard (AES-256-GCM)'
       };
@@ -45,7 +45,7 @@ const getEncryptionLabel = (encryptionLevel) => {
       return {
         text: 'OTP',
         color: 'error',
-        icon: '🔐',
+        icon: '',
         description: 'Quantum OTP Encrypted',
         fullName: 'One-Time Pad Encryption'
       };
@@ -54,7 +54,7 @@ const getEncryptionLabel = (encryptionLevel) => {
       return {
         text: 'STANDARD',
         color: 'default',
-        icon: '✉️',
+        icon: '',
         description: 'Standard Email',
         fullName: 'Unencrypted Email'
       };
@@ -146,9 +146,9 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading = false }) => {
                 justifyContent: 'center'
               }}
             >
-              {encryptionLabel.icon === '🔒' ? (
+              {encryptionLabel.icon === '' ? (
                 <EnhancedEncryptionIcon />
-              ) : encryptionLabel.icon === '🔐' ? (
+              ) : encryptionLabel.icon === '' ? (
                 <SecurityIcon />
               ) : (
                 <LockIcon />
