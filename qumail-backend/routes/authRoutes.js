@@ -4,6 +4,8 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const speakeasy = require('speakeasy');
+const qrcode = require('qrcode');
 const User = require('../models/User');
 const Mail = require('../models/Mail');
 const SecurityLog = require('../models/SecurityLog');
@@ -15,7 +17,7 @@ const { authLimiter } = require('../middleware/rateLimit');
 // Helper to log security actions
 const addLog = async (userId, action, details, type = 'info', req = null) => {
   try {
-    const log = {
+    const logData = {
       userId,
       action,
       details,
@@ -24,11 +26,42 @@ const addLog = async (userId, action, details, type = 'info', req = null) => {
     };
     
     if (req) {
-      log.ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-      log.deviceInfo = req.headers['user-agent'];
+      const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+      logData.ipAddress = ip;
+      const ua = req.headers['user-agent'] || '';
+      logData.deviceInfo = ua;
+      
+      // Smart Mock Location
+      if (ip === '127.0.0.1' || ip === '::1' || ip.includes('::ffff:127.0.0.1')) {
+        logData.location = 'Localhost (Internal)';
+      } else {
+        logData.location = 'San Francisco, US (Mock)';
+      }
+
+      // Simple UA Parsing
+      let browser = 'Unknown Browser';
+      if (ua.includes('Firefox')) browser = 'Firefox';
+      else if (ua.includes('Edg')) browser = 'Microsoft Edge';
+      else if (ua.includes('Chrome')) browser = 'Chrome';
+      else if (ua.includes('Safari')) browser = 'Safari';
+      else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
+      logData.browser = browser;
+
+      let os = 'Unknown OS';
+      if (ua.includes('Win')) os = 'Windows';
+      else if (ua.includes('Mac')) os = 'macOS';
+      else if (ua.includes('Linux')) os = 'Linux';
+      else if (ua.includes('Android')) os = 'Android';
+      else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+      logData.os = os;
+
+      let devType = 'Desktop';
+      if (ua.includes('Mobi') || ua.includes('Android') || ua.includes('iPhone')) devType = 'Mobile';
+      else if (ua.includes('iPad') || ua.includes('Tablet')) devType = 'Tablet';
+      logData.deviceType = devType;
     }
     
-    await SecurityLog.create(log);
+    await SecurityLog.create(logData);
   } catch (error) {
     console.error('Logging error:', error);
   }
@@ -71,7 +104,7 @@ router.post('/register', authLimiter,
   [
     body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters'),
     body('email').isEmail().withMessage('Valid email required').custom(validateQumailEmail).withMessage('Only @qumail.com addresses allowed'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
     body('confirmPassword').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match')
   ],
   async (req, res) => {
@@ -184,24 +217,69 @@ router.post('/forgot-password', authLimiter, [
       return res.json({ success: true, message: 'If that email is in our system, a reset link will be sent.' });
     }
 
-    // Generate token
-    const resetToken = crypto.randomBytes(20).toString('hex');
-    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetOTP = otp;
+    user.resetOTPExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     await user.save();
 
-    // In production, send email. Here we simulate it by logging to console/returning it for demo.
-    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
-    console.log(`[PASS_RESET] Reset link for ${email}: ${resetUrl}`);
+    // In production, send email. Simulation here.
+    console.log(`[PASS_RESET] OTP for ${email}: ${otp}`);
 
     res.json({ 
       success: true, 
-      message: 'Reset link generated (check backend console in demo)',
-      resetUrl: process.env.NODE_ENV === 'development' ? resetUrl : undefined // For ease of testing in dev
+      message: 'A 6-digit verification code was sent to your email (check console)',
+      otp: process.env.NODE_ENV === 'development' ? otp : undefined 
     });
 
-    await addLog(user._id, 'PASSWORD_RESET_REQUESTED', `Password reset requested for ${email}`, 'warning', req);
+    await addLog(user._id, 'PASSWORD_RESET_OTP_SENT', `Reset OTP sent to ${email}`, 'warning', req);
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ------------------ VERIFY RESET OTP ------------------
+router.post('/verify-reset-otp', authLimiter, [
+  body('email').isEmail().withMessage('Valid email required'),
+  body('otp').isLength({ min: 6, max: 6 }).withMessage('6-digit code required')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+
+  const { email, otp } = req.body;
+  try {
+    const user = await User.findOne({ 
+      email: email.toLowerCase(),
+      resetOTP: otp,
+      resetOTPExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired verification code' });
+    }
+
+    // Generate temporary reset token
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    // Clear OTP after use
+    user.resetOTP = undefined;
+    user.resetOTPExpire = undefined;
+
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Code verified successfully',
+      resetToken: resetToken
+    });
+
+    await addLog(user._id, 'RESET_OTP_VERIFIED', `OTP verified for password reset by ${email}`, 'warning', req);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -265,7 +343,7 @@ router.get('/verify-reset-token/:token', authLimiter, async (req, res) => {
 
 router.post('/reset-password', authLimiter, [
   body('token').notEmpty().withMessage('Token required'),
-  body('password').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+  body('password').isLength({ min: 8 }).withMessage('New password must be at least 8 characters')
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -340,11 +418,27 @@ router.post('/login', authLimiter,
         });
       }
       
-      // Generate tokens
+      // Check if 2FA is enabled
+      if (user.settings && user.settings.twoFactorEnabled) {
+        // Generate temporary MFA token
+        const mfaToken = jwt.sign(
+          { id: user._id, type: 'mfa' }, 
+          JWT_SECRET, 
+          { expiresIn: '5m' }
+        );
+        
+        return res.json({
+          success: true,
+          mfaRequired: true,
+          mfaToken
+        });
+      }
+      
+      // Generate tokens only after 2FA check (or if not enabled)
       const token = generateToken(user);
       const refreshToken = generateRefreshToken(user);
       
-      // Update user with refresh token
+      // Update user with refresh token and last login
       user.refreshToken = refreshToken;
       user.lastLogin = new Date();
       await user.save();
@@ -526,6 +620,13 @@ router.put('/profile',
       
       if (name) user.name = name.trim();
       if (settings) {
+        // Prevent enabling 2FA through generic profile update if no secret exists
+        if (settings.twoFactorEnabled === true && !user.twoFactorSecret) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Please complete the Two-Factor setup first before enabling it.' 
+          });
+        }
         user.settings = { ...user.settings, ...settings };
       }
       
@@ -768,6 +869,113 @@ router.delete('/notifications/:id', verifyToken, async (req, res) => {
     res.json({ success: true, message: 'Notification removed' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to delete notification' });
+  }
+});
+
+// ------------------ TWO-FACTOR AUTHENTICATION ------------------
+
+router.post('/setup-2fa', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const secret = speakeasy.generateSecret({ length: 20, name: `QuMail (${user.email})` });
+    user.twoFactorSecret = secret.base32;
+    await user.save();
+    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
+    res.json({ success: true, qrCode: qrCodeUrl, secret: secret.base32 });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to setup 2FA' });
+  }
+});
+
+router.post('/confirm-2fa', verifyToken, async (req, res) => {
+  try {
+    const { otp } = req.body;
+    const user = await User.findOne({ email: req.user.email });
+    if (!user || !user.twoFactorSecret) return res.status(400).json({ success: false, message: '2FA not initialized' });
+    const verified = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: otp });
+    if (verified) {
+      if (!user.settings) user.settings = {};
+      user.settings.twoFactorEnabled = true;
+      await user.save();
+      await addLog(user._id, 'MFA_ENABLED', 'Two-Factor Authentication enabled', 'success', req);
+      res.json({ success: true, message: '2FA enabled successfully!' });
+    } else {
+      res.status(400).json({ success: false, message: 'Invalid verification code' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to confirm 2FA' });
+  }
+});
+
+router.post('/verify-2fa', async (req, res) => {
+  try {
+    const { otp, mfaToken } = req.body;
+    if (!otp || !mfaToken) return res.status(400).json({ success: false, message: 'OTP and MFA token required' });
+    
+    let decoded;
+    try {
+      decoded = jwt.verify(mfaToken, JWT_SECRET);
+      if (decoded.type !== 'mfa') throw new Error('Invalid token type');
+    } catch (e) {
+      return res.status(401).json({ success: false, message: 'Verification session expired' });
+    }
+    
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    const verified = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: otp });
+    if (verified) {
+      const token = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
+      
+      // Update user with tokens and last login
+      user.refreshToken = refreshToken;
+      user.lastLogin = new Date();
+      await user.save();
+      
+      // Get email counts for response
+      const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
+        Mail.countDocuments({ owner: user.email, folder: 'INBOX', trash: false }),
+        Mail.countDocuments({ owner: user.email, folder: 'SENT', trash: false }),
+        Mail.countDocuments({ owner: user.email, folder: 'ARCHIVE', trash: false }),
+        Mail.countDocuments({ owner: user.email, trash: true })
+      ]);
+      
+      res.json({
+        success: true,
+        message: `Welcome back to QuMail, ${user.name}!`,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          settings: user.settings,
+          storageUsed: user.storageUsed,
+          storageLimit: user.storageLimit,
+          isVerified: user.isVerified,
+          role: user.role,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin
+        },
+        token: token,
+        accessToken: token,
+        refreshToken: refreshToken,
+        folderCounts: {
+          inbox: inboxCount,
+          sent: sentCount,
+          archive: archiveCount,
+          trash: trashCount
+        }
+      });
+      
+      await addLog(user._id, 'MFA_SUCCESS', `MFA verification successful at ${user.lastLogin}`, 'success', req);
+    } else {
+      res.status(401).json({ success: false, message: 'Invalid verification code' });
+    }
+  } catch (error) {
+    console.error('MFA verification error:', error);
+    res.status(500).json({ success: false, message: 'MFA verification failed' });
   }
 });
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Box, CssBaseline, useTheme, useMediaQuery, Drawer, SwipeableDrawer } from '@mui/material';
+import { Box, CssBaseline, useTheme, useMediaQuery, Drawer, SwipeableDrawer, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button } from '@mui/material';
 import TopBar from '../components/dashboard/TopBar';
 import Sidebar from '../components/Sidebar';
 import Inbox from '../components/Inbox';
@@ -16,7 +16,7 @@ import QuMailService from '../services/QuMailService';
 
 const DRAWER_WIDTH = 260;
 
-const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
+const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdateTheme }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -24,6 +24,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
   const [notifAnchor, setNotifAnchor] = useState(null);
   const [profileAnchor, setProfileAnchor] = useState(null);
   const [selectedEmailId, setSelectedEmailId] = useState(null);
+  const [draftToEdit, setDraftToEdit] = useState(null);
   
   // Custom hook for logic
   const {
@@ -41,10 +42,16 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
     setNotifications,
     fetchEmails,
     searchQuery,
-    setSearchQuery
+    setSearchQuery,
+    labels,
+    createLabel,
+    deleteLabel
   } = useDashboardActions(user);
 
-  const [activeSection, setActiveSection] = useState('inbox'); // Overrides folder view for settings/etc.
+  const [activeSection, setActiveSection] = useState('inbox');
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#1a73e8');
 
   const handleDrawerToggle = useCallback(() => setMobileOpen(prev => !prev), []);
 
@@ -61,10 +68,53 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
     setSelectedEmailId(null);
   }, [isMobile]);
 
+  const handleReply = useCallback((email) => {
+    setComposeOpen(true);
+    setDraftToEdit({
+      to: email.from,
+      subject: email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`,
+      body: `\n\nOn ${new Date(email.date).toLocaleString()}, ${email.from} wrote:\n> ${typeof email.body === 'string' ? email.body.replace(/\n/g, '\n> ') : ''}`,
+      encryptionLevel: email.encryptionLevel || 'aes256'
+    });
+  }, []);
+
+  const handleReplyAll = useCallback((email) => {
+    setComposeOpen(true);
+    const allRecipients = [
+      email.from, 
+      ...(typeof email.to === 'string' ? email.to.split(',') : []), 
+      ...(Array.isArray(email.cc) ? email.cc : [])
+    ].map(e => e.trim().toLowerCase())
+     .filter(e => e && e !== user.email.toLowerCase());
+    
+    const uniqueRecipients = [...new Set(allRecipients)];
+    const to = email.from;
+    const cc = uniqueRecipients.filter(r => r !== to.toLowerCase()).join(', ');
+
+    setDraftToEdit({
+      to,
+      cc,
+      subject: email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`,
+      body: `\n\nOn ${new Date(email.date).toLocaleString()}, ${email.from} wrote:\n> ${typeof email.body === 'string' ? email.body.replace(/\n/g, '\n> ') : ''}`,
+      encryptionLevel: email.encryptionLevel || 'aes256'
+    });
+  }, [user.email]);
+
+  const handleForward = useCallback((email) => {
+    setComposeOpen(true);
+    setDraftToEdit({
+      subject: email.subject.startsWith('Fwd:') ? email.subject : `Fwd: ${email.subject}`,
+      body: `\n\n---------- Forwarded message ----------\nFrom: ${email.from}\nDate: ${new Date(email.date).toLocaleString()}\nSubject: ${email.subject}\nTo: ${email.to}\n\n${typeof email.body === 'string' ? email.body : ''}`,
+      attachments: email.attachments || [],
+      encryptionLevel: email.encryptionLevel || 'aes256'
+    });
+  }, []);
+
   const handleSendEmail = useCallback((to, subject, body, level, messageId) => {
     // The actual sending is handled inside the Compose component.
     // This callback is for refreshing the UI and notifying the user.
     setComposeOpen(false);
+    setDraftToEdit(null);
     fetchEmails();
     addNotification('Email Sent', `To: ${to}`, 'success', 'CheckCircle');
   }, [fetchEmails, addNotification]);
@@ -88,13 +138,16 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
           onBack={() => setSelectedEmailId(null)} 
           onAction={handleAction}
           onDecryptEmail={handleDecryptEmail}
+          onReply={handleReply}
+          onReplyAll={handleReplyAll}
+          onForward={handleForward}
         />
       );
     }
 
     switch (activeSection) {
       case 'settings': return <AppSettings />;
-      case 'account': return <AccountSettings user={user} />;
+      case 'account': return <AccountSettings user={user} themeName={themeName} onUpdateTheme={onUpdateTheme} />;
       case 'security': return <SecuritySettings user={user} />;
       case 'help': return <HelpSupport />;
       case 'about': return <AboutQuMail />;
@@ -104,7 +157,15 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
             emails={filteredEmails} 
             folderName={activeFolder} 
             loading={loading}
-            onEmailClick={(email) => setSelectedEmailId(email.uid || email.id)}
+            labels={labels}
+            onEmailClick={(email) => {
+              if (activeFolder === 'drafts') {
+                setDraftToEdit(email);
+                setComposeOpen(true);
+              } else {
+                setSelectedEmailId(email.uid || email.id);
+              }
+            }}
             onAction={handleAction}
             onRefresh={() => fetchEmails()}
           />
@@ -162,6 +223,8 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
             folderCounts={folderCounts}
             drawerWidth={DRAWER_WIDTH}
             user={user}
+            labels={labels}
+            onAddLabel={() => setLabelDialogOpen(true)}
           />
         </SwipeableDrawer>
 
@@ -190,6 +253,8 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
             folderCounts={folderCounts}
             drawerWidth={DRAWER_WIDTH}
             user={user}
+            labels={labels}
+            onAddLabel={() => setLabelDialogOpen(true)}
           />
         </Drawer>
       </Box>
@@ -210,8 +275,9 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
 
       <Compose 
         open={composeOpen} 
-        onClose={() => setComposeOpen(false)} 
+        onClose={() => { setComposeOpen(false); setDraftToEdit(null); }} 
         onSend={handleSendEmail} 
+        draftToEdit={draftToEdit}
       />
 
       <NotificationList 
@@ -230,7 +296,69 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme }) => {
         onClose={() => setProfileAnchor(null)}
         onLogout={onLogout}
         onSettings={() => handleSectionChange('account')}
+        user={user}
       />
+
+      <Compose 
+        open={composeOpen} 
+        onClose={() => { setComposeOpen(false); setDraftToEdit(null); }} 
+        onSend={handleSendEmail} 
+        draftToEdit={draftToEdit}
+      />
+
+      {/* Label Dialog */}
+      <Dialog open={labelDialogOpen} onClose={() => setLabelDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Create New Label</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Label Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newLabelName}
+            onChange={(e) => setNewLabelName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+            Label Color
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+            {['#1a73e8', '#d93025', '#f9ab00', '#188038', '#fa7b17', '#9334e6', '#12b5cb', '#607d8b'].map((color) => (
+              <Box
+                key={color}
+                onClick={() => setNewLabelColor(color)}
+                sx={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  bgcolor: color,
+                  cursor: 'pointer',
+                  border: newLabelColor === color ? '2px solid' : 'none',
+                  borderColor: theme.palette.mode === 'dark' ? 'white' : 'black',
+                  boxShadow: 1
+                }}
+              />
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setLabelDialogOpen(false)}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            onClick={async () => {
+              if (await createLabel(newLabelName, newLabelColor)) {
+                setLabelDialogOpen(false);
+                setNewLabelName('');
+              }
+            }}
+            disabled={!newLabelName}
+          >
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

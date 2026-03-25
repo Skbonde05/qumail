@@ -1,14 +1,14 @@
-// App.js - QUMAIL CLEAN ENTRY POINT
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { ThemeProvider, CssBaseline, Box, CircularProgress } from "@mui/material";
+import { SnackbarProvider, useSnackbar } from "notistack";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import ResetPassword from "./pages/ResetPassword";
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { ThemeProvider, CssBaseline } from "@mui/material";
-import { SnackbarProvider, useSnackbar } from "notistack";
 import QuMailService from "./services/QuMailService";
-import { lightTheme, darkTheme } from "./theme";
+import { getTheme } from "./theme";
+
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 const AppContent = () => {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -16,8 +16,11 @@ const AppContent = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('qumail_dark_mode') === 'true');
+  const [themeName, setThemeName] = useState(() => localStorage.getItem('qumail_theme_name') || 'default');
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
+
+  const currentTheme = useMemo(() => getTheme(darkMode ? 'dark' : 'light', themeName), [darkMode, themeName]);
 
   // Load user profile if token exists
   useEffect(() => {
@@ -29,6 +32,10 @@ const AppContent = () => {
           if (profile.success) {
             setUser(profile.user);
             setLoggedIn(true);
+            // Sync theme from user settings if available
+            if (profile.user.settings?.theme) {
+              setThemeName(profile.user.settings.theme);
+            }
           } else {
             localStorage.removeItem('qumail_token');
             localStorage.removeItem('qumail_email');
@@ -46,15 +53,23 @@ const AppContent = () => {
     try {
       const result = await QuMailService.login(email, password);
       if (result.success) {
+        if (result.mfaRequired) {
+          return result;
+        }
         setUser(result.user);
+        if (result.user.settings?.theme) {
+          setThemeName(result.user.settings.theme);
+        }
         setLoggedIn(true);
         navigate("/");
         enqueueSnackbar(result.message, { variant: 'success' });
       } else {
         enqueueSnackbar(result.message, { variant: 'error' });
       }
+      return result;
     } catch (error) {
       enqueueSnackbar('Network error during login', { variant: 'error' });
+      return { success: false };
     } finally {
       setLoading(false);
     }
@@ -92,53 +107,66 @@ const AppContent = () => {
     localStorage.setItem('qumail_dark_mode', !darkMode);
   };
 
+  const updateThemeName = (name) => {
+    setThemeName(name);
+    localStorage.setItem('qumail_theme_name', name);
+  };
+
   return (
-    <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
+    <ThemeProvider theme={currentTheme}>
       <CssBaseline />
-      <Routes>
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
-        <Route path="/login" element={
-          loggedIn ? <Navigate to="/" /> : (
-            <Login 
-              onLogin={handleLogin} 
-              loading={loading} 
-              onSwitchToRegister={() => {
-                setShowRegister(true);
-                navigate("/register");
-              }} 
-            />
-          )
-        } />
-        <Route path="/register" element={
-          loggedIn ? <Navigate to="/" /> : (
-            <Register 
-              onRegister={handleRegister} 
-              loading={loading} 
-              onToggleLogin={() => {
-                setShowRegister(false);
-                navigate("/login");
-              }} 
-            />
-          )
-        } />
-        <Route path="/" element={
-          !loggedIn ? (
-            showRegister ? (
-              <Navigate to="/register" />
-            ) : (
-              <Navigate to="/login" />
+      <Suspense fallback={
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: 'background.default' }}>
+          <CircularProgress />
+        </Box>
+      }>
+        <Routes>
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+          <Route path="/login" element={
+            loggedIn ? <Navigate to="/" /> : (
+              <Login 
+                onLogin={handleLogin} 
+                loading={loading} 
+                onSwitchToRegister={() => {
+                  setShowRegister(true);
+                  navigate("/register");
+                }} 
+              />
             )
-          ) : (
-            <Dashboard 
-              user={user} 
-              onLogout={handleLogout} 
-              darkMode={darkMode} 
-              onToggleTheme={toggleTheme} 
-            />
-          )
-        } />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+          } />
+          <Route path="/register" element={
+            loggedIn ? <Navigate to="/" /> : (
+              <Register 
+                onRegister={handleRegister} 
+                loading={loading} 
+                onToggleLogin={() => {
+                  setShowRegister(false);
+                  navigate("/login");
+                }} 
+              />
+            )
+          } />
+          <Route path="/" element={
+            !loggedIn ? (
+              showRegister ? (
+                <Navigate to="/register" />
+              ) : (
+                <Navigate to="/login" />
+              )
+            ) : (
+              <Dashboard 
+                user={user} 
+                onLogout={handleLogout} 
+                darkMode={darkMode} 
+                onToggleTheme={toggleTheme} 
+                themeName={themeName}
+                onUpdateTheme={(name) => updateThemeName(name)}
+              />
+            )
+          } />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Suspense>
     </ThemeProvider>
   );
 };

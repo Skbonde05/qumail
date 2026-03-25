@@ -20,6 +20,10 @@ const apiGateway = (app) => {
     '/api/auth/login',
     '/api/auth/register',
     '/api/auth/refresh',
+    '/api/auth/forgot-password',
+    '/api/auth/verify-reset-otp',
+    '/api/auth/verify-recovery-code',
+    '/api/auth/reset-password',
     '/api/health',
     '/'
   ];

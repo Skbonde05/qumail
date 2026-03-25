@@ -21,6 +21,10 @@ const securityLogSchema = new mongoose.Schema({
     default: 'info'
   },
   ipAddress: String,
+  location: String,
+  browser: String,
+  os: String,
+  deviceType: String,
   deviceInfo: String,
   timestamp: {
     type: Date,

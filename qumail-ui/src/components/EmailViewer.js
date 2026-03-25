@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import {
   Box,
   Typography,
@@ -10,8 +10,11 @@ import {
   Divider,
   List,
   ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Collapse,
   CircularProgress,
@@ -57,7 +60,11 @@ import {
   Print as PrintIcon,
   Key as KeyIcon,
   CopyAll as CopyAllIcon,
-  Lock as LucideLock
+  Lock as LucideLock,
+  Report as ReportIcon,
+  ReportOff as ReportOffIcon,
+  Folder as FolderIcon,
+  Circle
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 
@@ -337,17 +344,19 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading }) => {
 
 const EMPTY_ARRAY = [];
 
-export default function EmailViewer({
+
+const EmailViewer = memo(({
   email,
   onBack,
   onReply,
   onReplyAll,
   onForward,
-  onAction, // Added onAction
+  onAction,
   onDecryptEmail,
   isLoading,
   isEncrypting = false,
-}) {
+  labels = [], // Added labels prop
+}) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
@@ -360,6 +369,9 @@ export default function EmailViewer({
   const [showDecryptModal, setShowDecryptModal] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
   const [isDecrypted, setIsDecrypted] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [snoozeDialogOpen, setSnoozeDialogOpen] = useState(false);
+  const [labelAnchorEl, setLabelAnchorEl] = useState(null);
 
   // Extract email data with safe defaults
   const emailData = email || {};
@@ -380,7 +392,7 @@ export default function EmailViewer({
     requiresDecryption = false,
     decrypted: alreadyDecrypted = false,
     otpKey = null,
-    attachments = EMPTY_ARRAY
+    attachments: initialAttachments = EMPTY_ARRAY
   } = emailData;
 
   // Parse sender information safely
@@ -471,7 +483,8 @@ export default function EmailViewer({
     
     setIsStarred(prev => prev !== (starred || flags?.includes('starred') || false) ? (starred || flags?.includes('starred') || false) : prev);
     setIsImportant(prev => prev !== (important || flags?.includes('important') || false) ? (important || flags?.includes('important') || false) : prev);
-  }, [email, body, securityLevel, alreadyDecrypted, starred, important, flags]);
+    setAttachments(initialAttachments || []);
+  }, [email, body, securityLevel, alreadyDecrypted, starred, important, flags, initialAttachments]);
 
   // Toggle expanded view
   const handleToggleExpand = () => {
@@ -507,6 +520,7 @@ export default function EmailViewer({
       
       if (result.success) {
         setDecryptedContent(result.decrypted || result.body || '');
+        if (result.attachments) setAttachments(result.attachments);
         setIsDecrypted(true);
         setShowDecryptModal(false);
       } else {
@@ -517,6 +531,38 @@ export default function EmailViewer({
       setDecryptionError(error.message || 'Failed to decrypt email. Please check your key and try again.');
     } finally {
       setIsDecrypting(false);
+    }
+  };
+  
+  const handleSnooze = async (duration) => {
+    let date = new Date();
+    switch (duration) {
+      case 'today':
+        date.setHours(18, 0, 0, 0); // Today 6 PM
+        if (date < new Date()) date.setTime(date.getTime() + 4 * 60 * 60 * 1000); // If already past, +4h
+        break;
+      case 'tomorrow':
+        date.setDate(date.getDate() + 1);
+        date.setHours(8, 0, 0, 0); // Tomorrow 8 AM
+        break;
+      case 'weekend':
+        const day = date.getDay();
+        const diff = (day <= 5) ? (6 - day) : (day === 6 ? 1 : 1);
+        date.setDate(date.getDate() + diff); // Next Saturday
+        date.setHours(8, 0, 0, 0);
+        break;
+      case 'next_week':
+        date.setDate(date.getDate() + 7);
+        date.setHours(8, 0, 0, 0);
+        break;
+      default:
+        date = new Date(duration);
+    }
+
+    const success = await onAction(email.uid || email.id, 'snooze', { snoozeDate: date.toISOString() });
+    if (success) {
+      setSnoozeDialogOpen(false);
+      onBack(); // Close viewer after snooze
     }
   };
 
@@ -809,6 +855,28 @@ export default function EmailViewer({
                 </IconButton>
               </Tooltip>
               
+              <Tooltip title="Snooze">
+                <IconButton size="small" onClick={() => setSnoozeDialogOpen(true)}>
+                  <AccessTimeIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title={email?.folder === 'spam' ? "Not Spam" : "Report Spam"}>
+                <IconButton size="small" onClick={() => {
+                  const action = email?.folder === 'spam' ? 'not-spam' : 'spam';
+                  onAction(email?.uid || email?.id, action);
+                  onBack();
+                }}>
+                  {email?.folder === 'spam' ? <ReportOffIcon /> : <ReportIcon />}
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Move to Label">
+                <IconButton size="small" onClick={(e) => setLabelAnchorEl(e.currentTarget)}>
+                  <FolderIcon />
+                </IconButton>
+              </Tooltip>
+              
               <Tooltip title="More options">
                 <IconButton size="small">
                   <MoreVertIcon />
@@ -959,6 +1027,19 @@ export default function EmailViewer({
             </Button>
             <Button
               variant="outlined"
+              startIcon={email?.folder === 'spam' ? <ReportOffIcon /> : <ReportIcon />}
+              onClick={() => {
+                const action = email?.folder === 'spam' ? 'not-spam' : 'spam';
+                onAction(email?.uid || email?.id, action);
+                onBack();
+              }}
+              size="small"
+              disabled={isDecrypting}
+            >
+              {email?.folder === 'spam' ? 'Not Spam' : 'Report Spam'}
+            </Button>
+            <Button
+              variant="outlined"
               startIcon={<DeleteIcon />}
               onClick={() => {
                 if (onAction && email?.uid) {
@@ -1047,6 +1128,33 @@ export default function EmailViewer({
         )}
       </StyledPaper>
 
+      {/* Snooze Dialog */}
+      <Dialog open={snoozeDialogOpen} onClose={() => setSnoozeDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Snooze until...</DialogTitle>
+        <List sx={{ pt: 0 }}>
+          <ListItem disablePadding>
+            <ListItemButton onClick={() => handleSnooze('today')}>
+              <ListItemText primary="Later today" secondary="6:00 PM" />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton onClick={() => handleSnooze('tomorrow')}>
+              <ListItemText primary="Tomorrow" secondary="8:00 AM" />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton onClick={() => handleSnooze('weekend')}>
+              <ListItemText primary="This weekend" secondary={new Date().getDay() >= 5 ? "Next Sat 8:00 AM" : "Sat 8:00 AM"} />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton onClick={() => handleSnooze('next_week')}>
+              <ListItemText primary="Next week" secondary="Mon 8:00 AM" />
+            </ListItemButton>
+          </ListItem>
+        </List>
+      </Dialog>
+
       {/* Decrypt Modal */}
       <DecryptModal
         open={showDecryptModal}
@@ -1055,6 +1163,36 @@ export default function EmailViewer({
         onDecrypt={handleDecrypt}
         loading={isDecrypting}
       />
+
+      <Menu
+        anchorEl={labelAnchorEl}
+        open={Boolean(labelAnchorEl)}
+        onClose={() => setLabelAnchorEl(null)}
+      >
+        <Typography variant="overline" sx={{ px: 2, display: 'block', fontWeight: 700 }}>
+          Move to Label
+        </Typography>
+        {labels.map((label) => (
+          <MenuItem 
+            key={label.id} 
+            onClick={() => {
+              onAction(email.uid || email.id, 'move', { folder: label.id });
+              setLabelAnchorEl(null);
+              onBack();
+            }}
+          >
+            <ListItemIcon>
+              <Circle sx={{ color: label.color, fontSize: 12 }} />
+            </ListItemIcon>
+            <ListItemText primary={label.name} />
+          </MenuItem>
+        ))}
+        {labels.length === 0 && (
+          <MenuItem disabled>No custom labels</MenuItem>
+        )}
+      </Menu>
     </>
   );
-}
+});
+
+export default EmailViewer;

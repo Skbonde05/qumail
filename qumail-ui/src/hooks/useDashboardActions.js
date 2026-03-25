@@ -9,6 +9,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [labels, setLabels] = useState([]);
   const { enqueueSnackbar } = useSnackbar();
 
   const fetchNotifications = useCallback(async () => {
@@ -63,7 +64,11 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
 
   const handleAction = useCallback(async (mailId, action, extra = {}) => {
     try {
-      const res = await QuMailService.updateEmailStatus(mailId, action, extra);
+      const isBatch = Array.isArray(mailId);
+      const res = isBatch 
+        ? await QuMailService.batchUpdate(mailId, action, extra)
+        : await QuMailService.updateEmailStatus(mailId, action, extra);
+        
       if (res.success) {
         fetchEmails();
         fetchNotifications();
@@ -101,6 +106,50 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     }
   }, [fetchNotifications]);
 
+  const fetchLabels = useCallback(async () => {
+    try {
+      const data = await QuMailService.getLabels();
+      setLabels(data || []);
+    } catch (err) {
+      console.error("Failed to fetch labels", err);
+    }
+  }, []);
+
+  const createLabel = useCallback(async (name, color) => {
+    try {
+      const res = await QuMailService.createLabel(name, color);
+      if (res.success) {
+        fetchLabels();
+        enqueueSnackbar('Label created', { variant: 'success' });
+        return true;
+      }
+    } catch (err) {
+      enqueueSnackbar('Failed to create label', { variant: 'error' });
+    }
+    return false;
+  }, [fetchLabels, enqueueSnackbar]);
+
+  const deleteLabel = useCallback(async (id) => {
+    try {
+      const res = await QuMailService.deleteLabel(id);
+      if (res.success) {
+        fetchLabels();
+        fetchEmails(); // Mails might have moved to INBOX
+        enqueueSnackbar('Label deleted', { variant: 'success' });
+        return true;
+      }
+    } catch (err) {
+      enqueueSnackbar('Failed to delete label', { variant: 'error' });
+    }
+    return false;
+  }, [fetchLabels, fetchEmails, enqueueSnackbar]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLabels();
+    }
+  }, [user, fetchLabels]);
+
   const handleDecryptEmail = useCallback(async (emailId, encryptionKey) => {
     try {
       return await QuMailService.decryptEmail(emailId, encryptionKey);
@@ -125,6 +174,12 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     setNotifications,
     fetchEmails,
     searchQuery,
-    setSearchQuery
+    setSearchQuery,
+    labels,
+    createLabel,
+    deleteLabel,
+    fetchLabels,
   };
 };
+
+export default useDashboardActions;

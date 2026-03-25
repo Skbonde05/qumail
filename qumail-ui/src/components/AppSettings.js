@@ -413,15 +413,18 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
           type: 'select',
           icon: <TranslateIcon />,
           options: [
-            { value: 'en', label: 'US English', flag: '' },
-            { value: 'en-gb', label: 'UK English', flag: '' },
-            { value: 'es', label: 'Español', flag: '' },
-            { value: 'fr', label: 'Français', flag: '' },
-            { value: 'de', label: 'Deutsch', flag: '' },
-            { value: 'zh', label: '中文', flag: '' },
-            { value: 'ja', label: '日本語', flag: '' },
-            { value: 'ko', label: '한국어', flag: '' },
-            { value: 'ru', label: 'Русский', flag: '' }
+            { value: 'en', label: 'US English' },
+            { value: 'en-gb', label: 'UK English' },
+            { value: 'es', label: 'Español' },
+            { value: 'fr', label: 'Français' },
+            { value: 'de', label: 'Deutsch' },
+            { value: 'hi', label: 'हिन्दी (Hindi)' },
+            { value: 'mr', label: 'मराठी (Marathi)' },
+            { value: 'ar', label: 'العربية (Arabic)' },
+            { value: 'zh', label: '中文' },
+            { value: 'ja', label: '日本語' },
+            { value: 'ko', label: '한국어' },
+            { value: 'ru', label: 'Русский' }
           ],
           description: 'Interface language for QuMail'
         },

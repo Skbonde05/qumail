@@ -51,6 +51,10 @@ const userSchema = new mongoose.Schema({
     otp: { type: String, default: null },
     aes256: { type: String, default: null }
   },
+  twoFactorSecret: {
+    type: String,
+    default: null
+  },
   storageUsed: {
     type: Number,
     default: 0
@@ -91,12 +95,35 @@ const userSchema = new mongoose.Schema({
   },
   recoveryCode: {
     type: String
-  }
+  },
+  resetOTP: {
+    type: String
+  },
+  resetOTPExpire: {
+    type: Date
+  },
+  spamList: [{
+    type: String,
+    lowercase: true,
+    trim: true,
+    default: []
+  }],
+  customLabels: [{
+    id: String,
+    name: String,
+    color: String,
+    default: []
+  }]
 });
 
 userSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// Performance indexes
+userSchema.index({ refreshToken: 1 });
+userSchema.index({ resetPasswordToken: 1 });
+userSchema.index({ recoveryCode: 1 });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);

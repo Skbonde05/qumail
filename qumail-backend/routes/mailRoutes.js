@@ -65,10 +65,13 @@ router.post('/send',
       let aesKey = null;
       let aesIV = null;
       let otpKey = null;
-      
+      let encryptedAttachments = [];
+
       if (normalizedEncryptionLevel !== 'none') {
         if (normalizedEncryptionLevel === 'otp') {
           encryptionType = 'OTP';
+          
+          // Encrypt Body with OTP
           if (!body.startsWith('[otp|') || !body.includes(']:')) {
             const textLength = Buffer.from(body, 'utf8').length;
             const newOtpKey = generateOTPKey(textLength);
@@ -76,40 +79,65 @@ router.post('/send',
             encryptedBody = otpEncrypt(body, newOtpKey);
             encryptedBody = `[otp|${newOtpKey}]:${encryptedBody}`;
           } else {
-            // Extract existing key if it was manually provided
             const match = body.match(/^\[otp\|([^\]]+)\]:(.*)$/);
             if (match) otpKey = match[1];
             encryptedBody = body;
           }
+
+          // Encrypt Attachments with OTP
+          encryptedAttachments = attachments.map(att => {
+            const attKey = generateOTPKey(Buffer.from(att.data, 'utf8').length);
+            const encData = otpEncrypt(att.data, attKey);
+            return {
+              ...att,
+              data: `[otp|${attKey}]:${encData}`,
+              isEncrypted: true
+            };
+          });
         } else if (normalizedEncryptionLevel === 'aes256') {
           encryptionType = 'AES';
           const sender = await User.findOne({ email: from }).session(session);
           aesKey = sender.encryptionKeys?.aes256 || generateAESKey();
           aesIV = generateAESIV();
+          
+          // Encrypt Body
           const encryptedData = aesEncrypt(body, aesKey, aesIV);
           encryptedBody = JSON.stringify(encryptedData);
+
+          // Encrypt Attachments
+          encryptedAttachments = attachments.map(att => {
+            const attIV = generateAESIV();
+            const encData = aesEncrypt(att.data, aesKey, attIV);
+            return {
+              ...att,
+              data: JSON.stringify(encData),
+              isEncrypted: true
+            };
+          });
         }
+      } else {
+        encryptedAttachments = attachments;
       }
       
       const mailId = uuidv4();
       const timestamp = new Date();
       
-      // Sent mail for sender
+      // Sent mail for sender (NOT encrypted for sender's view)
       const sentMail = new Mail({
         mailId, from, to: lowerTo, cc: lowerCc, bcc: lowerBcc,
         subject: subject || '(No Subject)',
-        body: body, encryption: 'NONE', // Original text for sender
+        body: body, encryption: 'NONE',
         encryptionLevel: normalizedEncryptionLevel || 'none',
-        aesKey, aesIV, otpKey, // Store keys for sender's reference
+        aesKey, aesIV, otpKey,
         folder: 'SENT', owner: from, read: true,
-        attachments,
+        attachments: attachments, // Plain for sender
         createdAt: timestamp, updatedAt: timestamp
       });
       await sentMail.save({ session });
       
-      // Inbox mail for all recipients
+      // Inbox mail for all recipients (ENCRYPTED)
       for (const recipientUser of recipients) {
-        const isBcc = lowerBcc.includes(recipientUser.email) && !lowerTo.includes(recipientUser.email) && !lowerCc.includes(recipientUser.email);
+        const isSpam = isPotentialSpam(subject, body, from, recipientUser.spamList || []);
         
         const inboxMail = new Mail({
           mailId, from, to: lowerTo, 
@@ -120,20 +148,22 @@ router.post('/send',
           encryption: encryptionType,
           encryptionLevel: normalizedEncryptionLevel || 'none',
           aesKey, aesIV, otpKey,
-          folder: 'INBOX', owner: recipientUser.email, read: false,
-          attachments,
+          folder: isSpam ? 'SPAM' : 'INBOX', owner: recipientUser.email, read: false,
+          attachments: encryptedAttachments, // Encrypted for recipient
           createdAt: timestamp, updatedAt: timestamp
         });
         await inboxMail.save({ session });
         
-        // Notify recipient
-        await Notification.create([{
-          userId: recipientUser._id,
-          title: 'New Message Received',
-          message: `From: ${from}`,
-          type: 'info',
-          icon: 'Mail'
-        }], { session });
+        // Notify recipient (only if not spam)
+        if (!isSpam) {
+          await Notification.create([{
+            userId: recipientUser._id,
+            title: 'New Message Received',
+            message: `From: ${from}`,
+            type: 'info',
+            icon: 'Mail'
+          }], { session });
+        }
       }
       
       await session.commitTransaction();
@@ -157,9 +187,27 @@ router.post('/send',
 );
 
 // Helper for formatting emails
+const isPotentialSpam = (subject, body, sender, userSpamList = []) => {
+  const spamKeywords = ['winner', 'offer', 'congratulations', 'lottery', 'inheritance', 'bank account', 'credit card', 'urgent', 'gift card', 'bitcoin', 'crypto'];
+  const lowerSubject = (subject || '').toLowerCase();
+  const lowerBody = (body || '').toLowerCase();
+  const lowerSender = (sender || '').toLowerCase();
+
+  // Check personal spam list
+  if (userSpamList.includes(lowerSender)) return true;
+
+  // Check keywords
+  for (const keyword of spamKeywords) {
+    if (lowerSubject.includes(keyword) || lowerBody.includes(keyword)) return true;
+  }
+  
+  return false;
+};
+
 const formatEmail = (mail) => ({
   id: mail.mailId,
   uid: mail.mailId,
+  _id: mail._id,
   from: mail.from,
   to: mail.to,
   subject: mail.subject,
@@ -184,6 +232,30 @@ const formatEmail = (mail) => ({
   attachments: mail.attachments || [],
   size: (mail.body ? mail.body.length : 0) + (mail.attachments ? mail.attachments.reduce((sum, a) => sum + (a.size || 0), 0) : 0)
 });
+
+// ------------------ HELPERS ------------------
+const checkSnoozed = async (userEmail) => {
+  try {
+    const now = new Date();
+    // Find snoozed mails where time has passed
+    const expiredSnoozed = await Mail.find({
+      owner: userEmail,
+      folder: 'SNOOZED',
+      snoozed: { $lte: now, $ne: null }
+    });
+
+    if (expiredSnoozed.length > 0) {
+      console.log(`[SNOOZE] Returning ${expiredSnoozed.length} emails to INBOX for ${userEmail}`);
+      for (const mail of expiredSnoozed) {
+        mail.folder = 'INBOX';
+        mail.snoozed = null;
+        await mail.save();
+      }
+    }
+  } catch (error) {
+    console.error('Check snoozed error:', error);
+  }
+};
 
 // ------------------ GET FOLDERS ------------------
 const getFolderRoute = (folderName) => async (req, res) => {
@@ -216,7 +288,33 @@ const getFolderRoute = (folderName) => async (req, res) => {
   }
 };
 
-router.post('/inbox', verifyToken, getFolderRoute('INBOX'));
+router.post('/inbox', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { page = 1, limit = 50, filter = 'all' } = req.body;
+    
+    await checkSnoozed(userEmail);
+    
+    const query = { owner: userEmail, folder: 'INBOX', trash: false };
+    const skip = (page - 1) * limit;
+
+    const [mails, total] = await Promise.all([
+      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Mail.countDocuments(query)
+    ]);
+    
+    res.json({
+      success: true,
+      emails: mails.map(formatEmail),
+      count: mails.length,
+      total, page, totalPages: Math.ceil(total / limit),
+      folder: 'inbox'
+    });
+  } catch (error) {
+    console.error('Fetch inbox error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch inbox emails' });
+  }
+});
 router.post('/sent', verifyToken, getFolderRoute('SENT'));
 router.post('/archive', verifyToken, getFolderRoute('ARCHIVE'));
 router.post('/trash', verifyToken, getFolderRoute('TRASH'));
@@ -251,11 +349,113 @@ const getSpecialFolderRoute = (queryField) => async (req, res) => {
 router.post('/starred', verifyToken, getSpecialFolderRoute('starred'));
 router.post('/important', verifyToken, getSpecialFolderRoute('important'));
 
+// ------------------ LABELS (CUSTOM FOLDERS) ------------------
+router.get('/labels', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, labels: user.customLabels || [] });
+  } catch (error) {
+    console.error('Fetch labels error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch labels' });
+  }
+});
+
+router.post('/labels', verifyToken, async (req, res) => {
+  try {
+    const { name, color } = req.body;
+    if (!name) return res.status(400).json({ success: false, message: 'Label name is required' });
+
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const newLabel = {
+      id: name.toUpperCase().replace(/\s/g, '_'), // Generate a simple ID from name
+      name,
+      color: color || '#607d8b' // Default color
+    };
+
+    if (user.customLabels.some(label => label.id === newLabel.id)) {
+      return res.status(409).json({ success: false, message: 'Label with this name already exists' });
+    }
+
+    user.customLabels.push(newLabel);
+    await user.save();
+    res.status(201).json({ success: true, label: newLabel });
+  } catch (error) {
+    console.error('Create label error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create label' });
+  }
+});
+
+router.delete('/labels/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const initialLength = user.customLabels.length;
+    user.customLabels = user.customLabels.filter(label => label.id !== id.toUpperCase());
+
+    if (user.customLabels.length === initialLength) {
+      return res.status(404).json({ success: false, message: 'Label not found' });
+    }
+
+    await user.save();
+    // Optionally, move all mails from this deleted custom folder to INBOX or ARCHIVE
+    await Mail.updateMany(
+      { owner: req.user.email, folder: id.toUpperCase() },
+      { $set: { folder: 'INBOX' } }
+    );
+
+    res.json({ success: true, message: 'Label deleted successfully' });
+  } catch (error) {
+    console.error('Delete label error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete label' });
+  }
+});
+
+// Generic Folder Listing for Custom Folders
+router.post('/folder/:folderId', verifyToken, async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const { page = 1, limit = 50 } = req.body;
+    const userEmail = req.user.email;
+    
+    // Check if it's a valid custom folder for this user
+    const user = await User.findOne({ email: userEmail });
+    const isValid = user.customLabels?.some(l => l.id === folderId.toUpperCase());
+    
+    if (!isValid) {
+      return res.status(404).json({ success: false, message: 'Folder not found' });
+    }
+
+    const query = { owner: userEmail, folder: folderId.toUpperCase(), trash: false };
+    const skip = (page - 1) * limit;
+
+    const [mails, total] = await Promise.all([
+      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Mail.countDocuments(query)
+    ]);
+    
+    res.json({ 
+      success: true, 
+      emails: mails.map(formatEmail), 
+      total, page, 
+      totalPages: Math.ceil(total / limit),
+      folder: folderId.toLowerCase()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ------------------ COUNTS ------------------
 router.get('/folder-counts', verifyToken, async (req, res) => {
   try {
     const userEmail = req.user.email;
-    const [inbox, sent, archive, trash, starred, important, drafts, unread] = await Promise.all([
+    // Standard folders
+    const [inbox, sent, archive, trash, starred, important, drafts, unread, snoozed, spam] = await Promise.all([
       Mail.countDocuments({ owner: userEmail, folder: 'INBOX', trash: false }),
       Mail.countDocuments({ owner: userEmail, folder: 'SENT', trash: false }),
       Mail.countDocuments({ owner: userEmail, folder: 'ARCHIVE', trash: false }),
@@ -263,9 +463,22 @@ router.get('/folder-counts', verifyToken, async (req, res) => {
       Mail.countDocuments({ owner: userEmail, starred: true, trash: false }),
       Mail.countDocuments({ owner: userEmail, important: true, trash: false }),
       Mail.countDocuments({ owner: userEmail, folder: 'DRAFTS', trash: false }),
-      Mail.countDocuments({ owner: userEmail, folder: 'INBOX', read: false, trash: false })
+      Mail.countDocuments({ owner: userEmail, folder: 'INBOX', read: false, trash: false }),
+      Mail.countDocuments({ owner: userEmail, folder: 'SNOOZED', trash: false }),
+      Mail.countDocuments({ owner: userEmail, folder: 'SPAM', trash: false })
     ]);
-    res.json({ success: true, counts: { inbox, sent, archive, trash, starred, important, unread, drafts } });
+
+    // Fetch custom folder counts
+    const user = await User.findOne({ email: userEmail });
+    const customLabels = user.customLabels || [];
+    const custom = {};
+    for (const label of customLabels) {
+      custom[label.id] = await Mail.countDocuments({ owner: userEmail, folder: label.id.toUpperCase(), trash: false });
+    }
+
+    res.json({ success: true, counts: { 
+      inbox, sent, archive, trash, starred, important, unread, drafts, snoozed, spam, custom 
+    } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -287,12 +500,28 @@ router.get('/:mailId', verifyToken, async (req, res) => {
     
     const response = { ...formatEmail(mail), aesKey: mail.aesKey, aesIV: mail.aesIV, otpKey: mail.otpKey, snoozed: mail.snoozed, labels: mail.labels || [] };
     
+    // Auto-decrypt AES Body
     if (mail.encryption === 'AES' && mail.aesKey) {
       try {
         const encryptedData = JSON.parse(mail.body);
         response.body = aesDecrypt(encryptedData, mail.aesKey);
         response.decrypted = true;
         response.requiresDecryption = false;
+
+        // Auto-decrypt AES Attachments
+        if (response.attachments && response.attachments.length > 0) {
+          response.attachments = response.attachments.map(att => {
+            if (att.isEncrypted) {
+              try {
+                const encAttData = JSON.parse(att.data);
+                return { ...att, data: aesDecrypt(encAttData, mail.aesKey), isEncrypted: false };
+              } catch (e) {
+                return att;
+              }
+            }
+            return att;
+          });
+        }
       } catch (e) {
         console.error(`[DECRYPT] Automatic AES decryption failed for mail ${mailId}:`, e.message);
       }
@@ -326,7 +555,7 @@ router.put('/:mailId/status', verifyToken, async (req, res) => {
       case 'read': update.read = true; break;
       case 'unread': update.read = false; break;
       case 'toggle-read': update.read = !mail.read; break;
-      case 'archive': update.folder = 'ARCHIVE'; update.trash = false; break;
+      case 'archive': update.folder = 'ARCHIVE'; update.trash = false; update.snoozed = null; break;
       case 'unarchive': update.folder = mail.to === userEmail ? 'INBOX' : 'SENT'; update.trash = false; break;
       case 'trash': 
         if (mail.trash) {
@@ -334,14 +563,46 @@ router.put('/:mailId/status', verifyToken, async (req, res) => {
           return res.json({ success: true, message: 'Email permanently deleted' });
         }
         update.trash = true; 
+        update.snoozed = null;
         break;
       case 'restore': update.trash = false; break;
       case 'delete': 
         await Mail.deleteOne({ mailId, owner: userEmail });
         return res.json({ success: true, message: 'Email permanently deleted' });
-      case 'snooze': update.snoozed = new Date(snoozeDate); break;
-      case 'unsnooze': update.snoozed = null; break;
-      case 'move': update.folder = folder.toUpperCase(); update.trash = false; break;
+      case 'snooze': 
+        update.snoozed = new Date(snoozeDate); 
+        update.folder = 'SNOOZED'; 
+        update.read = false; // Snoozed emails are typically unread
+        break;
+      case 'unsnooze': 
+        update.snoozed = null; 
+        update.folder = 'INBOX'; 
+        break;
+      case 'spam':
+        update.folder = 'SPAM';
+        update.snoozed = null;
+        update.trash = false;
+        // Add sender to spamList
+        const user = await User.findOne({ email: userEmail });
+        if (user && !user.spamList.includes(mail.from.toLowerCase())) {
+          user.spamList.push(mail.from.toLowerCase());
+          await user.save();
+        }
+        break;
+      case 'not-spam':
+        update.folder = 'INBOX';
+        // Remove sender from spamList
+        const suser = await User.findOne({ email: userEmail });
+        if (suser) {
+          suser.spamList = suser.spamList.filter(e => e !== mail.from.toLowerCase());
+          await suser.save();
+        }
+        break;
+      case 'move': 
+        update.folder = folder.toUpperCase(); 
+        update.trash = false; 
+        update.snoozed = null; // Moving out of snoozed folder
+        break;
     }
     
     await Mail.updateOne({ mailId, owner: userEmail }, { $set: update });
@@ -365,13 +626,32 @@ router.post('/batch-update', verifyToken, async (req, res) => {
       case 'unstar': update = { $set: { starred: false } }; break;
       case 'read': update = { $set: { read: true } }; break;
       case 'unread': update = { $set: { read: false } }; break;
-      case 'archive': update = { $set: { folder: 'ARCHIVE', trash: false } }; break;
-      case 'trash': update = { $set: { trash: true } }; break;
+      case 'archive': update = { $set: { folder: 'ARCHIVE', trash: false, snoozed: null } }; break;
+      case 'trash': update = { $set: { trash: true, snoozed: null } }; break;
       case 'restore': update = { $set: { trash: false } }; break;
+      case 'important': update = { $set: { important: true } }; break;
+      case 'unimportant': update = { $set: { important: false } }; break;
+      case 'snooze': update = { $set: { folder: 'SNOOZED', snoozed: new Date(req.body.snoozeDate || Date.now() + 86400000) } }; break;
+      case 'task': update = { $set: { folder: 'TASKS', trash: false } }; break;
+      case 'spam': 
+        update = { $set: { folder: 'SPAM', trash: false, snoozed: null } }; 
+        // Also add senders to spam list
+        const mailsToSpam = await Mail.find({ mailId: { $in: emailIds }, owner: userEmail });
+        const spamSenders = [...new Set(mailsToSpam.map(m => m.from.toLowerCase()))];
+        await User.updateOne({ email: userEmail }, { $addToSet: { spamList: { $each: spamSenders } } });
+        break;
       case 'delete':
         const del = await Mail.deleteMany({ mailId: { $in: emailIds }, owner: userEmail });
         return res.json({ success: true, count: del.deletedCount });
-      case 'move': update = { $set: { folder: folder.toUpperCase(), trash: false } }; break;
+      case 'move': update = { $set: { folder: (folder || 'INBOX').toUpperCase(), trash: false, snoozed: null } }; break;
+      case 'label':
+        const { labelId } = req.body;
+        update = { $addToSet: { labels: labelId } };
+        break;
+      case 'unlabel':
+        const { labelId: ulId } = req.body;
+        update = { $pull: { labels: ulId } };
+        break;
     }
 
     if (['toggle-star', 'toggle-important', 'toggle-read', 'unarchive'].includes(action)) {
@@ -400,7 +680,7 @@ router.post('/move-to-folder', verifyToken, async (req, res) => {
     try {
       const { emailIds, targetFolder } = req.body;
       const userEmail = req.user.email;
-      const update = targetFolder === 'trash' ? { trash: true } : { folder: targetFolder.toUpperCase(), trash: false };
+      const update = targetFolder === 'trash' ? { trash: true, snoozed: null } : { folder: targetFolder.toUpperCase(), trash: false, snoozed: null };
       const result = await Mail.updateMany({ mailId: { $in: emailIds }, owner: userEmail }, { $set: update });
       res.json({ success: true, count: result.modifiedCount });
     } catch (error) {
@@ -445,12 +725,24 @@ router.post('/decrypt', verifyToken, async (req, res) => {
     if (!mail) return res.status(404).json({ success: false, message: 'Email not found' });
     
     let decryptedBody = mail.body;
+    let decryptedAttachments = mail.attachments || [];
     let usedKey = encryptionKey;
 
     if (mail.encryption === 'AES') {
       try {
         const encryptedData = JSON.parse(mail.body);
         decryptedBody = aesDecrypt(encryptedData, mail.aesKey);
+
+        // Decrypt AES Attachments
+        decryptedAttachments = decryptedAttachments.map(att => {
+          if (att.isEncrypted) {
+            try {
+              const encAttData = JSON.parse(att.data);
+              return { ...att, data: aesDecrypt(encAttData, mail.aesKey), isEncrypted: false };
+            } catch (e) { return att; }
+          }
+          return att;
+        });
       } catch (e) {
         return res.status(400).json({ success: false, message: 'Invalid AES format: ' + e.message });
       }
@@ -458,15 +750,13 @@ router.post('/decrypt', verifyToken, async (req, res) => {
       let ciphertext = mail.body;
       let extractKey = encryptionKey;
 
-      // Handle auto-generated OTP key format: [otp|KEY]:CIPHERTEXT
       if (mail.body.startsWith('[otp|') && mail.body.includes(']:')) {
         const match = mail.body.match(/^\[otp\|([^\]]+)\]:(.*)$/);
         if (match) {
-          extractKey = encryptionKey || match[1] || mail.otpKey; // Use provided key, embedded key, or stored key
+          extractKey = encryptionKey || match[1] || mail.otpKey;
           ciphertext = match[2];
         }
       } else if (!extractKey && mail.otpKey) {
-        // Fallback for non-embedded keys that were stored in the database
         extractKey = mail.otpKey;
       }
 
@@ -476,11 +766,24 @@ router.post('/decrypt', verifyToken, async (req, res) => {
 
       try {
         decryptedBody = otpDecrypt(ciphertext, extractKey);
+
+        // Decrypt OTP Attachments (Note: OTP attachments have their OWN keys embedded)
+        decryptedAttachments = decryptedAttachments.map(att => {
+          if (att.isEncrypted && att.data.startsWith('[otp|')) {
+            try {
+              const match = att.data.match(/^\[otp\|([^\]]+)\]:(.*)$/);
+              if (match) {
+                return { ...att, data: otpDecrypt(match[2], match[1]), isEncrypted: false };
+              }
+            } catch (e) { return att; }
+          }
+          return att;
+        });
       } catch (e) {
         return res.status(400).json({ success: false, message: 'OTP decryption failed: ' + e.message });
       }
     } else {
-      return res.json({ success: true, decrypted: mail.body, alreadyDecrypted: true });
+      return res.json({ success: true, decrypted: mail.body, attachments: mail.attachments, alreadyDecrypted: true });
     }
     
     // Mark as read after success
@@ -492,6 +795,7 @@ router.post('/decrypt', verifyToken, async (req, res) => {
     res.json({ 
       success: true, 
       decrypted: decryptedBody, 
+      attachments: decryptedAttachments,
       emailId: mail.mailId,
       encryptionUsed: mail.encryption,
       isJson: typeof decryptedBody === 'object' || (typeof decryptedBody === 'string' && decryptedBody.startsWith('{'))
@@ -502,23 +806,64 @@ router.post('/decrypt', verifyToken, async (req, res) => {
   }
 });
 
+// ------------------ SNOOZED FOLDER ------------------
+router.post('/snoozed', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { page = 1, limit = 50 } = req.body;
+    
+    await checkSnoozed(userEmail);
+    
+    const count = await Mail.countDocuments({ owner: userEmail, folder: 'SNOOZED', trash: false });
+    const emails = await Mail.find({ owner: userEmail, folder: 'SNOOZED', trash: false })
+      .sort({ snoozed: 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+      
+    res.json({ success: true, emails: emails.map(formatEmail), total: count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ------------------ SPAM FOLDER ------------------
+router.post('/spam', verifyToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { page = 1, limit = 50 } = req.body;
+    
+    const count = await Mail.countDocuments({ owner: userEmail, folder: 'SPAM', trash: false });
+    const emails = await Mail.find({ owner: userEmail, folder: 'SPAM', trash: false })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+      
+    res.json({ success: true, emails: emails.map(formatEmail), total: count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // ------------------ DRAFTS ------------------
 // List drafts (accommodating both GET and POST for listing)
 router.all('/drafts', verifyToken, async (req, res) => {
-  const isListing = req.method === 'GET' || (req.method === 'POST' && Object.keys(req.body).length === 0);
+  const isListing = req.method === 'GET' || (req.method === 'POST' && (req.body.limit || req.body.page || Object.keys(req.body).length === 0));
   
   if (isListing) {
     try {
-      const drafts = await Mail.find({ 
-        owner: req.user.email, 
-        folder: 'DRAFTS', 
-        trash: false 
-      }).sort({ updatedAt: -1 });
+      const { limit = 50, page = 1 } = req.body;
+      const userEmail = req.user.email;
+      
+      const query = { owner: userEmail, folder: 'DRAFTS', trash: false };
+      const [emails, total] = await Promise.all([
+        Mail.find(query).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit)),
+        Mail.countDocuments(query)
+      ]);
       
       return res.json({ 
         success: true, 
-        drafts: drafts.map(formatEmail) 
+        emails: emails.map(formatEmail),
+        total
       });
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
@@ -543,7 +888,7 @@ router.all('/drafts', verifyToken, async (req, res) => {
         read: true 
       });
       await draft.save();
-      return res.json({ success: true, draft: formatEmail(draft), draftId: draft._id });
+      return res.json({ success: true, email: formatEmail(draft), draftId: draft._id });
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }

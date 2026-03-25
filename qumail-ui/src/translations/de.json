@@ -1,0 +1,51 @@
+{
+  "sidebar": {
+    "inbox": "Posteingang",
+    "sent": "Gesendet",
+    "archive": "Archiv",
+    "trash": "Papierkorb",
+    "drafts": "Entwürfe",
+    "starred": "Markiert",
+    "snoozed": "Zurückgestellt",
+    "important": "Wichtig",
+    "spam": "Spam",
+    "compose": "E-Mail schreiben",
+    "storage": "Speicherplatzbelegung"
+  },
+  "settings": {
+    "account": "Kontoeinstellungen",
+    "profileSub": "Profil, Sicherheit und Vorlieben verwalten",
+    "security": "Sicherheitszentrum",
+    "profile": "Profilinformationen",
+    "editProfile": "Profil bearbeiten",
+    "name": "Vollständiger Name",
+    "email": "E-Mail-Adresse",
+    "emailLocked": "E-Mail kann nicht geändert werden",
+    "language": "Anzeigesprache",
+    "selectLanguage": "Sprache auswählen",
+    "preferences": "Einstellungen",
+    "savePrefs": "Einstellungen speichern",
+    "theme": "App-Thema",
+    "save": "Änderungen speichern",
+    "regenerate": "Schlüssel regenerieren",
+    "twoFactor": "Zwei-Faktor-Authentifizierung",
+    "logout": "Abmelden"
+  },
+  "common": {
+    "loading": "Laden...",
+    "saving": "Speichern...",
+    "success": "Erfolg!",
+    "error": "Fehler",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "labels": "LABELS",
+    "createLabel": "Neues Label erstellen",
+    "help": "Hilfe",
+    "of": "von",
+    "upgrade": "Upgrade",
+    "loadingMailbox": "Sicherer Posteingang wird geladen...",
+    "noMessages": "Keine Nachrichten in",
+    "secureCommunication": "Ihre sichere Kommunikation wird hier angezeigt.",
+    "refresh": "Aktualisieren"
+  }
+}

@@ -1,18 +1,45 @@
 import { createTheme } from "@mui/material/styles";
 
-export const getTheme = (mode) =>
-  createTheme({
+export const THEME_CONFIGS = {
+  default: {
+    primary: { light: "#2563eb", dark: "#60a5fa" },
+    secondary: { light: "#7c3aed", dark: "#a78bfa" }
+  },
+  sunset: {
+    primary: { light: "#ea580c", dark: "#fb923c" },
+    secondary: { light: "#db2777", dark: "#f472b6" }
+  },
+  ocean: {
+    primary: { light: "#0891b2", dark: "#22d3ee" },
+    secondary: { light: "#0d9488", dark: "#2dd4bf" }
+  },
+  forest: {
+    primary: { light: "#059669", dark: "#34d399" },
+    secondary: { light: "#65a30d", dark: "#a3e635" }
+  },
+  royal: {
+    primary: { light: "#9333ea", dark: "#c084fc" },
+    secondary: { light: "#4f46e5", dark: "#818cf8" }
+  },
+  midnight: {
+    primary: { light: "#334155", dark: "#94a3b8" },
+    secondary: { light: "#1e293b", dark: "#475569" }
+  }
+};
+
+export const getTheme = (mode, themeName = 'default') => {
+  const config = THEME_CONFIGS[themeName] || THEME_CONFIGS.default;
+  
+  return createTheme({
     palette: {
       mode,
 
       primary: {
-        main: mode === "dark" ? "#60a5fa" : "#2563eb",
-        light: mode === "dark" ? "#93c5fd" : "#dbeafe",
-        dark: mode === "dark" ? "#1d4ed8" : "#1e3a8a"
+        main: mode === "dark" ? config.primary.dark : config.primary.light,
       },
 
       secondary: {
-        main: mode === "dark" ? "#a78bfa" : "#7c3aed"
+        main: mode === "dark" ? config.secondary.dark : config.secondary.light
       },
 
       success: {
@@ -287,6 +314,7 @@ export const getTheme = (mode) =>
       }
     }
   });
+};
 
 export const lightTheme = getTheme('light');
 export const darkTheme = getTheme('dark');

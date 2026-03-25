@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Typography,
@@ -14,7 +15,8 @@ import {
   Card,
   CardContent,
   LinearProgress,
-  Chip
+  Chip,
+  useTheme
 } from '@mui/material';
 import {
   Person,
@@ -27,9 +29,10 @@ import {
   Storage,
   CloudUpload,
   Security,
-  Notifications
+  Notifications,
+  Settings
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 import { getProfile, updateProfile, changePassword } from '../services/accountApi';
 import { uploadAvatar } from "../services/accountApi";
 import { MenuItem, Select, FormControl, InputLabel } from '@mui/material';
@@ -104,7 +107,9 @@ const useAutoSave = (saveFunction, delay = 1000) => {
   return autoSave;
 };
 
-export default function AccountSettings() {
+export default function AccountSettings({ user: initialUser, themeName, onUpdateTheme }) {
+  const { t, i18n: i18nInstance } = useTranslation();
+  const theme = useTheme();
   const [user, setUser] = useState(null);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -118,7 +123,8 @@ export default function AccountSettings() {
     signature: '',
     twoFactorEnabled: false,
     timezone: 'UTC',
-    language: 'en'
+    language: 'en',
+    theme: themeName || 'default'
   });
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -154,7 +160,8 @@ export default function AccountSettings() {
         signature: profileData.settings?.signature || '',
         twoFactorEnabled: profileData.settings?.twoFactorEnabled || false,
         timezone: profileData.settings?.timezone || 'UTC',
-        language: profileData.settings?.language || 'en'
+        language: profileData.settings?.language || 'en',
+        theme: profileData.settings?.theme || themeName || 'default'
       }));
       
       // Set avatar preview
@@ -184,7 +191,8 @@ export default function AccountSettings() {
           signature: data.signature,
           twoFactorEnabled: data.twoFactorEnabled,
           timezone: data.timezone,
-          language: data.language
+          language: data.language,
+          theme: data.theme
         }
       });
       
@@ -197,6 +205,7 @@ export default function AccountSettings() {
       updatedUser.settings.twoFactorEnabled = data.twoFactorEnabled;
       updatedUser.settings.timezone = data.timezone;
       updatedUser.settings.language = data.language;
+      updatedUser.settings.theme = data.theme;
       setUser(updatedUser);
       
       setPreferencesChanged(false);
@@ -229,9 +238,19 @@ export default function AccountSettings() {
     setFormData(updated);
     setPreferencesChanged(true);
     
+    // Switch language immediately if changed
+    if (field === 'language') {
+      i18nInstance.changeLanguage(value);
+    }
+
     // Auto-save preferences (except when editing profile)
     if (!editing) {
       autoSave(updated);
+    }
+
+    // Call onUpdateTheme immediately for visual feedback
+    if (field === 'theme' && onUpdateTheme) {
+      onUpdateTheme(value);
     }
   };
 
@@ -412,7 +431,8 @@ export default function AccountSettings() {
         signature: user.settings?.signature || '',
         twoFactorEnabled: user.settings?.twoFactorEnabled || false,
         timezone: user.settings?.timezone || 'UTC',
-        language: user.settings?.language || 'en'
+        language: user.settings?.language || 'en',
+        theme: user.settings?.theme || 'default'
       });
     }
     setErrors({});
@@ -495,15 +515,25 @@ export default function AccountSettings() {
     );
   }
 
+  const themes = [
+    { id: 'default', name: 'QuMail Blue', color: '#1a73e8', gradient: 'linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)' },
+    { id: 'dark', name: 'Midnight', color: '#121212', gradient: 'linear-gradient(45deg, #1e1e1e 30%, #121212 90%)' },
+    { id: 'sunset', name: 'Sunset', color: '#f43f5e', gradient: 'linear-gradient(45deg, #f43f5e 30%, #fbbf24 90%)' },
+    { id: 'emerald', name: 'Emerald', color: '#059669', gradient: 'linear-gradient(45deg, #059669 30%, #10b981 90%)' },
+    { id: 'ocean', name: 'Ocean', color: '#0d9488', gradient: 'linear-gradient(45deg, #0d9488 30%, #06b6d4 90%)' },
+    { id: 'purple', name: 'Royal', color: '#7c3aed', gradient: 'linear-gradient(45deg, #7c3aed 30%, #c026d3 90%)' },
+    { id: 'gold', name: 'Golden Hour', color: '#d97706', gradient: 'linear-gradient(45deg, #d97706 30%, #fcd34d 90%)' },
+  ];
+
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto', p: { xs: 2, md: 3 } }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight="700" gutterBottom color="primary">
-          Account Settings
+          {t('settings.account')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage your profile, security, and preferences
+          {t('settings.profileSub')}
         </Typography>
       </Box>
 
@@ -528,40 +558,40 @@ export default function AccountSettings() {
           <SectionHeader>
             <Person color="primary" />
             <Typography variant="h6" fontWeight="600">
-              Profile Information
+              {t('settings.profile')}
             </Typography>
             {!editing ? (
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Edit />}
-                onClick={() => setEditing(true)}
-                sx={{ ml: 'auto' }}
-              >
-                Edit Profile
-              </Button>
-            ) : (
-              <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<Cancel />}
-                  onClick={handleCancel}
-                  disabled={loading}
+                  startIcon={<Edit />}
+                  onClick={() => setEditing(true)}
+                  sx={{ ml: 'auto' }}
                 >
-                  Cancel
+                  {t('settings.editProfile')}
                 </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={loading ? <CircularProgress size={16} /> : <Save />}
-                  onClick={handleSave}
-                  disabled={loading}
-                >
-                  {loading ? 'Saving...' : 'Save'}
-                </Button>
-              </Box>
-            )}
+              ) : (
+                <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Cancel />}
+                    onClick={handleCancel}
+                    disabled={loading}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={loading ? <CircularProgress size={16} /> : <Save />}
+                    onClick={handleSave}
+                    disabled={loading}
+                  >
+                    {loading ? t('common.saving') : t('common.save')}
+                  </Button>
+                </Box>
+              )}
           </SectionHeader>
 
           <Grid container spacing={4}>
@@ -637,7 +667,7 @@ export default function AccountSettings() {
                     <Grid item xs={12} md={6}>
                       <TextField
                         fullWidth
-                        label="Full Name"
+                        label={t('settings.name')}
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         error={!!errors.name}
@@ -651,12 +681,12 @@ export default function AccountSettings() {
                     <Grid item xs={12} md={6}>
                       <TextField
                         fullWidth
-                        label="Email"
+                        label={t('settings.email')}
                         type="email"
                         value={formData.email}
                         disabled={true}
                         margin="normal"
-                        helperText="Email cannot be changed"
+                        helperText={t('settings.emailLocked')}
                         required
                       />
                     </Grid>
@@ -734,7 +764,7 @@ export default function AccountSettings() {
                   <Grid item xs={12} md={6}>
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        Full Name
+                        {t('settings.name')}
                       </Typography>
                       <Typography variant="body1" fontWeight="500">
                         {user?.name || 'Not set'}
@@ -743,7 +773,7 @@ export default function AccountSettings() {
                     
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        Email Address
+                        {t('settings.email')}
                       </Typography>
                       <Typography variant="body1">
                         {user?.email || 'Not set'}
@@ -777,13 +807,13 @@ export default function AccountSettings() {
         </CardContent>
       </StyledCard>
 
-      {/* Preferences Card */}
+      {/* Preferences & Display Card */}
       <StyledCard>
         <CardContent>
           <SectionHeader>
-            <Notifications color="primary" />
+            <Settings color="primary" />
             <Typography variant="h6" fontWeight="600">
-              Preferences
+               Preferences & Display
             </Typography>
             {preferencesChanged && !editing && (
               <Button
@@ -794,15 +824,122 @@ export default function AccountSettings() {
                 disabled={loading}
                 sx={{ ml: 'auto' }}
               >
-                {loading ? <CircularProgress size={16} /> : 'Save Preferences'}
+                {loading ? <CircularProgress size={16} /> : t('settings.savePrefs')}
               </Button>
             )}
           </SectionHeader>
 
-          <Grid container spacing={3}>
+          <Grid container spacing={4}>
+            {/* Language and Timezone */}
             <Grid item xs={12} md={6}>
-              <Box sx={{ mb: 3 }}>
-                <FormControlLabel
+              <FormControl fullWidth margin="normal" disabled={loading}>
+                <InputLabel>{t('settings.language')}</InputLabel>
+                <Select
+                  value={formData.language}
+                  label={t('settings.language')}
+                  onChange={(e) => handlePreferenceChange('language', e.target.value)}
+                >
+                  <MenuItem value="en">English (US)</MenuItem>
+                  <MenuItem value="hi">Hindi (हिन्दी)</MenuItem>
+                  <MenuItem value="mr">Marathi (मराठी)</MenuItem>
+                  <MenuItem value="ar">Arabic (العربية)</MenuItem>
+                  <MenuItem value="es">Spanish (Español)</MenuItem>
+                  <MenuItem value="fr">French (Français)</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth margin="normal" disabled={loading}>
+                <InputLabel>{t('settings.timezone')}</InputLabel>
+                <Select
+                  value={formData.timezone}
+                  label={t('settings.timezone')}
+                  onChange={(e) => handlePreferenceChange('timezone', e.target.value)}
+                >
+                  <MenuItem value="UTC">UTC</MenuItem>
+                  <MenuItem value="America/New_York">Eastern Time</MenuItem>
+                  <MenuItem value="Asia/Kolkata">India Standard Time</MenuItem>
+                  <MenuItem value="Europe/London">Greenwich Mean Time</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Themes Section */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1, fontWeight: 600 }}>
+                Choose Visual Theme
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                {themes.map((t) => (
+                  <Box
+                    key={t.id}
+                    onClick={() => handlePreferenceChange('theme', t.id)}
+                    sx={{
+                      width: 75,
+                      height: 75,
+                      borderRadius: 2,
+                      background: t.gradient,
+                      cursor: 'pointer',
+                      border: formData.theme === t.id ? '3px solid' : '1px solid transparent',
+                      borderColor: 'primary.main',
+                      position: 'relative',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': { 
+                        transform: 'scale(1.08)',
+                        boxShadow: '0 6px 15px rgba(0,0,0,0.2)'
+                      }
+                    }}
+                  >
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        color: 'white', 
+                        fontWeight: 700, 
+                        textAlign: 'center', 
+                        fontSize: '0.65rem',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                        p: 0.5, 
+                        lineHeight: 1.1 
+                      }}
+                    >
+                      {t.name}
+                    </Typography>
+                    {formData.theme === t.id && (
+                      <Box sx={{ 
+                        position: 'absolute', 
+                        top: -8, 
+                        right: -8, 
+                        bgcolor: 'primary.main', 
+                        borderRadius: '50%', 
+                        width: 20, 
+                        height: 20, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center' 
+                      }}>
+                         <Save sx={{ fontSize: 12, color: 'white' }} />
+                      </Box>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
+            <SectionHeader sx={{ borderBottom: 'none', mb: 1 }}>
+                <Notifications color="primary" fontSize="small" />
+                <Typography variant="subtitle1" fontWeight="600">
+                    Notifications & Security
+                </Typography>
+            </SectionHeader>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                 <FormControlLabel
                   control={
                     <Switch
                       checked={formData.emailNotifications}
@@ -810,18 +947,10 @@ export default function AccountSettings() {
                       disabled={loading}
                     />
                   }
-                  label={
-                    <Box>
-                      <Typography variant="body1" fontWeight="500">Email Notifications</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Receive email notifications for important updates
-                      </Typography>
-                    </Box>
-                  }
+                  label="Email Notifications"
                 />
-              </Box>
-              
-              <Box sx={{ mb: 3 }}>
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -830,20 +959,10 @@ export default function AccountSettings() {
                       disabled={loading}
                     />
                   }
-                  label={
-                    <Box>
-                      <Typography variant="body1" fontWeight="500">Auto-save Drafts</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Automatically save drafts as you compose
-                      </Typography>
-                    </Box>
-                  }
+                  label="Auto-save Drafts"
                 />
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <Box sx={{ mb: 3 }}>
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -852,82 +971,26 @@ export default function AccountSettings() {
                       disabled={loading}
                     />
                   }
-                  label={
-                    <Box>
-                      <Typography variant="body1" fontWeight="500">Two-Factor Authentication</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Add an extra layer of security to your account
-                      </Typography>
-                    </Box>
-                  }
+                  label="2FA Security"
                 />
-              </Box>
+              </Grid>
             </Grid>
-          </Grid>
-
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle2" gutterBottom color="text.secondary">
-              Email Signature
-            </Typography>
-            <TextField
-              fullWidth
-              value={formData.signature}
-              onChange={(e) => handlePreferenceChange('signature', e.target.value)}
-              multiline
-              rows={3}
-              disabled={loading}
-              placeholder="Add a professional signature to your outgoing emails"
-              variant="outlined"
-            />
           </Box>
-
+          
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle2" gutterBottom color="text.secondary">
-              Language
-            </Typography>
-            <FormControl fullWidth disabled={loading}>
-              <InputLabel id="language-label">Select Language</InputLabel>
-              <Select
-                labelId="language-label"
-                value={formData.language}
-                label="Select Language"
-                onChange={(e) => handlePreferenceChange('language', e.target.value)}
-              >
-                <MenuItem value="en">English (US)</MenuItem>
-                <MenuItem value="en-gb">English (UK)</MenuItem>
-                <MenuItem value="es">Español</MenuItem>
-                <MenuItem value="fr">Français</MenuItem>
-                <MenuItem value="de">Deutsch</MenuItem>
-                <MenuItem value="zh">中文 (Chinese)</MenuItem>
-                <MenuItem value="ja">日本語 (Japanese)</MenuItem>
-                <MenuItem value="ru">Русский (Russian)</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle2" gutterBottom color="text.secondary">
-              Timezone
-            </Typography>
-            <FormControl fullWidth disabled={loading}>
-              <InputLabel id="timezone-label">Select Timezone</InputLabel>
-              <Select
-                labelId="timezone-label"
-                value={formData.timezone}
-                label="Select Timezone"
-                onChange={(e) => handlePreferenceChange('timezone', e.target.value)}
-              >
-                <MenuItem value="UTC">UTC (Coordinated Universal Time)</MenuItem>
-                <MenuItem value="America/New_York">EST (Eastern Time)</MenuItem>
-                <MenuItem value="America/Chicago">CST (Central Time)</MenuItem>
-                <MenuItem value="America/Denver">MST (Mountain Time)</MenuItem>
-                <MenuItem value="America/Los_Angeles">PST (Pacific Time)</MenuItem>
-                <MenuItem value="Europe/London">GMT (London)</MenuItem>
-                <MenuItem value="Europe/Paris">CET (Central European Time)</MenuItem>
-                <MenuItem value="Asia/Tokyo">JST (Japan Standard Time)</MenuItem>
-                <MenuItem value="Asia/Kolkata">IST (India Standard Time)</MenuItem>
-              </Select>
-            </FormControl>
+             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+               Email Signature
+             </Typography>
+             <TextField
+               fullWidth
+               multiline
+               rows={3}
+               variant="outlined"
+               value={formData.signature}
+               onChange={(e) => handlePreferenceChange('signature', e.target.value)}
+               placeholder="Write your email signature here..."
+               disabled={loading}
+             />
           </Box>
         </CardContent>
       </StyledCard>

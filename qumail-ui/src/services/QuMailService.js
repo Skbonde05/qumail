@@ -133,13 +133,28 @@ const QuMailService = {
     return response.data;
   },
 
+  updateProfile: async (data) => {
+    try {
+      const response = await axiosInstance.put('/api/auth/profile', data);
+      return response.data;
+    } catch (error) {
+      return error.response?.data || { success: false, message: 'Profile update failed' };
+    }
+  },
+
   // Email Operations
   fetchEmails: async (folder = 'inbox', limit = 50, page = 1) => {
     const cacheKey = `emails_${folder}_${limit}_${page}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
     
-    const response = await axiosInstance.post(`/api/mail/${folder}`, { limit, page });
+    // Check if it's a standard folder or a custom one
+    const standardFolders = ['inbox', 'sent', 'archive', 'trash', 'starred', 'important', 'drafts', 'snoozed', 'spam'];
+    const endpoint = standardFolders.includes(folder.toLowerCase()) 
+      ? `/api/mail/${folder.toLowerCase()}` 
+      : `/api/mail/folder/${folder}`;
+
+    const response = await axiosInstance.post(endpoint, { limit, page });
     const result = response.data.emails || [];
     cache.set(cacheKey, result, 10000); // 10s cache
     return result;
@@ -212,6 +227,22 @@ const QuMailService = {
     const response = await axiosInstance.post('/api/auth/regenerate-key', { algorithm });
     return response.data;
   },
+  forgotPassword: async (email) => {
+    const response = await axiosInstance.post('/api/auth/forgot-password', { email });
+    return response.data;
+  },
+  verifyResetOTP: async (email, otp) => {
+    const response = await axiosInstance.post('/api/auth/verify-reset-otp', { email, otp });
+    return response.data;
+  },
+  verifyRecoveryCode: async (email, recoveryCode) => {
+    const response = await axiosInstance.post('/api/auth/verify-recovery-code', { email, recoveryCode });
+    return response.data;
+  },
+  resetPassword: async (token, password) => {
+    const response = await axiosInstance.post('/api/auth/reset-password', { token, password });
+    return response.data;
+  },
 
   // --- Notifications ---
   // These methods are essential for real-time engagement.
@@ -230,17 +261,62 @@ const QuMailService = {
 
   // Drafts
   getDrafts: async () => {
-    const response = await axiosInstance.post('/api/mail/drafts');
+    const response = await axiosInstance.get('/api/mail/drafts');
     return response.data.drafts || [];
   },
 
-  createDraft: async (to, subject, body) => {
-    const response = await axiosInstance.post('/api/mail/drafts/create', { to, subject, body });
+  createDraft: async (to, subject, body, options = {}) => {
+    const response = await axiosInstance.post('/api/mail/drafts', { to, subject, body, ...options });
+    return response.data;
+  },
+
+  updateDraft: async (id, data) => {
+    const response = await axiosInstance.put(`/api/mail/drafts/${id}`, data);
     return response.data;
   },
 
   deleteDraft: async (id) => {
     const response = await axiosInstance.delete(`/api/mail/drafts/${id}`);
+    return response.data;
+  },
+
+  // Labels
+  getLabels: async () => {
+    const response = await axiosInstance.get('/api/mail/labels');
+    return response.data.labels || [];
+  },
+
+  createLabel: async (name, color) => {
+    const response = await axiosInstance.post('/api/mail/labels', { name, color });
+    return response.data;
+  },
+
+  deleteLabel: async (id) => {
+    const response = await axiosInstance.delete(`/api/mail/labels/${id}`);
+    return response.data;
+  },
+
+  // Two-Factor Authentication
+  setup2FA: async () => {
+    const response = await axiosInstance.post('/api/auth/setup-2fa');
+    return response.data;
+  },
+  confirm2FA: async (otp) => {
+    const response = await axiosInstance.post('/api/auth/confirm-2fa', { otp });
+    return response.data;
+  },
+  verify2FA: async (otp, mfaToken) => {
+    const response = await axiosInstance.post('/api/auth/verify-2fa', { otp, mfaToken });
+    if (response.data.success && response.data.token) {
+      const { token, refreshToken, user } = response.data;
+      localStorage.setItem('qumail_token', token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('qumail_refresh_token', refreshToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('qumail_email', user.email);
+      localStorage.setItem('userEmail', user.email);
+      localStorage.setItem('qumail_name', user.name || user.email.split('@')[0]);
+    }
     return response.data;
   }
 };

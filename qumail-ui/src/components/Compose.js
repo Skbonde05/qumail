@@ -21,7 +21,8 @@ import {
   Snackbar,
   CircularProgress,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  alpha
 } from "@mui/material";
 import {
   Close,
@@ -41,7 +42,7 @@ import {
   Lock as LockKeyhole,
   Mail
 } from "@mui/icons-material";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 import EmailService from "../services/EmailService";
 
@@ -77,12 +78,14 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
       setSubject(draftToEdit.subject || "");
       setBody(draftToEdit.body || "");
       setLevel(draftToEdit.encryptionLevel || "aes256");
-      setCc(draftToEdit.cc || "");
-      setBcc(draftToEdit.bcc || "");
-      setDraftId(draftToEdit.id || null);
+      setCc(Array.isArray(draftToEdit.cc) ? draftToEdit.cc.join(", ") : draftToEdit.cc || "");
+      setBcc(Array.isArray(draftToEdit.bcc) ? draftToEdit.bcc.join(", ") : draftToEdit.bcc || "");
+      setAttachments(draftToEdit.attachments || []);
+      setProcessedAttachments(draftToEdit.attachments || []);
+      setDraftId(draftToEdit._id || null);
       
-      if (draftToEdit.cc) setShowCC(true);
-      if (draftToEdit.bcc) setShowBCC(true);
+      if (draftToEdit.cc && draftToEdit.cc.length > 0) setShowCC(true);
+      if (draftToEdit.bcc && draftToEdit.bcc.length > 0) setShowBCC(true);
     }
   }, [draftToEdit]);
 
@@ -195,12 +198,6 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     setSaving(true);
 
     try {
-      const token = localStorage.getItem("token");
-      
-      if (!token) {
-        return;
-      }
-
       const result = await EmailService.saveDraft(
         draftId,
         to.trim(),
@@ -214,17 +211,39 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
       if (result.success) {
         setDraftId(result.draftId);
-        
-        setSnackbar({
-          open: true,
-          message: "Draft saved",
-          severity: "success"
-        });
       }
     } catch (error) {
       console.error("Save draft error:", error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteDraft = async () => {
+    if (!draftId) {
+      onClose();
+      resetForm();
+      return;
+    }
+
+    if (window.confirm("Are you sure you want to discard this draft? It will be permanently deleted.")) {
+      try {
+        await EmailService.deleteDraft(draftId);
+        onClose();
+        resetForm();
+        setSnackbar({
+          open: true,
+          message: "Draft discarded",
+          severity: "info"
+        });
+      } catch (error) {
+        console.error("Delete draft error:", error);
+        setSnackbar({
+          open: true,
+          message: "Failed to delete draft",
+          severity: "error"
+        });
+      }
     }
   };
 
@@ -244,16 +263,9 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   };
 
   const handleClose = () => {
-    // If there's content, ask before discarding
-    if ((subject || body || to) && !sending) {
-      if (window.confirm("You have unsaved changes. Discard draft?")) {
-        onClose();
-        resetForm();
-      }
-    } else {
-      onClose();
-      resetForm();
-    }
+    // Just close the modal, don't reset if we are editing
+    // The resetForm will be called by the useEffect if open becomes false
+    onClose();
   };
 
   const handleAttachment = async (e) => {
@@ -345,6 +357,49 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     setBody(body.substring(0, start) + formattedText + body.substring(end));
   };
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      setAttachments(prev => [...prev, ...files]);
+      
+      const newProcessed = await Promise.all(files.map(file => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            resolve({
+              filename: file.name,
+              contentType: file.type,
+              size: file.size,
+              data: ev.target.result.split(',')[1]
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      }));
+      
+      setProcessedAttachments(prev => [...prev, ...newProcessed]);
+      setSnackbar({
+        open: true,
+        message: `${files.length} file(s) attached via drag & drop`,
+        severity: "info"
+      });
+    }
+  };
+
   return (
     <>
       <Dialog
@@ -357,9 +412,16 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
           sx: isMobile ? {} : {
             height: "85vh",
             maxHeight: "700px",
-            borderRadius: "12px"
+            borderRadius: "12px",
+            ...(isDragging && {
+              border: '2px dashed #1a73e8',
+              bgcolor: alpha('#1a73e8', 0.05)
+            })
           }
         }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <DialogTitle sx={{ 
           bgcolor: "primary.main", 
@@ -378,7 +440,24 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
           </IconButton>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent sx={{ p: 0, position: 'relative' }}>
+          {isDragging && (
+            <Box sx={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: alpha('#1a73e8', 0.1),
+              zIndex: 10,
+              pointerEvents: 'none'
+            }}>
+              <Box sx={{ p: 3, bgcolor: 'white', borderRadius: 2, boxShadow: 3, textAlign: 'center' }}>
+                <AttachFile sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+                <Typography variant="h6">Drop to Attach Files</Typography>
+              </Box>
+            </Box>
+          )}
           <Box sx={{ p: 2.5 }}>
             {/* Recipients */}
             <Box sx={{ display: "flex", alignItems: "flex-start", mb: 1 }}>
@@ -516,7 +595,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
             <Divider sx={{ my: 2 }} />
 
-            {/* Message Body ... same ... */}
+            {/* Message Body */}
             <Box sx={{ border: "1px solid #e0e0e0", borderRadius: 1 }}>
               {/* Formatting Toolbar */}
               <Box sx={{ 
@@ -665,9 +744,10 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
             
             <Box>
               <Button
-                onClick={handleClose}
-                sx={{ mr: 1 }}
+                onClick={handleDeleteDraft}
+                sx={{ mr: 1, color: 'error.main' }}
                 disabled={sending}
+                startIcon={<Delete />}
               >
                 Discard
               </Button>

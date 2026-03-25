@@ -82,8 +82,8 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -102,6 +102,16 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
     navigator.clipboard.writeText(recoveryCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    const element = document.createElement("a");
+    const file = new Blob([`QuMail Account Recovery Code\n\nName: ${name}\nEmail: ${email}\nRecovery Code: ${recoveryCode}\n\nKeep this file safe and offline.`], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `qumail_recovery_${email}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
   };
 
   return (
@@ -298,7 +308,15 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
             </Tooltip>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 0, justifyContent: 'center' }}>
+        <DialogActions sx={{ p: 3, pt: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Button 
+            variant="outlined" 
+            fullWidth
+            onClick={handleDownload}
+            sx={{ borderRadius: "24px", py: 1 }}
+          >
+            Download Code as Text
+          </Button>
           <Button 
             variant="contained" 
             fullWidth

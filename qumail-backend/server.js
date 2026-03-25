@@ -3,6 +3,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const authRoutes = require("./routes/authRoutes");
@@ -12,6 +13,9 @@ const { apiLimiter } = require("./middleware/rateLimit");
 const apiGateway = require("./middleware/apiGateway"); // Imported apiGateway
 
 const app = express();
+
+// Enable Gzip Compression
+app.use(compression());
 
 // Configure CORS
 app.use(cors({

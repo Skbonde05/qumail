@@ -1,0 +1,51 @@
+{
+  "sidebar": {
+    "inbox": "Boîte de réception",
+    "sent": "Envoyés",
+    "archive": "Archives",
+    "trash": "Corbeille",
+    "drafts": "Brouillons",
+    "starred": "Favoris",
+    "snoozed": "En attente",
+    "important": "Important",
+    "spam": "Indésirables",
+    "compose": "Nouveau message",
+    "storage": "Utilisation du stockage"
+  },
+  "settings": {
+    "account": "Paramètres du compte",
+    "profileSub": "Gérer votre profil, sécurité et préférences",
+    "security": "Centre de sécurité",
+    "profile": "Informations du profil",
+    "editProfile": "Modifier le profil",
+    "name": "Nom complet",
+    "email": "Adresse e-mail",
+    "emailLocked": "L'e-mail ne peut être modifié",
+    "language": "Langue d'affichage",
+    "selectLanguage": "Choisir la langue",
+    "preferences": "Préférences",
+    "savePrefs": "Enregistrer les préférences",
+    "theme": "Thème de l'application",
+    "save": "Enregistrer les modifications",
+    "regenerate": "Régénérer les clés",
+    "twoFactor": "Authentification à deux facteurs",
+    "logout": "Se déconnecter"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "saving": "Enregistrement...",
+    "success": "Succès !",
+    "error": "Erreur",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "labels": "ÉTIQUETTES",
+    "createLabel": "Nouvelle étiquette",
+    "help": "Aide",
+    "of": "sur",
+    "upgrade": "Mettre à niveau",
+    "loadingMailbox": "Chargement de votre boîte aux lettres sécurisée...",
+    "noMessages": "Aucun message dans",
+    "secureCommunication": "Votre communication sécurisée apparaîtra ici.",
+    "refresh": "Actualiser"
+  }
+}

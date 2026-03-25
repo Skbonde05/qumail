@@ -1,9 +1,10 @@
 import React, { memo } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  Box, Button, List, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Avatar, Menu, MenuItem, LinearProgress, useTheme
+  Box, Button, List, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Avatar, Menu, MenuItem, LinearProgress, useTheme, ListSubheader, IconButton, Tooltip
 } from "@mui/material";
 import { 
-  Create, Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, ExitToApp, Settings, HelpOutline, Security, Storage, Upgrade
+  Create, Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, ExitToApp, Settings, HelpOutline, Security, Storage, Upgrade, AccessTime, Report, Circle, Add
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 
@@ -51,6 +52,7 @@ const SidebarItem = memo(({ icon: Icon, text, count, selected, onClick }) => (
 ));
 
 const ProfileMenu = ({ anchorEl, onClose, onLogout, onSettings, user }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const open = Boolean(anchorEl);
   
@@ -75,11 +77,11 @@ const ProfileMenu = ({ anchorEl, onClose, onLogout, onSettings, user }) => {
       <Divider />
       <MenuItem onClick={onSettings} sx={{ py: 1.5 }}>
         <ListItemIcon><Settings fontSize="small" /></ListItemIcon>
-        <ListItemText primary="Account Settings" />
+        <ListItemText primary={t('settings.account')} />
       </MenuItem>
       <MenuItem onClick={onLogout} sx={{ py: 1.5, color: 'error.main' }}>
         <ListItemIcon><ExitToApp fontSize="small" color="error" /></ListItemIcon>
-        <ListItemText primary="Logout" />
+        <ListItemText primary={t('settings.logout')} />
       </MenuItem>
     </Menu>
   );
@@ -93,8 +95,11 @@ const Sidebar = memo(({
   onSectionChange,
   folderCounts = {},
   drawerWidth = 260,
-  user = null
+  user = null,
+  labels = [],
+  onAddLabel = null
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const limit = user?.storageLimit || (15 * 1024 * 1024 * 1024);
   const storageGB = limit / (1024 * 1024 * 1024);
@@ -102,13 +107,15 @@ const Sidebar = memo(({
   const storagePercentage = storageGB > 0 ? (usedGB / storageGB) * 100 : 0;
 
   const sections = [
-    { id: "inbox", icon: Inbox, text: "Inbox", count: folderCounts.inbox },
-    { id: "starred", icon: Star, text: "Starred", count: folderCounts.starred },
-    { id: "important", icon: LabelImportant, text: "Important", count: folderCounts.important },
-    { id: "sent", icon: Send, text: "Sent", count: folderCounts.sent },
-    { id: "drafts", icon: Drafts, text: "Drafts", count: folderCounts.drafts },
-    { id: "archive", icon: Archive, text: "Archive", count: folderCounts.archive },
-    { id: "trash", icon: Delete, text: "Trash", count: folderCounts.trash },
+    { id: "inbox", icon: Inbox, text: t("sidebar.inbox"), count: folderCounts.inbox },
+    { id: "snoozed", icon: AccessTime, text: t("sidebar.snoozed"), count: folderCounts.snoozed },
+    { id: "starred", icon: Star, text: t("sidebar.starred"), count: folderCounts.starred },
+    { id: "important", icon: LabelImportant, text: t("sidebar.important"), count: folderCounts.important },
+    { id: "sent", icon: Send, text: t("sidebar.sent"), count: folderCounts.sent },
+    { id: "drafts", icon: Drafts, text: t("sidebar.drafts"), count: folderCounts.drafts },
+    { id: "archive", icon: Archive, text: t("sidebar.archive"), count: folderCounts.archive },
+    { id: "spam", icon: Report, text: t("sidebar.spam"), count: folderCounts.spam },
+    { id: "trash", icon: Delete, text: t("sidebar.trash"), count: folderCounts.trash },
   ];
 
   return (
@@ -121,7 +128,7 @@ const Sidebar = memo(({
           onClick={onCompose}
           sx={{ borderRadius: "16px", py: 1.5, textTransform: "none", fontWeight: "700", boxShadow: 0, '&:hover': { boxShadow: 2 } }}
         >
-          Compose
+          {t('sidebar.compose')}
         </Button>
       </Box>
 
@@ -141,10 +148,49 @@ const Sidebar = memo(({
 
         <Divider sx={{ my: 2, mx: 2 }} />
 
+        <List
+          disablePadding
+          subheader={
+            <ListSubheader 
+              sx={{ 
+                bgcolor: 'transparent', 
+                lineHeight: '32px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                px: 3, 
+                fontSize: '0.75rem', 
+                fontWeight: 700, 
+                color: 'text.secondary' 
+              }}
+            >
+              {t('common.labels')}
+              <Tooltip title={t('common.createLabel')}>
+                <IconButton size="small" onClick={onAddLabel} sx={{ p: 0.5 }}>
+                  <Add sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </ListSubheader>
+          }
+        >
+          {labels.map((label) => (
+            <SidebarItem
+              key={label.id}
+              icon={() => <Circle sx={{ color: label.color, fontSize: 12 }} />}
+              text={label.name}
+              count={folderCounts.custom?.[label.id]}
+              selected={activeSection === 'inbox' && activeFolder === label.id}
+              onClick={() => onFolderChange(label.id)}
+            />
+          ))}
+        </List>
+
+        <Divider sx={{ my: 2, mx: 2 }} />
+
         <List disablePadding>
-          <SidebarItem icon={Settings} text="Settings" selected={activeSection === 'settings'} onClick={() => onSectionChange('settings')} />
-          <SidebarItem icon={Security} text="Security" selected={activeSection === 'security'} onClick={() => onSectionChange('security')} />
-          <SidebarItem icon={HelpOutline} text="Help" selected={activeSection === 'help'} onClick={() => onSectionChange('help')} />
+          <SidebarItem icon={Settings} text={t('settings.account')} selected={activeSection === 'settings'} onClick={() => onSectionChange('settings')} />
+          <SidebarItem icon={Security} text={t('settings.security')} selected={activeSection === 'security'} onClick={() => onSectionChange('security')} />
+          <SidebarItem icon={HelpOutline} text={t('common.help')} selected={activeSection === 'help'} onClick={() => onSectionChange('help')} />
         </List>
       </Box>
 
@@ -152,7 +198,7 @@ const Sidebar = memo(({
         <Box sx={{ p: 2.5, bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
             <Storage fontSize="small" color="primary" />
-            <Typography variant="caption" fontWeight="700">Storage Usage</Typography>
+            <Typography variant="caption" fontWeight="700">{t('sidebar.storage')}</Typography>
           </Box>
           <LinearProgress 
             variant="determinate" 
@@ -161,7 +207,7 @@ const Sidebar = memo(({
           />
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">
-              {usedGB.toFixed(2)} GB of {storageGB.toFixed(0)} GB
+              {usedGB.toFixed(2)} GB {t('common.of')} {storageGB.toFixed(0)} GB
             </Typography>
             <Typography variant="caption" fontWeight="700" color={storagePercentage > 90 ? 'error' : 'primary'}>
               {storagePercentage.toFixed(1)}%
@@ -169,7 +215,7 @@ const Sidebar = memo(({
           </Box>
           {storagePercentage > 80 && (
             <Button variant="outlined" size="small" fullWidth sx={{ mt: 1.5, fontSize: '0.7rem', py: 0.5 }} startIcon={<Upgrade />}>
-              Upgrade
+              {t('common.upgrade')}
             </Button>
           )}
         </Box>
