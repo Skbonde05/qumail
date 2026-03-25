@@ -120,7 +120,12 @@ const Sidebar = memo(({
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ p: 2, pt: 3 }}>
+      <Box sx={{ p: 2, pt: 3, display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
+          <Box component="img" src="/qumail_logo.png" sx={{ height: 32, mr: 1 }} alt="QuMail Logo" />
+          <Typography variant="h6" fontWeight="700">QuMail</Typography>
+      </Box>
+
+      <Box sx={{ p: 2, pt: { xs: 1, md: 3 } }}>
         <Button
           variant="contained"
           fullWidth

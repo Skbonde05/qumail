@@ -431,7 +431,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
           alignItems: "center",
           py: 1.5
         }}>
-          <Typography variant="h6" fontWeight="600">
+          <Typography variant="h6" fontWeight="600" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
             {draftId ? "Edit Draft" : "New Message"}
             {saving && <CircularProgress size={20} sx={{ ml: 2, color: "white" }} />}
           </Typography>

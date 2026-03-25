@@ -173,9 +173,9 @@ export default function SecuritySettings() {
   };
 
   return (
-    <Box key="security-center" sx={{ maxWidth: 1000, mx: 'auto', p: 3 }}>
-      <Typography variant="h4" fontWeight="700" gutterBottom color="primary">Security Center</Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>Manage your encryption keys and monitor account activity across all devices.</Typography>
+    <Box key="security-center" sx={{ maxWidth: 1000, mx: 'auto', p: { xs: 2, sm: 3 } }}>
+      <Typography variant="h4" fontWeight="700" gutterBottom color="primary" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>Security Center</Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 4, fontSize: { xs: '0.9rem', sm: '1rem' } }}>Manage your encryption keys and monitor account activity across all devices.</Typography>
 
       <Grid container spacing={3}>
         {/* Left Column: Settings */}

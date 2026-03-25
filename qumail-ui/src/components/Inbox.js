@@ -237,13 +237,17 @@ const Inbox = memo(({
       {selectedEmailIds.length > 0 ? (
         <Box sx={{ 
           p: 1.5, 
-          px: 3, 
+          px: { xs: 1.5, sm: 3 }, 
           display: 'flex', 
           alignItems: 'center', 
           borderBottom: 1, 
           borderColor: 'divider', 
           bgcolor: alpha(theme.palette.primary.main, 0.04),
-          transition: 'all 0.3s ease'
+          transition: 'all 0.3s ease',
+          overflowX: 'auto',
+          '&::-webkit-scrollbar': { display: 'none' }, // Hide scrollbar but keep functionality
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none',
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
             <Checkbox 
@@ -258,9 +262,9 @@ const Inbox = memo(({
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, flexShrink: 0 }}>
             {/* Action Group 1: Folders */}
-            <Box sx={{ display: 'flex', gap: 0.5, borderRight: 1, borderColor: 'divider', pr: 1.5, mr: 1.5 }}>
+            <Box sx={{ display: 'flex', gap: 0.5, borderRight: 1, borderColor: 'divider', pr: { xs: 1, sm: 1.5 }, mr: { xs: 1, sm: 1.5 } }}>
                 {isTrashFolder ? (
                   <Tooltip title="Restore">
                     <IconButton size="small" onClick={() => { onAction(selectedEmailIds, 'restore'); clearSelection(); }} sx={{ color: 'text.secondary' }}>
@@ -287,7 +291,7 @@ const Inbox = memo(({
             </Box>
 
             {/* Action Group 2: Status */}
-            <Box sx={{ display: 'flex', gap: 0.5, borderRight: 1, borderColor: 'divider', pr: 1.5, mr: 1.5 }}>
+            <Box sx={{ display: 'flex', gap: 0.5, borderRight: 1, borderColor: 'divider', pr: { xs: 1, sm: 1.5 }, mr: { xs: 1, sm: 1.5 } }}>
                 <Tooltip title="Mark as read">
                   <IconButton size="small" onClick={() => { onAction(selectedEmailIds, 'read'); clearSelection(); }} sx={{ color: 'text.secondary' }}>
                     <MarkEmailRead fontSize="small" />
@@ -309,7 +313,7 @@ const Inbox = memo(({
 
             {/* Action Group 3: Categorization */}
             {!isTrashFolder && (
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', gap: 0.5, borderRight: 1, borderColor: 'divider', pr: { xs: 1, sm: 1.5 }, mr: { xs: 1, sm: 1.5 } }}>
                     <Tooltip title="Move to">
                       <IconButton size="small" onClick={(e) => setMoveAnchor(e.currentTarget)} sx={{ color: 'text.secondary' }}>
                         <DriveFileMove fontSize="small" />

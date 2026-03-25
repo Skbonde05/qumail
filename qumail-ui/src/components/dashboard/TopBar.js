@@ -5,17 +5,23 @@ import { styled, alpha } from '@mui/material/styles';
 
 const SearchBar = styled('div')(({ theme }) => ({
   position: 'relative',
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
+  borderRadius: "12px",
+  backgroundColor: alpha(theme.palette.text.primary, 0.05),
   '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
+    backgroundColor: alpha(theme.palette.text.primary, 0.08),
   },
   marginRight: theme.spacing(2),
-  marginLeft: 0,
+  marginLeft: theme.spacing(1),
   width: '100%',
-  [theme.breakpoints.up('sm')]: {
-    marginLeft: theme.spacing(3),
-    width: 'auto',
+  display: 'flex',
+  alignItems: 'center',
+  maxWidth: '600px',
+  transition: 'all 0.2s ease',
+  [theme.breakpoints.down('sm')]: {
+     marginLeft: theme.spacing(0),
+     maxWidth: 'none',
+     backgroundColor: 'transparent',
+     '&:hover': { backgroundColor: 'transparent' }
   },
 }));
 
@@ -27,17 +33,27 @@ const SearchIconWrapper = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  color: theme.palette.text.secondary,
 }));
 
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
   color: 'inherit',
+  width: '100%',
   '& .MuiInputBase-input': {
-    padding: theme.spacing(1, 1, 1, 0),
+    padding: theme.spacing(1.2, 1, 1.2, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
     transition: theme.transitions.create('width'),
     width: '100%',
-    [theme.breakpoints.up('md')]: {
-      width: '400px',
+    fontSize: '0.95rem',
+    [theme.breakpoints.down('sm')]: {
+      paddingLeft: `calc(1em + ${theme.spacing(3)})`,
+      width: '0px',
+      '&:focus': {
+        width: '100%',
+        backgroundColor: alpha(theme.palette.text.primary, 0.05),
+        borderRadius: '8px',
+        paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+      }
     },
   },
 }));
@@ -54,7 +70,20 @@ const TopBar = memo(({
   onSearchChange
 }) => {
   return (
-    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: 'background.paper', color: 'text.primary', borderBottom: 1, borderColor: 'divider', boxShadow: 'none' }}>
+    <AppBar 
+      position="fixed" 
+      sx={{ 
+        zIndex: (theme) => ({ 
+          xs: theme.zIndex.drawer - 1, 
+          md: theme.zIndex.drawer + 1 
+        }), 
+        bgcolor: 'background.paper', 
+        color: 'text.primary', 
+        borderBottom: 1, 
+        borderColor: 'divider', 
+        boxShadow: 'none' 
+      }}
+    >
       <Toolbar>
         <IconButton color="inherit" edge="start" onClick={onDrawerToggle} sx={{ mr: 2, display: { md: 'none' } }}>
           <MenuIcon />

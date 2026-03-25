@@ -4,6 +4,7 @@ import { ThemeProvider, CssBaseline, Box, CircularProgress } from "@mui/material
 import { SnackbarProvider, useSnackbar } from "notistack";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import SplashScreen from "./components/SplashScreen";
 import QuMailService from "./services/QuMailService";
 import { getTheme } from "./theme";
 
@@ -15,6 +16,9 @@ const AppContent = () => {
   const [showRegister, setShowRegister] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [appInitialized, setAppInitialized] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [animationDone, setAnimationDone] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('qumail_dark_mode') === 'true');
   const [themeName, setThemeName] = useState(() => localStorage.getItem('qumail_theme_name') || 'default');
   const { enqueueSnackbar } = useSnackbar();
@@ -44,6 +48,7 @@ const AppContent = () => {
           console.error('Auth check failed:', error);
         }
       }
+      setAuthChecked(true);
     };
     checkAuth();
   }, [enqueueSnackbar]);
@@ -112,11 +117,26 @@ const AppContent = () => {
     localStorage.setItem('qumail_theme_name', name);
   };
 
+  useEffect(() => {
+    if (authChecked && animationDone) {
+      setAppInitialized(true);
+    }
+  }, [authChecked, animationDone]);
+
+  if (!appInitialized) {
+    return (
+      <ThemeProvider theme={currentTheme}>
+        <CssBaseline />
+        <SplashScreen onComplete={() => setAnimationDone(true)} />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={currentTheme}>
       <CssBaseline />
       <Suspense fallback={
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: 'background.default' }}>
+        <Box sx={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
           <CircularProgress />
         </Box>
       }>

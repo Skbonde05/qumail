@@ -239,8 +239,8 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
         background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
       }}
     >
-      <Container maxWidth="sm">
-        <StyledPaper>
+      <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 3 } }}>
+        <StyledPaper sx={{ p: { xs: 3, sm: 4 } }}>
           {/* Header */}
           <Box sx={{ textAlign: "center", mb: 3 }}>
             <Avatar
