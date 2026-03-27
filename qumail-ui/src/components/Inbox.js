@@ -15,27 +15,49 @@ const EmailListItem = styled(ListItem, {
   shouldForwardProp: (prop) => prop !== 'unread' && prop !== 'selected',
 })(({ theme, unread, selected }) => ({
   borderBottom: `1px solid ${theme.palette.divider}`,
+  padding: theme.spacing(1.5, 2.5),
   backgroundColor: selected 
     ? alpha(theme.palette.primary.main, 0.08)
-    : unread 
-      ? alpha(theme.palette.primary.main, 0.04)
-      : theme.palette.background.paper,
+    : theme.palette.background.paper,
   '&:hover': {
+    zIndex: 1,
     backgroundColor: selected 
-      ? alpha(theme.palette.primary.main, 0.12)
-      : theme.palette.action.hover,
+      ? alpha(theme.palette.primary.main, 0.1)
+      : alpha(theme.palette.action.hover, 0.5),
+    boxShadow: theme.palette.mode === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.04)',
+    transform: 'translateY(-1px)',
     '& .actions': {
       display: 'flex',
     }
   },
-  transition: 'all 0.2s ease',
+  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   cursor: 'pointer',
+  position: 'relative',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    left: 0,
+    top: '20%',
+    bottom: '20%',
+    width: 4,
+    borderRadius: '0 4px 4px 0',
+    backgroundColor: theme.palette.primary.main,
+    transform: unread ? 'scaleY(1)' : 'scaleY(0)',
+    transition: 'transform 0.3s ease',
+  }
 }));
 
-const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSelect }) => (
+
+const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSelect, availableLabels = [] }) => {
+  const emailLabels = useMemo(() => {
+    if (!email.labels) return [];
+    return email.labels.map(lId => availableLabels.find(l => l.id === lId)).filter(Boolean);
+  }, [email.labels, availableLabels]);
+
+  return (
   <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0 }}
   >
     <EmailListItem
@@ -43,42 +65,51 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
       onClick={() => onEmailClick(email)}
       selected={selected}
     >
-      <ListItemIcon sx={{ minWidth: 40 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: { xs: 80, sm: 100 } }}>
         <Checkbox 
           size="small" 
           checked={selected}
           onClick={(e) => { e.stopPropagation(); onSelect(email.id); }} 
+          sx={{ mr: 1 }}
         />
-      </ListItemIcon>
-      
-      <IconButton 
-        size="small" 
-        onClick={(e) => { e.stopPropagation(); onAction(email.id, email.starred ? 'unstar' : 'star'); }}
-        sx={{ color: email.starred ? 'warning.main' : 'text.disabled', mr: 1 }}
-      >
-        {email.starred ? <Star fontSize="small" /> : <StarBorder fontSize="small" />}
-      </IconButton>
+        <IconButton 
+          size="small" 
+          onClick={(e) => { e.stopPropagation(); onAction(email.id, email.starred ? 'unstar' : 'star'); }}
+          sx={{ color: email.starred ? 'warning.main' : 'text.disabled' }}
+        >
+          {email.starred ? <Star sx={{ fontSize: 20 }} /> : <StarBorder sx={{ fontSize: 20 }} />}
+        </IconButton>
+      </Box>
 
-      <ListItemAvatar sx={{ minWidth: 50 }}>
+      <ListItemAvatar sx={{ minWidth: 50, display: { xs: 'none', sm: 'block' } }}>
         <Badge
           overlap="circular"
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          badgeContent={email.encrypted ? <Box sx={{ bgcolor: 'secondary.main', borderRadius: '50%', p: 0.2, display: 'flex', border: '1px solid white' }}><Lock size={10} color="white" /></Box> : null}
+          badgeContent={email.encrypted ? <Box sx={{ bgcolor: 'secondary.main', borderRadius: '50%', p: 0.2, display: 'flex', border: '2px solid white' }}><Lock sx={{ fontSize: 10, color: 'white' }} /></Box> : null}
         >
-          <Avatar sx={{ width: 36, height: 36, bgcolor: email.encrypted ? 'secondary.main' : 'primary.main', fontSize: '14px' }}>
+          <Avatar sx={{ 
+              width: 38, 
+              height: 38, 
+              bgcolor: email.encrypted ? 'secondary.main' : 'primary.main', 
+              fontSize: '14px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
             {email.from?.charAt(0).toUpperCase()}
           </Avatar>
         </Badge>
       </ListItemAvatar>
 
-
       <ListItemText
         primary={
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ fontWeight: !email.read ? 700 : 500, color: 'text.primary' }}>
+            <Typography variant="body2" sx={{ 
+                fontWeight: !email.read ? 700 : 500, 
+                color: !email.read ? 'text.primary' : 'text.secondary',
+                fontSize: '0.9rem'
+            }}>
               {email.from}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
               {formatDistanceToNow(new Date(email.date), { addSuffix: true })}
             </Typography>
           </Box>
@@ -87,16 +118,36 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
         secondary={
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography variant="body2" sx={{ fontWeight: !email.read ? 600 : 400, color: 'text.secondary' }} noWrap>
+              <Typography variant="body2" sx={{ 
+                  fontWeight: !email.read ? 600 : 400, 
+                  color: !email.read ? 'text.primary' : 'text.disabled',
+                  maxWidth: { xs: '200px', sm: '400px', md: '600px' }
+              }} noWrap>
                 {email.subject}
               </Typography>
               {email.attachments && email.attachments.length > 0 && (
-                <Box sx={{ display: 'flex', color: 'text.disabled' }}>
-                  <AttachFileIcon sx={{ fontSize: 14 }} />
-                </Box>
+                <AttachFileIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
               )}
+              {emailLabels.map(label => (
+                <Box 
+                  key={label.id}
+                  sx={{ 
+                    bgcolor: alpha(label.color, 0.15), 
+                    color: label.color,
+                    px: 0.8,
+                    py: 0.1,
+                    borderRadius: '4px',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    ml: 0.5,
+                    border: `1px solid ${alpha(label.color, 0.3)}`
+                  }}
+                >
+                  {label.name}
+                </Box>
+              ))}
             </Box>
-            <Typography variant="caption" color="text.disabled" noWrap>
+            <Typography variant="caption" sx={{ color: 'text.disabled', opacity: 0.7 }} noWrap>
               {email.preview || (typeof email.body === 'string' ? email.body.substring(0, 100) : '')}
             </Typography>
           </Box>
@@ -104,23 +155,26 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
         secondaryTypographyProps={{ component: 'div' }}
       />
       
-      <Box className="actions" sx={{ display: { xs: 'none', md: 'flex' }, ml: 1 }}>
-         {isTrash ? (
-           <Tooltip title="Restore">
-             <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'restore'); }}><RestoreFromTrash fontSize="small" /></IconButton>
-           </Tooltip>
-         ) : (
-           <Tooltip title="Archive">
-             <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'archive'); }}><Archive fontSize="small" /></IconButton>
-           </Tooltip>
-         )}
+      {!email.read && (
+        <Box sx={{ width: 8, height: 8, bgcolor: 'primary.main', borderRadius: '50%', ml: 2, display: { xs: 'block', md: 'none' } }} />
+      )}
+
+      <Box className="actions" sx={{ display: 'none', alignItems: 'center', ml: 2, gap: 1 }}>
+         <Tooltip title={isTrash ? "Restore" : "Archive"}>
+           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, isTrash ? 'restore' : 'archive'); }}>
+             {isTrash ? <RestoreFromTrash sx={{ fontSize: 18 }} /> : <Archive sx={{ fontSize: 18 }} />}
+           </IconButton>
+         </Tooltip>
          <Tooltip title={isTrash ? "Delete Forever" : "Delete"}>
-           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, isTrash ? 'delete' : 'trash'); }}><Delete fontSize="small" /></IconButton>
+           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, isTrash ? 'delete' : 'trash'); }} sx={{ '&:hover': { color: 'error.main' } }}>
+             <Delete sx={{ fontSize: 18 }} />
+           </IconButton>
          </Tooltip>
       </Box>
     </EmailListItem>
   </motion.div>
-));
+  );
+});
 
 const Inbox = memo(({ 
   emails = [], 
@@ -151,6 +205,12 @@ const Inbox = memo(({
   };
 
   const clearSelection = () => setSelectedEmailIds([]);
+  
+  const standardFolders = ['inbox', 'sent', 'archive', 'trash', 'starred', 'important', 'drafts', 'snoozed', 'spam'];
+  const isStandard = standardFolders.includes(folderName.toLowerCase());
+  const displayFolderName = isStandard 
+    ? t(`sidebar.${folderName.toLowerCase()}`) 
+    : (labels.find(l => l.id === folderName || l.id === folderName.toUpperCase())?.name || folderName);
 
   const renderedEmails = useMemo(() => {
     return emails.map((email) => (
@@ -162,6 +222,7 @@ const Inbox = memo(({
         isTrash={isTrashFolder}
         selected={selectedEmailIds.includes(email.id)}
         onSelect={handleSelectOne}
+        availableLabels={labels}
       />
     ));
   }, [emails, onEmailClick, onAction, isTrashFolder, selectedEmailIds]);
@@ -207,28 +268,48 @@ const Inbox = memo(({
 
   if (emails.length === 0) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.disabled', p: 4, textAlign: 'center' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }}>
         <Box sx={{ position: 'relative', mb: 3 }}>
-           <InboxIcon sx={{ fontSize: 100, opacity: 0.1 }} />
-           <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', opacity: 0.8 }}>
-              <Circle sx={{ fontSize: 40, color: 'primary.main', opacity: 0.1 }} />
+           <InboxIcon sx={{ fontSize: 120, color: 'primary.main', opacity: 0.05 }} />
+           <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+              <Circle sx={{ fontSize: 32, color: 'primary.main', opacity: 0.15, animation: 'pulse 2s infinite' }} />
            </Box>
         </Box>
-        <Typography variant="h5" fontWeight="700" color="text.primary" gutterBottom>
-           {t(`sidebar.${folderName}`)} is empty
+        <Typography variant="h4" fontWeight="800" color="text.primary" sx={{ letterSpacing: '-1px', mb: 1 }}>
+           {displayFolderName} is empty
         </Typography>
-        <Typography variant="body1" sx={{ maxWidth: 300, mb: 3 }}>
-           Your secure communication starts here. Relax, there's nothing to show right now.
+        <Typography variant="body1" sx={{ maxWidth: 360, mb: 4, color: 'text.secondary', fontWeight: 500 }}>
+           You're all caught up! Your secure communication landscape is clean and quiet.
         </Typography>
         <Button 
-          variant="outlined" 
+          variant="contained" 
           onClick={onRefresh} 
           startIcon={<Refresh />} 
-          sx={{ borderRadius: 28, px: 3 }}
+          sx={{ 
+            borderRadius: '12px', 
+            px: 4, 
+            py: 1.2,
+            background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+            boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.2)}`,
+            '&:hover': {
+              boxShadow: theme => `0 12px 24px ${alpha(theme.palette.primary.main, 0.3)}`,
+              transform: 'translateY(-2px)'
+            }
+          }}
         >
           {t('common.refresh')}
         </Button>
+        <style>
+          {`
+            @keyframes pulse {
+              0% { transform: scale(0.95); opacity: 0.15; }
+              50% { transform: scale(1.1); opacity: 0.25; }
+              100% { transform: scale(0.95); opacity: 0.15; }
+            }
+          `}
+        </style>
       </Box>
+
     );
   }
 
@@ -396,11 +477,15 @@ const Inbox = memo(({
           </Menu>
         </Box>
       ) : (
-        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, textTransform: 'capitalize' }}>{t(`sidebar.${folderName}`)}</Typography>
+        <Box sx={{ p: 2, px: 3, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+          <Typography variant="h6" sx={{ fontWeight: 800, textTransform: 'capitalize', letterSpacing: '-0.5px' }}>
+            {displayFolderName}
+          </Typography>
           <Box sx={{ flexGrow: 1 }} />
           <Tooltip title={t('common.refresh')}>
-            <IconButton onClick={onRefresh} size="small"><Refresh /></IconButton>
+            <IconButton onClick={onRefresh} size="small" sx={{ color: 'text.secondary' }}>
+              <Refresh sx={{ fontSize: 20 }} />
+            </IconButton>
           </Tooltip>
         </Box>
       )}

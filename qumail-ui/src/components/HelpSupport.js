@@ -1,299 +1,207 @@
 import React, { useState } from "react";
 import {
-  Box,
-  Typography,
-  Paper,
-  TextField,
-  Button,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
-  Chip,
-  IconButton,
-  useTheme
+  Box, Typography, Paper, Button, Accordion, AccordionSummary, AccordionDetails, Divider, Chip, useTheme
 } from "@mui/material";
 import {
-  HelpOutline as HelpIcon,
-  Search,
-  ExpandMore,
-  ContactSupport,
-  Article,
-  VideoLibrary,
-  Forum,
-  BugReport,
-  Email,
-  Phone,
-  Chat
+  HelpOutline as HelpIcon, ExpandMore, Email, Chat, Phone, Security, Speed, Storage
 } from "@mui/icons-material";
 
-export default function HelpSupport() {
+export default function HelpSupport({ onCompose }) {
   const theme = useTheme();
-  const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState("panel1");
 
   const faqs = [
     {
       id: "panel1",
-      question: "How do I reset my password?",
-      answer: "To reset your password, go to Settings > Security & Privacy > Change Password. You'll need to enter your current password and then create a new one. Make sure your new password is at least 8 characters long and includes a mix of letters, numbers, and special characters."
+      icon: <Security />,
+      question: "What is Quantum-Secure encryption and why do I need it?",
+      answer: "Standard encryption (like RSA) is vulnerable to future quantum computers. QuMail implements One-Time Pad (OTP) and quantum-resistant AES-256 architectures. This ensures that your private communications today cannot be 'stored now and decrypted later' by quantum processors, providing truly future-proof privacy."
     },
     {
       id: "panel2",
-      question: "How can I increase my storage limit?",
-      answer: "You can upgrade your storage by clicking the 'Upgrade Storage' button in your profile menu. We offer several plans ranging from 50GB to unlimited storage. All paid plans also include additional features like priority support and custom domains."
+      icon: <Storage />,
+      question: "What is my storage limit and how can I see my usage?",
+      answer: "Every QuMail account comes with 15GB of free secure storage. You can view your real-time storage metrics at the bottom of the navigation sidebar. If you reach your limit, you can archive old messages to 'Cold Storage' or contact support to upgrade to a Pro plan."
     },
     {
       id: "panel3",
-      question: "How do I set up email filters?",
-      answer: "To set up filters, go to Settings > Filters and Blocked Addresses. Click 'Create a new filter' and specify the criteria for emails you want to filter. You can choose to automatically archive, label, forward, or delete emails that match your filter criteria."
+      icon: <Speed />,
+      question: "How do the 'Master Keys' and session tokens work?",
+      answer: "QuMail uses a decentralized key management system. When you login, your session token is verified against our secure vault. This token allows you to derive keys for viewing your mail without ever exposing your master password to the network, preventing middle-man attacks."
     },
     {
       id: "panel4",
-      question: "Is my data secure with QuMail?",
-      answer: "Yes, QuMail uses industry-standard encryption for all data in transit and at rest. We also offer two-factor authentication for added security. Your emails are stored on secure servers with multiple layers of protection and regular security audits."
+      icon: <HelpIcon />,
+      question: "What is the difference between archiving and deleting?",
+      answer: "Archiving removes an email from your Inbox but keeps it in your permanent 'Archive' folder, which doesn't count against your primary active storage as heavily. Deleting moves mail to the 'Trash' folder, where it is automatically and permanently purged after 30 days."
     },
     {
       id: "panel5",
-      question: "How do I export my emails?",
-      answer: "You can export your emails by going to Settings > Accounts and Import > Download mail. This will create a compressed archive of your emails that you can download. The export process may take some time depending on the amount of mail you have."
+      icon: <Security />,
+      question: "Why do some emails require a manual decryption key?",
+      answer: "For maximum security, QuMail allows 'Absolute Encrypted' messages (via OTP). These are so secure that even our system cannot read them. To view these, you must enter the unique decryption key shared between you and the sender, ensuring end-to-end zero-knowledge privacy."
+    },
+    {
+      id: "panel6",
+      icon: <Security />,
+      question: "Can I use QuMail on multiple devices?",
+      answer: "Yes. QuMail is accessible from any modern browser. However, because our encryption is end-to-end, you may need to 'Export and Import' your Master Encryption Key when first signing in on a new device to access your archived encrypted communications."
+    },
+    {
+      id: "panel7",
+      icon: <HelpIcon />,
+      question: "How do labels and custom folders work?",
+      answer: "Custom labels act as both tags and folders. When you 'Label' a message, it remains in your inbox but also appears in the corresponding label view in the sidebar. If you 'Move To' a label, it is archived from the inbox and accessible only via that label folder."
+    },
+    {
+      id: "panel8",
+      icon: <Security />,
+      question: "How do I recover my account if I lose my password?",
+      answer: "Because we use zero-knowledge encryption, your password cannot be reset by us if you lose it. You must use the Recovery Codes generated during account creation. We strongly recommend storing these codes in a separate physical location or an offline password manager."
     }
   ];
 
-  const contactMethods = [
-    {
-      icon: <Email />,
-      title: "Email Support",
-      description: "Get help via email",
-      details: "support@qumail.com",
-      responseTime: "Typically within 24 hours"
-    },
-    {
-      icon: <Chat />,
-      title: "Live Chat",
-      description: "Chat with our support team",
-      details: "Available 9 AM - 6 PM EST",
-      responseTime: "Instant response during business hours"
-    },
-    {
-      icon: <Phone />,
-      title: "Phone Support",
-      description: "Call us for immediate assistance",
-      details: "+1 (800) 123-4567",
-      responseTime: "Available 24/7 for critical issues"
-    },
-    {
-      icon: <Forum />,
-      title: "Community Forum",
-      description: "Get help from other users",
-      details: "community.qumail.com",
-      responseTime: "Varies by community response"
+  const handleSupportEmail = () => {
+    if (onCompose) {
+      onCompose();
+      // Optionally we could pre-fill the support email, but we'll let the user type if desired 
+      // or we can add a way to pass draft state. For now, we trigger compose.
     }
-  ];
-
-  const handleChange = (panel) => (event, isExpanded) => {
-    setExpanded(isExpanded ? panel : false);
   };
 
   return (
-    <Box sx={{ maxWidth: 800, mx: "auto", p: 3 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight="700" gutterBottom>
-          <HelpIcon sx={{ mr: 2, verticalAlign: "middle" }} />
-          Help & Support
+    <Box sx={{ maxWidth: 850, mx: "auto", p: { xs: 2, md: 4 } }}>
+      <Box sx={{ mb: 6, textAlign: 'center' }}>
+        <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1px', mb: 2 }}>
+          How can we help?
         </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Find answers to common questions or contact our support team
+        <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.8, maxWidth: 600, mx: 'auto' }}>
+          Find answers to common questions about our quantum-secure platform or get in touch with our security experts.
         </Typography>
-      </Box>
-
-      {/* Search */}
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h6" fontWeight="600" gutterBottom>
-          How can we help you today?
-        </Typography>
-        <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
-          <TextField
-            fullWidth
-            placeholder="Search for help articles, FAQs, or guides..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: <Search sx={{ mr: 1, color: "text.secondary" }} />
-            }}
-          />
-          <Button variant="contained">
-            Search
-          </Button>
-        </Box>
-      </Paper>
-
-      {/* Quick Help Categories */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" fontWeight="600" gutterBottom sx={{ mb: 3 }}>
-          Quick Help
-        </Typography>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }, gap: 2 }}>
-          {[
-            { icon: <Article />, title: "Documentation", count: "150+ articles" },
-            { icon: <VideoLibrary />, title: "Video Tutorials", count: "50+ videos" },
-            { icon: <BugReport />, title: "Report a Bug", count: "Submit issue" },
-            { icon: <ContactSupport />, title: "Contact Support", count: "Multiple options" },
-            { icon: <Forum />, title: "Community", count: "10k+ members" },
-            { icon: <Email />, title: "Email Guides", count: "Get started" }
-          ].map((item, index) => (
-            <Paper
-              key={index}
-              sx={{
-                p: 3,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                textAlign: "center",
-                cursor: "pointer",
-                transition: "transform 0.2s, box-shadow 0.2s",
-                "&:hover": {
-                  transform: "translateY(-4px)",
-                  boxShadow: theme.shadows[4]
-                }
-              }}
-            >
-              <Box sx={{ 
-                width: 60, 
-                height: 60, 
-                borderRadius: "50%", 
-                bgcolor: theme.palette.primary.main + "20",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mb: 2
-              }}>
-                <Box sx={{ color: theme.palette.primary.main, fontSize: 30 }}>
-                  {item.icon}
-                </Box>
-              </Box>
-              <Typography variant="h6" fontWeight="600" gutterBottom>
-                {item.title}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {item.count}
-              </Typography>
-            </Paper>
-          ))}
-        </Box>
       </Box>
 
       {/* FAQs */}
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h6" fontWeight="600" gutterBottom sx={{ mb: 3 }}>
-          Frequently Asked Questions
+      <Box sx={{ mb: 6 }}>
+        <Typography variant="h5" fontWeight="700" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <HelpIcon color="primary" /> Common Questions
         </Typography>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {faqs.map((faq) => (
             <Accordion
               key={faq.id}
               expanded={expanded === faq.id}
-              onChange={handleChange(faq.id)}
+              onChange={(e, isExpanded) => setExpanded(isExpanded ? faq.id : false)}
               sx={{
+                bgcolor: 'background.paper',
+                backgroundImage: 'none',
                 "&:before": { display: "none" },
-                boxShadow: "none",
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: "8px !important",
-                mb: 1
+                boxShadow: theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.03)',
+                borderRadius: "16px !important",
+                overflow: 'hidden',
+                border: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
+                transition: 'all 0.3s ease'
               }}
             >
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography fontWeight="500">{faq.question}</Typography>
+              <AccordionSummary expandIcon={<ExpandMore />} sx={{ px: 3, py: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ color: 'primary.main', display: 'flex' }}>{faq.icon}</Box>
+                  <Typography fontWeight="600" variant="subtitle1">{faq.question}</Typography>
+                </Box>
               </AccordionSummary>
-              <AccordionDetails>
-                <Typography color="text.secondary">{faq.answer}</Typography>
+              <AccordionDetails sx={{ px: 3, pb: 3, pt: 0 }}>
+                <Divider sx={{ mb: 2, opacity: 0.5 }} />
+                <Typography color="text.secondary" sx={{ lineHeight: 1.7 }}>{faq.answer}</Typography>
               </AccordionDetails>
             </Accordion>
           ))}
         </Box>
-      </Paper>
+      </Box>
 
-      {/* Contact Methods */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" fontWeight="600" gutterBottom sx={{ mb: 3 }}>
-          Contact Support
+      {/* Contact Support */}
+      <Box>
+        <Typography variant="h5" fontWeight="700" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Chat color="primary" /> Contact Support
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Choose your preferred method to get in touch with our support team
-        </Typography>
-
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 3 }}>
-          {contactMethods.map((method, index) => (
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+          {[
+            {
+              icon: <Email />,
+              title: "Email Support",
+              details: "support@qumail.com",
+              waitTip: "24h Response",
+              action: handleSupportEmail
+            },
+            {
+              icon: <Chat />,
+              title: "Live Chat",
+              details: "Available in Dashboard",
+              waitTip: "Instant",
+              action: () => alert("Live Chat is available for Pro users in the dashboard.")
+            }
+          ].map((method, index) => (
             <Paper
               key={index}
               sx={{
                 p: 3,
-                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: '20px',
+                border: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)',
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                transition: 'all 0.3s ease',
                 "&:hover": {
-                  borderColor: theme.palette.primary.main,
-                  boxShadow: theme.shadows[1]
+                  transform: 'translateY(-5px)',
+                  boxShadow: theme.shadows[8],
+                  borderColor: 'primary.main'
                 }
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', mb: 3 }}>
                 <Box sx={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: "50%", 
-                  bgcolor: theme.palette.primary.main + "20",
+                  width: 54, 
+                  height: 54, 
+                  borderRadius: "14px", 
+                  bgcolor: theme.palette.primary.main + "15",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center"
+                  justifyContent: "center",
+                  color: 'primary.main'
                 }}>
-                  <Box sx={{ color: theme.palette.primary.main }}>
-                    {method.icon}
-                  </Box>
+                  {method.icon}
                 </Box>
-                <Box>
-                  <Typography variant="h6" fontWeight="600">
-                    {method.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {method.description}
-                  </Typography>
-                </Box>
+                <Chip label={method.waitTip} size="small" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.65rem' }} />
               </Box>
               
-              <Divider sx={{ my: 2 }} />
-              
-              <Box>
-                <Typography variant="body2" fontWeight="500" gutterBottom>
-                  {method.details}
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-                  <Chip
-                    label={method.responseTime}
-                    size="small"
-                    sx={{ 
-                      bgcolor: theme.palette.primary.main + "10",
-                      color: theme.palette.primary.main,
-                      fontSize: "0.7rem"
-                    }}
-                  />
-                </Box>
-              </Box>
+              <Typography variant="h6" fontWeight="700" gutterBottom>
+                {method.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {method.details}
+              </Typography>
               
               <Button
                 fullWidth
-                variant="outlined"
-                sx={{ mt: 2 }}
-                onClick={() => alert(`Opening ${method.title}`)}
+                variant="contained"
+                sx={{ 
+                  mt: 3, 
+                  borderRadius: '12px', 
+                  py: 1, 
+                  textTransform: 'none', 
+                  fontWeight: 700,
+                  boxShadow: 'none'
+                }}
+                onClick={method.action}
               >
-                Get Help
+                {method.title === "Email Support" ? "Compose Message" : "Start Chat"}
               </Button>
             </Paper>
           ))}
         </Box>
-      </Paper>
+      </Box>
+
+      <Box sx={{ mt: 8, textAlign: 'center', opacity: 0.6 }}>
+        <Typography variant="caption">
+          QuMail Security Help Center • v5.2.0 • Independent Secure Network
+        </Typography>
+      </Box>
     </Box>
   );
 }

@@ -32,7 +32,7 @@ const SplashScreen = ({ onComplete }) => {
   const theme = useTheme();
 
   useEffect(() => {
-    const timer = setTimeout(onComplete, 4000); 
+    const timer = setTimeout(onComplete, 1500); // Reduced from 4000 to 1500 for better UX
     return () => clearTimeout(timer);
   }, [onComplete]);
 

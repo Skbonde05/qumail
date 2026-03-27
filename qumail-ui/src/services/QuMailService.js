@@ -149,15 +149,30 @@ const QuMailService = {
     if (cached) return cached;
     
     // Check if it's a standard folder or a custom one
+    // Sanitize folder
+    const folderStr = (folder || 'inbox').toString().toLowerCase();
+    
+    // Check if it's a standard folder or a custom one
     const standardFolders = ['inbox', 'sent', 'archive', 'trash', 'starred', 'important', 'drafts', 'snoozed', 'spam'];
-    const endpoint = standardFolders.includes(folder.toLowerCase()) 
-      ? `/api/mail/${folder.toLowerCase()}` 
-      : `/api/mail/folder/${folder}`;
+    const isStandard = standardFolders.includes(folderStr);
+    
+    const endpoint = isStandard
+      ? `/api/mail/${folderStr}` 
+      : `/api/mail/folder/${folder}`; // Keep original case for custom labels
 
-    const response = await axiosInstance.post(endpoint, { limit, page });
-    const result = response.data.emails || [];
-    cache.set(cacheKey, result, 10000); // 10s cache
-    return result;
+    try {
+      const response = await axiosInstance.post(endpoint, { limit, page });
+      const result = response.data.emails || [];
+      cache.set(cacheKey, result, 10000); // 10s cache
+      return result;
+    } catch (error) {
+      if (error.response?.status === 404 && !isStandard) {
+        // Folder probably deleted, fallback to empty to avoid red error popups
+        console.warn(`Folder ${folder} not found, likely deleted. Returning empty.`);
+        return []; // Return empty instead of throwing
+      }
+      throw error;
+    }
   },
 
   getEmail: async (mailId) => {

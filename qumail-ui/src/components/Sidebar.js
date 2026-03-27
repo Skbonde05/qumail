@@ -4,7 +4,8 @@ import {
   Box, Button, List, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Avatar, Menu, MenuItem, LinearProgress, useTheme, ListSubheader, IconButton, Tooltip
 } from "@mui/material";
 import { 
-  Create, Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, ExitToApp, Settings, HelpOutline, Security, Storage, Upgrade, AccessTime, Report, Circle, Add
+  Create, Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, ExitToApp, Settings, HelpOutline, Security, Storage, Upgrade, AccessTime, Report, Circle, Add,
+  ManageAccounts, Palette, Policy, SettingsSuggest
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 
@@ -13,9 +14,11 @@ const alpha = (color, opacity) => {
 };
 
 const StyledListItem = styled(ListItemButton)(({ theme, selected }) => ({
-  borderRadius: "0 22px 22px 0",
-  marginRight: theme.spacing(2),
-  paddingLeft: theme.spacing(3),
+  borderRadius: "12px",
+  margin: theme.spacing(0.5, 1.5),
+  padding: theme.spacing(1, 2),
+  height: 44,
+  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   backgroundColor: selected 
     ? alpha(theme.palette.primary.main, 0.12)
     : "transparent",
@@ -23,35 +26,79 @@ const StyledListItem = styled(ListItemButton)(({ theme, selected }) => ({
   "&:hover": {
     backgroundColor: selected 
       ? alpha(theme.palette.primary.main, 0.18)
-      : theme.palette.action.hover,
+      : alpha(theme.palette.action.hover, 0.5),
+    transform: 'translateX(2px)',
   },
   "& .MuiListItemIcon-root": {
     color: selected ? theme.palette.primary.main : theme.palette.text.secondary,
-    minWidth: "40px"
-  }
+    minWidth: "36px",
+    transition: 'all 0.2s ease',
+  },
 }));
 
-const SidebarItem = memo(({ icon: Icon, text, count, selected, onClick }) => (
-  <StyledListItem selected={selected} onClick={onClick}>
+const SidebarItem = memo(({ icon: Icon, text, count, selected, onClick, action }) => (
+  <StyledListItem 
+    selected={selected} 
+    onClick={onClick}
+    sx={{
+      "& .sidebar-action": { opacity: 0, transition: 'all 0.2s', transform: 'scale(0.8)' },
+      "&:hover .sidebar-action": { opacity: 0.6, transform: 'scale(1)' },
+      "& .sidebar-action:hover": { opacity: 1, color: 'error.main' }
+    }}
+  >
     <ListItemIcon>
-      <Icon fontSize="small" />
+      {typeof Icon === 'function' ? <Icon /> : (
+        <Icon sx={{ fontSize: 20, transform: selected ? 'scale(1.05)' : 'none' }} />
+      )}
     </ListItemIcon>
     <ListItemText 
       primary={text}
       primaryTypographyProps={{
         fontSize: "0.875rem",
         fontWeight: selected ? "600" : "500",
+        letterSpacing: '0.01em',
       }}
     />
     {count > 0 && (
-      <Typography variant="caption" sx={{ fontWeight: "700", mr: 1 }}>
+      <Box sx={{ 
+        bgcolor: selected ? 'primary.main' : alpha('#000', 0.05), 
+        color: selected ? 'white' : 'text.secondary',
+        px: 1, 
+        py: 0.2, 
+        borderRadius: '6px',
+        fontSize: '0.75rem',
+        fontWeight: 700,
+        minWidth: 20,
+        textAlign: 'center'
+      }}>
         {count}
-      </Typography>
+      </Box>
+    )}
+    {action && (
+      <IconButton 
+        size="small" 
+        className="sidebar-action"
+        onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+        sx={{ ml: 0.5, p: 0.5 }}
+      >
+        {action.icon}
+      </IconButton>
     )}
   </StyledListItem>
 ));
 
-const ProfileMenu = ({ anchorEl, onClose, onLogout, onSettings, user }) => {
+
+const ProfileMenu = ({ 
+  anchorEl, 
+  onClose, 
+  onLogout, 
+  onAppSettings, 
+  onAccountSettings, 
+  onThemes, 
+  onPrivacy, 
+  onHelp, 
+  user 
+}) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const open = Boolean(anchorEl);
@@ -61,6 +108,7 @@ const ProfileMenu = ({ anchorEl, onClose, onLogout, onSettings, user }) => {
       anchorEl={anchorEl}
       open={open}
       onClose={onClose}
+      onClick={onClose}
       PaperProps={{
         sx: { width: 320, mt: 1, borderRadius: 3, boxShadow: theme.shadows[8] }
       }}
@@ -68,18 +116,42 @@ const ProfileMenu = ({ anchorEl, onClose, onLogout, onSettings, user }) => {
       anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
     >
       <Box sx={{ p: 2.5, textAlign: 'center' }}>
-        <Avatar src={user?.avatar} sx={{ width: 64, height: 64, mx: 'auto', mb: 1.5, bgcolor: 'primary.main' }}>
+        <Avatar src={user?.avatar} sx={{ width: 64, height: 64, mx: 'auto', mb: 1.5, bgcolor: 'primary.main', border: '2px solid white', boxShadow: theme.shadows[2] }}>
           {user?.name?.charAt(0)}
         </Avatar>
         <Typography variant="subtitle1" fontWeight="700">{user?.name}</Typography>
         <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
       </Box>
       <Divider />
-      <MenuItem onClick={onSettings} sx={{ py: 1.5 }}>
-        <ListItemIcon><Settings fontSize="small" /></ListItemIcon>
+      
+      <MenuItem onClick={() => { onAppSettings(); onClose(); }} sx={{ py: 1.2 }}>
+        <ListItemIcon><SettingsSuggest fontSize="small" /></ListItemIcon>
+        <ListItemText primary={t('settings.app')} />
+      </MenuItem>
+      
+      <MenuItem onClick={() => { onAccountSettings(); onClose(); }} sx={{ py: 1.2 }}>
+        <ListItemIcon><ManageAccounts fontSize="small" /></ListItemIcon>
         <ListItemText primary={t('settings.account')} />
       </MenuItem>
-      <MenuItem onClick={onLogout} sx={{ py: 1.5, color: 'error.main' }}>
+
+      <MenuItem onClick={() => { onThemes(); onClose(); }} sx={{ py: 1.2 }}>
+        <ListItemIcon><Palette fontSize="small" /></ListItemIcon>
+        <ListItemText primary={t('settings.theme')} />
+      </MenuItem>
+
+      <MenuItem onClick={() => { onPrivacy(); onClose(); }} sx={{ py: 1.2 }}>
+        <ListItemIcon><Policy fontSize="small" /></ListItemIcon>
+        <ListItemText primary={t('settings.privacy')} />
+      </MenuItem>
+
+      <MenuItem onClick={() => { onHelp(); onClose(); }} sx={{ py: 1.2 }}>
+        <ListItemIcon><HelpOutline fontSize="small" /></ListItemIcon>
+        <ListItemText primary={t('common.help')} />
+      </MenuItem>
+
+      <Divider />
+      
+      <MenuItem onClick={() => { onLogout(); onClose(); }} sx={{ py: 1.5, color: 'error.main' }}>
         <ListItemIcon><ExitToApp fontSize="small" color="error" /></ListItemIcon>
         <ListItemText primary={t('settings.logout')} />
       </MenuItem>
@@ -97,7 +169,8 @@ const Sidebar = memo(({
   drawerWidth = 260,
   user = null,
   labels = [],
-  onAddLabel = null
+  onAddLabel = null,
+  onDeleteLabel = null
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -131,11 +204,27 @@ const Sidebar = memo(({
           fullWidth
           startIcon={<Create />}
           onClick={onCompose}
-          sx={{ borderRadius: "16px", py: 1.5, textTransform: "none", fontWeight: "700", boxShadow: 0, '&:hover': { boxShadow: 2 } }}
+          sx={{ 
+            borderRadius: "14px", 
+            py: 1.5, 
+            textTransform: "none", 
+            fontWeight: "700", 
+            boxShadow: theme.palette.mode === 'dark' ? '0 8px 20px rgba(0,0,0,0.4)' : '0 8px 20px rgba(37, 99, 235, 0.2)',
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+            color: 'white',
+            '&:hover': { 
+                transform: 'translateY(-2px)',
+                boxShadow: theme.palette.mode === 'dark' ? '0 12px 24px rgba(0,0,0,0.5)' : '0 12px 24px rgba(37, 99, 235, 0.3)',
+                filter: 'brightness(1.1)'
+            },
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
         >
           {t('sidebar.compose')}
         </Button>
       </Box>
+
+
 
       <Box sx={{ flex: 1, overflowY: "auto", pt: 1 }}>
         <List disablePadding>
@@ -186,6 +275,10 @@ const Sidebar = memo(({
               count={folderCounts.custom?.[label.id]}
               selected={activeSection === 'inbox' && activeFolder === label.id}
               onClick={() => onFolderChange(label.id)}
+              action={onDeleteLabel ? {
+                icon: <Delete sx={{ fontSize: 16 }} />,
+                onClick: () => onDeleteLabel(label.id)
+              } : null}
             />
           ))}
         </List>
@@ -193,7 +286,7 @@ const Sidebar = memo(({
         <Divider sx={{ my: 2, mx: 2 }} />
 
         <List disablePadding>
-          <SidebarItem icon={Settings} text={t('settings.account')} selected={activeSection === 'settings'} onClick={() => onSectionChange('settings')} />
+          <SidebarItem icon={Settings} text={t('settings.account')} selected={activeSection === 'account'} onClick={() => onSectionChange('account')} />
           <SidebarItem icon={Security} text={t('settings.security')} selected={activeSection === 'security'} onClick={() => onSectionChange('security')} />
           <SidebarItem icon={HelpOutline} text={t('common.help')} selected={activeSection === 'help'} onClick={() => onSectionChange('help')} />
         </List>

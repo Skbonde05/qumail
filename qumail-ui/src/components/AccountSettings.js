@@ -30,7 +30,10 @@ import {
   CloudUpload,
   Security,
   Notifications,
-  Settings
+  Settings,
+  Image,
+  AddPhotoAlternate,
+  Wallpaper
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { getProfile, updateProfile, changePassword } from '../services/accountApi';
@@ -107,7 +110,22 @@ const useAutoSave = (saveFunction, delay = 1000) => {
   return autoSave;
 };
 
-export default function AccountSettings({ user: initialUser, themeName, onUpdateTheme }) {
+const commonBackgrounds = [
+  { id: 'none', name: 'Default', url: null, preview: 'linear-gradient(45deg, #f1f5f9 30%, #cbd5e1 90%)' },
+  { id: 'nature', name: 'Mountain Lake', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80' },
+  { id: 'space', name: 'Deep Space', url: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=80' },
+  { id: 'abstract', name: 'Modern Abstract', url: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80' },
+  { id: 'city', name: 'Neon City', url: 'https://images.unsplash.com/photo-1510672981848-a1c4f1cb5ccf?auto=format&fit=crop&q=80' },
+  { id: 'forest', name: 'Ancient Forest', url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80' },
+  { id: 'winter', name: 'Winter Silence', url: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?auto=format&fit=crop&q=80' },
+  { id: 'arch', name: 'Minimalist Arch', url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80' },
+  { id: 'ocean', name: 'Turquoise Ocean', url: 'https://images.unsplash.com/photo-1505118380757-91f5f45d8de4?auto=format&fit=crop&q=80' },
+  { id: 'textured', name: 'Dark Texture', url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80' },
+  { id: 'art', name: 'Canvas Oil', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80' },
+  { id: 'dawn', name: 'Golden Dawn', url: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&q=80' }
+];
+
+export default function AccountSettings({ user: initialUser, themeName, onUpdateTheme, bgImage, onUpdateBgImage }) {
   const { t, i18n: i18nInstance } = useTranslation();
   const theme = useTheme();
   const [user, setUser] = useState(null);
@@ -868,7 +886,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
               <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1, fontWeight: 600 }}>
                 Choose Visual Theme
               </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
                 {themes.map((t) => (
                   <Box
                     key={t.id}
@@ -926,6 +944,98 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                     )}
                   </Box>
                 ))}
+              </Box>
+
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1, fontWeight: 600 }}>
+                Application Background
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                {commonBackgrounds.map((bg) => (
+                  <Box
+                    key={bg.id}
+                    onClick={() => onUpdateBgImage(bg.url)}
+                    sx={{
+                      width: 75,
+                      height: 75,
+                      borderRadius: 2,
+                      background: bg.url ? `url(${bg.url}) center/cover` : bg.preview,
+                      cursor: 'pointer',
+                      border: bgImage === bg.url ? '3px solid' : '1px solid transparent',
+                      borderColor: 'primary.main',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': { 
+                        transform: 'scale(1.08)',
+                        boxShadow: '0 6px 15px rgba(0,0,0,0.2)'
+                      }
+                    }}
+                  >
+                    {!bg.url && <Wallpaper sx={{ color: 'text.secondary', opacity: 0.5 }} />}
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        position: 'absolute',
+                        bottom: 0,
+                        width: '100%',
+                        color: 'white', 
+                        bgcolor: 'rgba(0,0,0,0.5)',
+                        fontWeight: 700, 
+                        textAlign: 'center', 
+                        fontSize: '0.65rem',
+                        p: 0.2
+                      }}
+                    >
+                      {bg.name}
+                    </Typography>
+                  </Box>
+                ))}
+                
+                {/* Custom Upload */}
+                <Box
+                  component="label"
+                  htmlFor="bg-upload"
+                  sx={{
+                    width: 75,
+                    height: 75,
+                    borderRadius: 2,
+                    border: '2px dashed',
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: alpha(theme.palette.action.hover, 0.05),
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      backgroundColor: alpha(theme.palette.primary.main, 0.05)
+                    }
+                  }}
+                >
+                  <AddPhotoAlternate fontSize="small" color="primary" />
+                  <Typography variant="caption" sx={{ fontSize: '0.6rem', mt: 0.5, fontWeight: 600 }}>
+                    Custom
+                  </Typography>
+                  <input
+                    id="bg-upload"
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => onUpdateBgImage(ev.target?.result);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </Box>
               </Box>
             </Grid>
           </Grid>

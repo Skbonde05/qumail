@@ -13,7 +13,8 @@
     "storage": "Storage Usage"
   },
   "settings": {
-    "account": "Account Settings",
+    "app": "App Setting",
+    "account": "Account Setting",
     "profileSub": "Manage your profile, security, and preferences",
     "security": "Security Center",
     "profile": "Profile Information",
@@ -25,12 +26,15 @@
     "selectLanguage": "Select Language",
     "preferences": "Preferences",
     "savePrefs": "Save Preferences",
-    "theme": "App Theme",
+    "theme": "Themes",
+    "background": "Application Background",
+    "customBackground": "Custom Background",
+    "privacy": "Privacy Policy",
     "save": "Save Changes",
     "regenerate": "Regenerate Keys",
     "twoFactor": "Two-Factor Authentication",
     "loginActivity": "Recent Activity",
-    "logout": "Sign Out"
+    "logout": "Logout"
   },
   "security": {
     "dashboard": "Security Activity Dashboard",

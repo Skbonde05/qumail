@@ -271,7 +271,7 @@ const getFolderRoute = (folderName) => async (req, res) => {
     }
 
     const [mails, total] = await Promise.all([
-      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Mail.countDocuments(query)
     ]);
     
@@ -299,7 +299,7 @@ router.post('/inbox', verifyToken, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const [mails, total] = await Promise.all([
-      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Mail.countDocuments(query)
     ]);
     
@@ -329,7 +329,7 @@ const getSpecialFolderRoute = (queryField) => async (req, res) => {
     const query = { owner: email, [queryField]: true, trash: false };
 
     const [mails, total] = await Promise.all([
-      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Mail.countDocuments(query)
     ]);
     
@@ -352,7 +352,7 @@ router.post('/important', verifyToken, getSpecialFolderRoute('important'));
 // ------------------ LABELS (CUSTOM FOLDERS) ------------------
 router.get('/labels', verifyToken, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
+    const user = await User.findOne({ email: req.user.email }).lean();
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.json({ success: true, labels: user.customLabels || [] });
   } catch (error) {
@@ -430,11 +430,18 @@ router.post('/folder/:folderId', verifyToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Folder not found' });
     }
 
-    const query = { owner: userEmail, folder: folderId.toUpperCase(), trash: false };
+    const query = { 
+      owner: userEmail, 
+      trash: false,
+      $or: [
+        { folder: folderId.toUpperCase() },
+        { labels: folderId.toUpperCase() }
+      ]
+    };
     const skip = (page - 1) * limit;
 
     const [mails, total] = await Promise.all([
-      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Mail.find(query).select('-aesKey -aesIV').sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
       Mail.countDocuments(query)
     ]);
     
@@ -469,12 +476,25 @@ router.get('/folder-counts', verifyToken, async (req, res) => {
     ]);
 
     // Fetch custom folder counts
-    const user = await User.findOne({ email: userEmail });
-    const customLabels = user.customLabels || [];
+    const user = await User.findOne({ email: userEmail }).lean();
+    const customLabels = user?.customLabels || [];
     const custom = {};
-    for (const label of customLabels) {
-      custom[label.id] = await Mail.countDocuments({ owner: userEmail, folder: label.id.toUpperCase(), trash: false });
-    }
+    
+    // Efficiently count all custom labels in parallel
+    const labelCounts = await Promise.all(customLabels.map(label => 
+      Mail.countDocuments({ 
+        owner: userEmail, 
+        trash: false,
+        $or: [
+          { folder: label.id.toUpperCase() },
+          { labels: label.id.toUpperCase() }
+        ]
+      })
+    ));
+
+    customLabels.forEach((label, index) => {
+      custom[label.id] = labelCounts[index];
+    });
 
     res.json({ success: true, counts: { 
       inbox, sent, archive, trash, starred, important, unread, drafts, snoozed, spam, custom 
@@ -707,7 +727,7 @@ router.post('/search', verifyToken, async (req, res) => {
     if (folder === 'starred') { delete searchQuery.folder; searchQuery.starred = true; }
     if (folder === 'important') { delete searchQuery.folder; searchQuery.important = true; }
 
-    const mails = await Mail.find(searchQuery).select('-aesKey -aesIV').sort({ createdAt: -1 }).limit(limit);
+    const mails = await Mail.find(searchQuery).select('-aesKey -aesIV').sort({ createdAt: -1 }).limit(limit).lean();
     res.json({ success: true, emails: mails.map(formatEmail), total: await Mail.countDocuments(searchQuery) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -818,7 +838,8 @@ router.post('/snoozed', verifyToken, async (req, res) => {
     const emails = await Mail.find({ owner: userEmail, folder: 'SNOOZED', trash: false })
       .sort({ snoozed: 1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
       
     res.json({ success: true, emails: emails.map(formatEmail), total: count });
   } catch (error) {
@@ -836,7 +857,8 @@ router.post('/spam', verifyToken, async (req, res) => {
     const emails = await Mail.find({ owner: userEmail, folder: 'SPAM', trash: false })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
       
     res.json({ success: true, emails: emails.map(formatEmail), total: count });
   } catch (error) {

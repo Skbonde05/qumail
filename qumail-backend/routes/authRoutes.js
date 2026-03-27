@@ -178,8 +178,8 @@ router.post('/register', authLimiter,
         refreshToken: refreshToken
       });
 
-      // Log registration
-      await addLog(user._id, 'ACCOUNT_CREATED', `Account ${user.email} created successfully`, 'success', req);
+      // Log registration (non-blocking)
+      addLog(user._id, 'ACCOUNT_CREATED', `Account ${user.email} created successfully`, 'success', req);
 
       // Create initial notification
       await Notification.create({
@@ -233,7 +233,7 @@ router.post('/forgot-password', authLimiter, [
       otp: process.env.NODE_ENV === 'development' ? otp : undefined 
     });
 
-    await addLog(user._id, 'PASSWORD_RESET_OTP_SENT', `Reset OTP sent to ${email}`, 'warning', req);
+    addLog(user._id, 'PASSWORD_RESET_OTP_SENT', `Reset OTP sent to ${email}`, 'warning', req);
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -279,7 +279,7 @@ router.post('/verify-reset-otp', authLimiter, [
       resetToken: resetToken
     });
 
-    await addLog(user._id, 'RESET_OTP_VERIFIED', `OTP verified for password reset by ${email}`, 'warning', req);
+    addLog(user._id, 'RESET_OTP_VERIFIED', `OTP verified for password reset by ${email}`, 'warning', req);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -315,7 +315,7 @@ router.post('/verify-recovery-code', authLimiter, [
       resetToken: resetToken
     });
 
-    await addLog(user._id, 'RECOVERY_CODE_USED', `Recovery code used for password reset by ${email}`, 'warning', req);
+    addLog(user._id, 'RECOVERY_CODE_USED', `Recovery code used for password reset by ${email}`, 'warning', req);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -374,7 +374,7 @@ router.post('/reset-password', authLimiter, [
 
     res.json({ success: true, message: 'Password reset successful. Please login with your new password.' });
 
-    await addLog(user._id, 'PASSWORD_RESET_COMPLETED', `Password reset completed for ${user.email}`, 'info', req);
+    addLog(user._id, 'PASSWORD_RESET_COMPLETED', `Password reset completed for ${user.email}`, 'info', req);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -443,16 +443,12 @@ router.post('/login', authLimiter,
       user.lastLogin = new Date();
       await user.save();
       
-      // Log login
-      await addLog(user._id, 'LOGIN', `Login successful at ${user.lastLogin}`, 'success', req);
+      // Log login (non-blocking)
+      addLog(user._id, 'LOGIN', `Login successful at ${user.lastLogin}`, 'success', req);
       
       // Get email counts for response
-      const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
-        Mail.countDocuments({ owner: lowerEmail, folder: 'INBOX', trash: false }),
-        Mail.countDocuments({ owner: lowerEmail, folder: 'SENT', trash: false }),
-        Mail.countDocuments({ owner: lowerEmail, folder: 'ARCHIVE', trash: false }),
-        Mail.countDocuments({ owner: lowerEmail, trash: true })
-      ]);
+      // Optimized Login: skip counts since Dashboard will fetch them with fresh labels anyway
+      const inboxCount = 0; const sentCount = 0; const archiveCount = 0; const trashCount = 0;
       
       res.json({
         success: true,
@@ -494,7 +490,7 @@ router.post('/login', authLimiter,
 // ------------------ VERIFY TOKEN ------------------
 router.post('/verify-token', verifyToken, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
+    const user = await User.findOne({ email: req.user.email }).lean();
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -504,12 +500,8 @@ router.post('/verify-token', verifyToken, async (req, res) => {
     }
     
     // Get email counts
-    const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
-      Mail.countDocuments({ owner: req.user.email, folder: 'INBOX', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, folder: 'SENT', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, folder: 'ARCHIVE', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, trash: true })
-    ]);
+    // Optimized token verification: skip counts for faster splash screen exit
+    const inboxCount = 0; const sentCount = 0; const archiveCount = 0; const trashCount = 0;
     
     res.json({
       success: true,
@@ -546,7 +538,7 @@ router.post('/verify-token', verifyToken, async (req, res) => {
 // ------------------ GET USER PROFILE ------------------
 router.get('/profile', verifyToken, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
+    const user = await User.findOne({ email: req.user.email }).lean();
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -554,12 +546,8 @@ router.get('/profile', verifyToken, async (req, res) => {
       });
     }
     
-    const [inboxCount, sentCount, archiveCount, trashCount] = await Promise.all([
-      Mail.countDocuments({ owner: req.user.email, folder: 'INBOX', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, folder: 'SENT', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, folder: 'ARCHIVE', trash: false }),
-      Mail.countDocuments({ owner: req.user.email, trash: true })
-    ]);
+    // Optimized profile fetch: skip counts
+    const inboxCount = 0; const sentCount = 0; const archiveCount = 0; const trashCount = 0;
     
     const storagePercentage = user.storageLimit > 0 ? (user.storageUsed / user.storageLimit) * 100 : 0;
     

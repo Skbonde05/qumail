@@ -29,29 +29,77 @@ import {
   ContentCopy,
   Warning
 } from "@mui/icons-material";
-import { styled } from "@mui/material/styles";
+import { styled, alpha } from "@mui/material/styles";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(4),
-  borderRadius: "16px",
-  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-  backgroundColor: "rgba(255, 255, 255, 0.95)",
+  padding: theme.spacing(5),
+  borderRadius: "24px",
+  backdropFilter: "blur(20px) saturate(180%)",
+  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+  backgroundColor: theme.palette.mode === 'dark' ? alpha("#1a1f2e", 0.75) : alpha("#ffffff", 0.8),
+  border: `1px solid ${theme.palette.mode === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+  boxShadow: theme.palette.mode === 'dark' ? "0 25px 50px -12px rgba(0, 0, 0, 0.5)" : "0 20px 40px rgba(0, 0, 0, 0.08)",
 }));
 
 const GradientButton = styled(Button)(({ theme }) => ({
-  background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
   color: "white",
   padding: theme.spacing(1.5),
-  borderRadius: "24px",
-  fontWeight: 600,
+  borderRadius: "14px",
+  fontWeight: 700,
   textTransform: "none",
   fontSize: "1rem",
+  boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   "&:hover": {
-    background: "linear-gradient(45deg, #0d47a1 30%, #1a73e8 90%)",
+    transform: "translateY(-2px)",
+    boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
+    filter: 'brightness(1.1)',
   },
+  "&:active": {
+    transform: "scale(0.98)",
+  }
 }));
 
+const BackgroundHero = styled(Box)(({ theme }) => ({
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: -1,
+  background: theme.palette.mode === 'dark' 
+    ? 'radial-gradient(circle at 20% 20%, #1a2e3b 0%, #0a0e14 100%)'
+    : 'radial-gradient(circle at 20% 20%, #eff6ff 0%, #dbeafe 100%)',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: '10%',
+    left: '10%',
+    width: '300px',
+    height: '300px',
+    background: theme.palette.primary.main,
+    filter: 'blur(120px)',
+    opacity: 0.15,
+    borderRadius: '50%',
+  },
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    bottom: '10%',
+    right: '10%',
+    width: '400px',
+    height: '400px',
+    background: theme.palette.secondary.main,
+    filter: 'blur(150px)',
+    opacity: 0.1,
+    borderRadius: '50%',
+  }
+}));
+
+
 export default function Register({ onRegister, loading, onToggleLogin }) {
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -115,43 +163,38 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      }}
-    >
-      <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 3 } }}>
-        <StyledPaper sx={{ p: { xs: 3, sm: 4 } }}>
+    <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: 'relative', overflow: 'hidden' }}>
+      <BackgroundHero />
+      <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 3 }, position: 'relative', zIndex: 1 }}>
+
+        <StyledPaper>
           {/* Header */}
           <Box sx={{ textAlign: "center", mb: 4 }}>
             <Avatar
               sx={{
-                width: 80,
-                height: 80,
-                margin: "0 auto 16px",
-                background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+                width: 72,
+                height: 72,
+                margin: "0 auto 20px",
+                background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
               }}
             >
-              <Security sx={{ fontSize: 48, color: "white" }} />
+              <Security sx={{ fontSize: 40, color: "white" }} />
             </Avatar>
 
-            <Typography variant="h4" fontWeight="700" gutterBottom>
-              Create QuMail Account
+            <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1.5px', mb: 1 }}>
+              Join QuMail
             </Typography>
 
-            <Typography variant="body1" color="text.secondary">
-              Secure. Private. Quantum-ready.
+            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500 }}>
+              Create your quantum-secure mailbox
             </Typography>
           </Box>
 
           {/* Register Form */}
           <form onSubmit={handleSubmit}>
             {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>
                 {error}
               </Alert>
             )}
@@ -164,10 +207,12 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
               onChange={(e) => setName(e.target.value)}
               required
               disabled={loading}
+              sx={{ mb: 1 }}
               InputProps={{
+                sx: { borderRadius: '12px' },
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Person />
+                    <Person sx={{ color: 'primary.main' }} />
                   </InputAdornment>
                 ),
               }}
@@ -175,7 +220,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
 
             <TextField
               fullWidth
-              label="Email"
+              label="QuMail Address"
               type="email"
               placeholder="user@qumail.com"
               margin="normal"
@@ -183,10 +228,12 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              sx={{ mb: 1 }}
               InputProps={{
+                sx: { borderRadius: '12px' },
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Mail />
+                    <Mail sx={{ color: 'primary.main' }} />
                   </InputAdornment>
                 ),
               }}
@@ -194,22 +241,24 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
 
             <TextField
               fullWidth
-              label="Password"
+              label="Create Password"
               type={showPassword ? "text" : "password"}
               margin="normal"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
+              sx={{ mb: 1 }}
               InputProps={{
+                sx: { borderRadius: '12px' },
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Lock />
+                    <Lock sx={{ color: 'primary.main' }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)}>
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -226,36 +275,42 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               disabled={loading}
+              sx={{ mb: 3 }}
+              InputProps={{
+                sx: { borderRadius: '12px' },
+              }}
             />
 
             <GradientButton
               fullWidth
               type="submit"
               disabled={loading}
-              sx={{ mt: 3 }}
             >
               {loading ? (
                 <CircularProgress size={24} color="inherit" />
               ) : (
-                "Create Account"
+                "Create Secure Account"
               )}
             </GradientButton>
           </form>
 
           {/* Footer */}
-          <Box sx={{ textAlign: "center", mt: 3 }}>
-            <Typography variant="body2">
+          <Box sx={{ textAlign: "center", mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="body2" color="text.secondary" fontWeight={500}>
               Already have an account?{" "}
               <Link
                 component="button"
+                type="button"
                 onClick={onToggleLogin}
+                sx={{ fontWeight: 700, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
               >
-                Sign in
+                Sign In
               </Link>
             </Typography>
           </Box>
         </StyledPaper>
       </Container>
+
 
       {/* Recovery Code Dialog */}
       <Dialog 

@@ -16,7 +16,7 @@ import QuMailService from '../services/QuMailService';
 
 const DRAWER_WIDTH = 260;
 
-const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdateTheme }) => {
+const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdateTheme, bgImage, onUpdateBgImage }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -146,10 +146,10 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     }
 
     switch (activeSection) {
-      case 'settings': return <AppSettings />;
-      case 'account': return <AccountSettings user={user} themeName={themeName} onUpdateTheme={onUpdateTheme} />;
+      case 'settings': return <AppSettings darkMode={darkMode} onToggleTheme={onToggleTheme} userEmail={user?.email} onBack={() => setActiveFolder('inbox')} />;
+      case 'account': return <AccountSettings user={user} themeName={themeName} onUpdateTheme={onUpdateTheme} bgImage={bgImage} onUpdateBgImage={onUpdateBgImage} />;
       case 'security': return <SecuritySettings user={user} />;
-      case 'help': return <HelpSupport />;
+      case 'help': return <HelpSupport onCompose={() => setComposeOpen(true)} />;
       case 'about': return <AboutQuMail />;
       default:
         return (
@@ -174,7 +174,19 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        height: '100vh', 
+        overflow: 'hidden', 
+        bgcolor: 'background.default',
+        backgroundImage: bgImage ? `url(${bgImage})` : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+        transition: 'background-image 0.5s ease-in-out'
+      }}
+    >
       <CssBaseline />
       
       <TopBar 
@@ -225,6 +237,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             user={user}
             labels={labels}
             onAddLabel={() => setLabelDialogOpen(true)}
+            onDeleteLabel={deleteLabel}
           />
         </SwipeableDrawer>
 
@@ -255,6 +268,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             user={user}
             labels={labels}
             onAddLabel={() => setLabelDialogOpen(true)}
+            onDeleteLabel={deleteLabel}
           />
         </Drawer>
       </Box>
@@ -285,9 +299,9 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         onClose={() => setNotifAnchor(null)}
         notifications={notifications}
         onMarkAsRead={(id) => markNotificationAsRead(id)}
-        onMarkAllAsRead={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
+        onMarkAllAsRead={() => { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); setNotifAnchor(null); }}
         onDelete={(id) => deleteNotification(id)}
-        onDeleteAll={() => setNotifications([])}
+        onDeleteAll={() => { setNotifications([]); setNotifAnchor(null); }}
         onShowAll={() => { setNotifAnchor(null); handleSectionChange('notifications'); }}
       />
       
@@ -295,16 +309,15 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         anchorEl={profileAnchor}
         onClose={() => setProfileAnchor(null)}
         onLogout={onLogout}
-        onSettings={() => handleSectionChange('account')}
+        onAppSettings={() => handleSectionChange('settings')}
+        onAccountSettings={() => handleSectionChange('account')}
+        onThemes={() => handleSectionChange('account')}
+        onPrivacy={() => handleSectionChange('about')}
+        onHelp={() => handleSectionChange('help')}
         user={user}
       />
 
-      <Compose 
-        open={composeOpen} 
-        onClose={() => { setComposeOpen(false); setDraftToEdit(null); }} 
-        onSend={handleSendEmail} 
-        draftToEdit={draftToEdit}
-      />
+
 
       {/* Label Dialog */}
       <Dialog open={labelDialogOpen} onClose={() => setLabelDialogOpen(false)} maxWidth="xs" fullWidth>

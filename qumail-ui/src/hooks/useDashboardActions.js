@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import QuMailService from '../services/QuMailService';
 import { useSnackbar } from 'notistack';
 
@@ -11,6 +11,87 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const [searchQuery, setSearchQuery] = useState('');
   const [labels, setLabels] = useState([]);
   const { enqueueSnackbar } = useSnackbar();
+  const lastNotifId = useRef(null);
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qumail_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) { return {}; }
+  });
+
+  useEffect(() => {
+    const handleUpdate = (e) => setSettings(e.detail || {});
+    window.addEventListener('qumail-settings-updated', handleUpdate);
+    return () => window.removeEventListener('qumail-settings-updated', handleUpdate);
+  }, []);
+
+  // System Notification Handler
+  useEffect(() => {
+    if (notifications.length > 0) {
+      const latest = notifications[0];
+      // Only notify for fresh UNREAD notifications we haven't seen in this session
+      if (latest.id !== lastNotifId.current && latest.status === 'unread') {
+        const isMFA = latest.title.includes('MFA') || latest.title.includes('Security');
+        
+        // Push Notification
+        if (settings.pushNotifications && Notification.permission === 'granted') {
+          try {
+             new Notification(latest.title, { 
+                body: latest.message,
+                icon: '/logo192.png' // Use site logo if available
+             });
+          } catch (e) { console.error("Notification trigger failed", e); }
+        }
+
+        // Sound Notification
+        if (settings.soundNotifications) {
+          const sounds = {
+            gentle: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
+            classic: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
+            modern: 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3',
+            custom: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'
+          };
+          const soundUrl = sounds[settings.notificationSound] || sounds.gentle;
+          const chime = new Audio(soundUrl);
+          chime.volume = 0.4;
+          chime.play().catch(() => {}); // Autoplay policies might block this until user interacts
+        }
+
+        lastNotifId.current = latest.id;
+      }
+    }
+  }, [notifications, settings]);
+
+  // Storage Cleanup Engine
+  useEffect(() => {
+    if (!settings.autoCleanup) return;
+    
+    const performCleanup = () => {
+      let totalSize = 0;
+      const cacheKeys = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('qumail_cache_')) {
+          const content = localStorage.getItem(key);
+          totalSize += (content.length * 2) / (1024 * 1024); // Est MB
+          cacheKeys.push(key);
+        }
+      }
+
+      const limit = settings.maxCacheSize || 1000;
+      const threshold = settings.cleanupThreshold || 70;
+      
+      // If we are over threshold or over limit, clear all
+      if (totalSize > limit || totalSize > (limit * (threshold / 100))) {
+        cacheKeys.forEach(key => localStorage.removeItem(key));
+        console.log('QuMail: Storage auto-cleanup performed.');
+      }
+    };
+
+    performCleanup();
+  }, [settings.autoCleanup, settings.maxCacheSize, settings.cleanupThreshold]);
+
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -26,16 +107,37 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const fetchEmails = useCallback(async (folder = activeFolder) => {
     setLoading(true);
     try {
-      const data = await QuMailService.fetchEmails(folder);
-      setEmails(data);
-      const counts = await QuMailService.getFolderCounts();
-      setFolderCounts(counts);
+      const [emailsData, countsData] = await Promise.all([
+        QuMailService.fetchEmails(folder),
+        QuMailService.getFolderCounts()
+      ]);
+      setEmails(emailsData);
+      setFolderCounts(countsData);
+      
+      // Cache logic
+      if (settings.cacheEmails) {
+        localStorage.setItem(`qumail_cache_${folder}`, JSON.stringify(emailsData));
+      }
     } catch (error) {
       console.error('Fetch emails failure:', error);
+      
+      // Fallback to cache if enabled
+      if (settings.cacheEmails) {
+        const cached = localStorage.getItem(`qumail_cache_${folder}`);
+        if (cached) {
+          try {
+            setEmails(JSON.parse(cached));
+            enqueueSnackbar('Working offline: showing cached emails', { variant: 'info' });
+            return;
+          } catch(e) {}
+        }
+      }
+      
       enqueueSnackbar('Failed to load emails', { variant: 'error' });
     } finally {
       setLoading(false);
     }
+
   }, [activeFolder, enqueueSnackbar]);
 
   useEffect(() => {
@@ -43,11 +145,17 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
       fetchEmails();
       fetchNotifications();
       
-      // Real-time simulation: poll for new notifications every 30s
-      const interval = setInterval(fetchNotifications, 30000);
+      // Sync frequency from settings (minutes -> ms)
+      const syncInterval = (settings.syncFrequency || 5) * 60000;
+      const interval = setInterval(() => {
+        fetchEmails();
+        fetchNotifications();
+      }, syncInterval);
+
       return () => clearInterval(interval);
     }
-  }, [user, activeFolder, fetchEmails, fetchNotifications]);
+  }, [user, activeFolder, fetchEmails, fetchNotifications, settings.syncFrequency]);
+
 
   const addNotification = useCallback(async (title, message, type = 'info', icon = 'Info') => {
     // Note: We don't have a POST /notifications for custom client-side notifications yet,
@@ -133,8 +241,13 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     try {
       const res = await QuMailService.deleteLabel(id);
       if (res.success) {
+        if (activeFolder === id || activeFolder === id.toUpperCase()) {
+          setActiveFolder('inbox');
+          setTimeout(() => fetchEmails('inbox'), 100); 
+        } else {
+          setTimeout(() => fetchEmails(), 100);
+        }
         fetchLabels();
-        fetchEmails(); // Mails might have moved to INBOX
         enqueueSnackbar('Label deleted', { variant: 'success' });
         return true;
       }

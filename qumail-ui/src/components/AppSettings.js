@@ -35,8 +35,12 @@ import {
   ListItemIcon,
   ListItemText,
   Collapse,
-  CircularProgress
+  CircularProgress,
+  useTheme
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
+
 import {
   Settings as SettingsIcon,
   Notifications as NotificationsIcon,
@@ -80,8 +84,8 @@ const ProfessionalPaper = styled(Paper)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius * 1.5,
   border: `1px solid ${theme.palette.divider}`,
   background: theme.palette.mode === 'dark'
-    ? `linear-gradient(145deg, ${alpha(theme.palette.background.paper, 0.95)} 0%, ${alpha(theme.palette.background.default, 0.95)} 100%)`
-    : `linear-gradient(145deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.grey[50], 0.8)} 100%)`,
+    ? `linear-gradient(145deg, ${alpha(theme.palette.background.paper, 0.4)} 0%, ${alpha(theme.palette.background.default, 0.4)} 100%)`
+    : `linear-gradient(145deg, ${alpha(theme.palette.background.paper, 0.2)} 0%, ${alpha(theme.palette.grey[50], 0.2)} 100%)`,
   backdropFilter: 'blur(10px)',
   boxShadow: theme.shadows[1],
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -164,6 +168,9 @@ const StyledSlider = styled(Slider)(({ theme }) => ({
 }));
 
 const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
+  const { t } = useTranslation();
+  const theme = useTheme();
+
   // Settings state with enhanced defaults
   const [settings, setSettings] = useState({
     // General settings
@@ -212,191 +219,15 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
     backgroundSync: true,
     dataSaver: false,
     
-    // Advanced
-    enableBetaFeatures: false,
-    useQuantumEncryption: true,
-    performanceMode: false,
-    developerMode: false,
     telemetry: false
   });
+
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
-  const [expandedSections, setExpandedSections] = useState({
-    general: true,
-    appearance: false,
-    notifications: false,
-    email: false,
-    security: false,
-    storage: false,
-    advanced: false
-  });
-
-  // Load settings from localStorage on mount
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('qumail_settings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings(prev => ({ ...prev, ...parsed }));
-      } catch (error) {
-        console.error('Failed to parse saved settings:', error);
-      }
-    }
-  }, []);
-
-  // Detect changes
-  useEffect(() => {
-    const defaultSettings = {
-      language: 'en',
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      dateFormat: 'MM/DD/YYYY',
-      timeFormat: '12h',
-      theme: darkMode ? 'dark' : 'light',
-      density: 'comfortable',
-      fontSize: 14,
-      animationLevel: 'normal',
-      emailNotifications: true,
-      pushNotifications: false,
-      soundNotifications: true,
-      desktopNotifications: true,
-      notificationSound: 'gentle',
-      autoSaveDrafts: true,
-      autoSaveInterval: 30,
-      sendConfirmation: true,
-      spellCheck: true,
-      grammarCheck: false,
-      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
-      autoEncrypt: false,
-      defaultEncryptionLevel: 'high',
-      sessionTimeout: 30,
-      twoFactorAuth: false,
-      autoLogout: true,
-      syncFrequency: 5,
-      cacheEmails: true,
-      maxCacheSize: 1000,
-      autoCleanup: true,
-      cleanupThreshold: 70,
-      hardwareAcceleration: true,
-      backgroundSync: true,
-      dataSaver: false,
-      enableBetaFeatures: false,
-      useQuantumEncryption: true,
-      performanceMode: false,
-      developerMode: false,
-      telemetry: false
-    };
-
-    const hasChanges = JSON.stringify(settings) !== JSON.stringify(defaultSettings);
-    setHasUnsavedChanges(hasChanges);
-  }, [settings, darkMode, userEmail]);
-
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: value
-    }));
-    
-    // Special handling for theme changes
-    if (key === 'theme' && onToggleTheme) {
-      if (value === 'dark' && !darkMode) {
-        onToggleTheme();
-      } else if (value === 'light' && darkMode) {
-        onToggleTheme();
-      }
-    }
-  };
-
-  const toggleSection = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  const handleSave = () => {
-    setIsSaving(true);
-    
-    // Simulate API call with progress
-    setTimeout(() => {
-      try {
-        localStorage.setItem('qumail_settings', JSON.stringify(settings));
-        
-        setSaveMessage({
-          type: 'success',
-          text: 'Settings saved successfully! Your preferences have been updated.'
-        });
-        
-        setHasUnsavedChanges(false);
-        
-        // Clear message after 4 seconds
-        setTimeout(() => {
-          setSaveMessage({ type: '', text: '' });
-        }, 4000);
-      } catch (error) {
-        setSaveMessage({
-          type: 'error',
-          text: `Failed to save settings: ${error.message}. Please try again.`
-        });
-      } finally {
-        setIsSaving(false);
-      }
-    }, 800);
-  };
-
-  const handleReset = () => {
-    const defaultSettings = {
-      language: 'en',
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      dateFormat: 'MM/DD/YYYY',
-      timeFormat: '12h',
-      theme: darkMode ? 'dark' : 'light',
-      density: 'comfortable',
-      fontSize: 14,
-      animationLevel: 'normal',
-      emailNotifications: true,
-      pushNotifications: false,
-      soundNotifications: true,
-      desktopNotifications: true,
-      notificationSound: 'gentle',
-      autoSaveDrafts: true,
-      autoSaveInterval: 30,
-      sendConfirmation: true,
-      spellCheck: true,
-      grammarCheck: false,
-      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
-      autoEncrypt: false,
-      defaultEncryptionLevel: 'high',
-      sessionTimeout: 30,
-      twoFactorAuth: false,
-      autoLogout: true,
-      syncFrequency: 5,
-      cacheEmails: true,
-      maxCacheSize: 1000,
-      autoCleanup: true,
-      cleanupThreshold: 70,
-      hardwareAcceleration: true,
-      backgroundSync: true,
-      dataSaver: false,
-      enableBetaFeatures: false,
-      useQuantumEncryption: true,
-      performanceMode: false,
-      developerMode: false,
-      telemetry: false
-    };
-    
-    setSettings(defaultSettings);
-    setSaveMessage({
-      type: 'info',
-      text: 'All settings have been reset to their default values.'
-    });
-    
-    setTimeout(() => {
-      setSaveMessage({ type: '', text: '' });
-    }, 3000);
-  };
+  const [activeCategory, setActiveCategory] = useState('general');
 
   // Enhanced settings sections with more detail
   const settingsSections = [
@@ -732,69 +563,190 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
           description: 'Clean cache when this percentage is reached'
         }
       ]
-    },
-    {
-      id: 'advanced',
-      title: 'Advanced',
-      icon: <ScienceIcon />,
-      description: 'Experimental features and developer options',
-      badge: 'Beta',
-      fields: [
-        {
-          key: 'enableBetaFeatures',
-          label: 'Beta Features',
-          type: 'switch',
-          icon: <RocketLaunchIcon />,
-          description: 'Enable experimental features (may be unstable)'
-        },
-        {
-          key: 'useQuantumEncryption',
-          label: 'Quantum Encryption',
-          type: 'switch',
-          icon: <AutoAwesomeIcon />,
-          description: 'Use quantum-safe encryption algorithms (experimental)'
-        },
-        {
-          key: 'performanceMode',
-          label: 'Performance Mode',
-          type: 'switch',
-          icon: <BoltIcon />,
-          description: 'Optimize for speed over visual effects'
-        },
-        {
-          key: 'hardwareAcceleration',
-          label: 'Hardware Acceleration',
-          type: 'switch',
-          icon: <MemoryIcon />,
-          description: 'Use GPU acceleration for better performance'
-        },
-        {
-          key: 'backgroundSync',
-          label: 'Background Sync',
-          type: 'switch',
-          description: 'Sync emails in background (recommended)'
-        },
-        {
-          key: 'dataSaver',
-          label: 'Data Saver Mode',
-          type: 'switch',
-          description: 'Reduce data usage for mobile connections'
-        },
-        {
-          key: 'developerMode',
-          label: 'Developer Mode',
-          type: 'switch',
-          description: 'Enable debugging tools and advanced options'
-        },
-        {
-          key: 'telemetry',
-          label: 'Anonymous Telemetry',
-          type: 'switch',
-          description: 'Help improve QuMail by sharing anonymous usage data'
-        }
-      ]
     }
   ];
+
+
+
+
+  // Load settings from localStorage on mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('qumail_settings');
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        setSettings(prev => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Failed to parse saved settings:', error);
+      }
+    }
+  }, []);
+
+  // Detect changes
+  useEffect(() => {
+    const defaultSettings = {
+      language: 'en',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      dateFormat: 'MM/DD/YYYY',
+      timeFormat: '12h',
+      theme: darkMode ? 'dark' : 'light',
+      density: 'comfortable',
+      fontSize: 14,
+      animationLevel: 'normal',
+      emailNotifications: true,
+      pushNotifications: false,
+      soundNotifications: true,
+      desktopNotifications: true,
+      notificationSound: 'gentle',
+      autoSaveDrafts: true,
+      autoSaveInterval: 30,
+      sendConfirmation: true,
+      spellCheck: true,
+      grammarCheck: false,
+      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
+      autoEncrypt: false,
+      defaultEncryptionLevel: 'high',
+      sessionTimeout: 30,
+      twoFactorAuth: false,
+      autoLogout: true,
+      syncFrequency: 5,
+      cacheEmails: true,
+      maxCacheSize: 1000,
+      autoCleanup: true,
+      cleanupThreshold: 70,
+      telemetry: false
+    };
+
+
+    const hasChanges = JSON.stringify(settings) !== JSON.stringify(defaultSettings);
+    setHasUnsavedChanges(hasChanges);
+  }, [settings, darkMode, userEmail]);
+
+  const handleSettingChange = (key, value) => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));
+    
+    // Special handling for theme changes
+    if (key === 'theme' && onToggleTheme) {
+      if (value === 'dark' && !darkMode) {
+        onToggleTheme();
+      } else if (value === 'light' && darkMode) {
+        onToggleTheme();
+      }
+    }
+
+    // Special handling for language changes
+    if (key === 'language') {
+      i18n.changeLanguage(value);
+    }
+
+    // Global Side Effects for Appearance
+    if (key === 'fontSize') {
+      document.documentElement.style.fontSize = `${value}px`;
+    }
+
+    if (key === 'animationLevel') {
+      const duration = value === 'minimal' ? '0s' : value === 'enhanced' ? '0.5s' : '0.3s';
+      document.documentElement.style.setProperty('--app-transition-duration', duration);
+    }
+
+    // Notifications permission logic
+    if (key === 'pushNotifications' && value === true) {
+      if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+          if (permission !== 'granted') {
+            setSettings(prev => ({ ...prev, pushNotifications: false }));
+          }
+        });
+      }
+    }
+  };
+
+  const currentSection = settingsSections.find(s => s.id === activeCategory);
+
+
+  const handleSave = () => {
+    setIsSaving(true);
+    
+    // Simulate API call with progress
+    setTimeout(() => {
+      try {
+        localStorage.setItem('qumail_settings', JSON.stringify(settings));
+        
+        // Broadcast change globally
+        window.dispatchEvent(new CustomEvent('qumail-settings-updated', { detail: settings }));
+
+        setSaveMessage({
+          type: 'success',
+          text: 'Settings saved successfully! Your preferences have been updated.'
+        });
+        
+        setHasUnsavedChanges(false);
+        
+        // Clear message after 4 seconds
+        setTimeout(() => {
+          setSaveMessage({ type: '', text: '' });
+        }, 4000);
+      } catch (error) {
+        setSaveMessage({
+          type: 'error',
+          text: `Failed to save settings: ${error.message}. Please try again.`
+        });
+      } finally {
+        setIsSaving(false);
+      }
+    }, 800);
+  };
+
+  const handleReset = () => {
+    const defaultSettings = {
+      language: 'en',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      dateFormat: 'MM/DD/YYYY',
+      timeFormat: '12h',
+      theme: darkMode ? 'dark' : 'light',
+      density: 'comfortable',
+      fontSize: 14,
+      animationLevel: 'normal',
+      emailNotifications: true,
+      pushNotifications: false,
+      soundNotifications: true,
+      desktopNotifications: true,
+      notificationSound: 'gentle',
+      autoSaveDrafts: true,
+      autoSaveInterval: 30,
+      sendConfirmation: true,
+      spellCheck: true,
+      grammarCheck: false,
+      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}\n\nSent from QuMail - Quantum Secure Email`,
+      autoEncrypt: false,
+      defaultEncryptionLevel: 'high',
+      sessionTimeout: 30,
+      twoFactorAuth: false,
+      autoLogout: true,
+      syncFrequency: 5,
+      cacheEmails: true,
+      maxCacheSize: 1000,
+      autoCleanup: true,
+      cleanupThreshold: 70,
+      telemetry: false
+    };
+
+    
+    setSettings(defaultSettings);
+    setSaveMessage({
+      type: 'info',
+      text: 'All settings have been reset to their default values.'
+    });
+    
+    setTimeout(() => {
+      setSaveMessage({ type: '', text: '' });
+    }, 3000);
+  };
+
+
 
   const renderField = (field) => {
     const value = settings[field.key];
@@ -989,10 +941,6 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
         hardwareAcceleration: true,
         backgroundSync: true,
         dataSaver: false,
-        enableBetaFeatures: false,
-        useQuantumEncryption: true,
-        performanceMode: false,
-        developerMode: false,
         telemetry: false
       };
       
@@ -1009,7 +957,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
     <Box sx={{ 
       height: '100%',
       overflow: 'auto',
-      bgcolor: 'background.default',
+      bgcolor: 'transparent',
       p: { xs: 2, md: 3 }
     }}>
       {/* Page Header */}
@@ -1123,11 +1071,12 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
         {/* Left Navigation */}
         <Box sx={{ 
           width: { xs: '100%', lg: 300 }, 
-          border: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`,
+          border: `1px solid ${alpha(darkMode ? '#fff' : '#000', 0.1)}`,
           p: 3,
           borderRadius: 2,
           height: 'fit-content',
-          bgcolor: 'background.paper'
+          bgcolor: alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(20px)',
         }}>
           <Typography variant="subtitle2" sx={{ 
             color: 'text.secondary', 
@@ -1144,16 +1093,16 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
               <ListItem
                 key={section.id}
                 button
-                onClick={() => toggleSection(section.id)}
+                onClick={() => setActiveCategory(section.id)}
                 sx={{
                   borderRadius: 2,
                   mb: 1,
                   py: 1.5,
                   px: 2,
-                  backgroundColor: expandedSections[section.id] 
+                  backgroundColor: activeCategory === section.id 
                     ? alpha(darkMode ? '#667eea' : '#4f46e5', 0.1)
                     : 'transparent',
-                  border: expandedSections[section.id] 
+                  border: activeCategory === section.id 
                     ? `1px solid ${alpha(darkMode ? '#667eea' : '#4f46e5', 0.3)}`
                     : '1px solid transparent',
                   '&:hover': {
@@ -1166,10 +1115,10 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
                   <Avatar sx={{ 
                     width: 32, 
                     height: 32, 
-                    bgcolor: expandedSections[section.id] 
+                    bgcolor: activeCategory === section.id 
                       ? darkMode ? '#667eea' : '#4f46e5'
                       : alpha(darkMode ? '#fff' : '#000', 0.1),
-                    color: expandedSections[section.id] ? 'white' : 'inherit'
+                    color: activeCategory === section.id ? 'white' : 'inherit'
                   }}>
                     {section.icon}
                   </Avatar>
@@ -1194,10 +1143,8 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
                     </Typography>
                   }
                 />
-                {expandedSections[section.id] ? (
-                  <ExpandLessIcon fontSize="small" />
-                ) : (
-                  <ExpandMoreIcon fontSize="small" />
+                {activeCategory === section.id && (
+                  <Box sx={{ width: 4, height: 24, borderRadius: 2, bgcolor: 'primary.main', ml: 1 }} />
                 )}
               </ListItem>
             ))}
@@ -1208,66 +1155,71 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
         <Box sx={{ 
           flex: 1,
           borderRadius: 2,
-          p: 3,
-          bgcolor: 'background.paper',
-          border: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`
+          p: 0,
+          bgcolor: alpha(theme.palette.background.paper, 0.6),
+          backdropFilter: 'blur(20px)',
+          border: `1px solid ${alpha(darkMode ? '#fff' : '#000', 0.1)}`,
+          minHeight: '600px',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
         }}>
-          {settingsSections.map((section) => (
-            <Collapse key={section.id} in={expandedSections[section.id]}>
-              <Box sx={{ mb: 4 }}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 2, 
-                  mb: 3,
-                  p: 2.5,
-                  borderRadius: 3,
-                  background: darkMode
-                    ? `linear-gradient(90deg, ${alpha('#1a1a1a', 0.8)} 0%, ${alpha('#2a2a2a', 0.8)} 100%)`
-                    : `linear-gradient(90deg, ${alpha('#ffffff', 0.9)} 0%, ${alpha('#f8f9fa', 0.9)} 100%)`,
-                  border: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`,
-                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-                }}>
-                  <SectionIconWrapper>
-                    {section.icon}
-                  </SectionIconWrapper>
-                  <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                      <Typography variant="h6" fontWeight="700">
-                        {section.title}
-                      </Typography>
-                      {section.badge && (
-                        <PremiumChip label={section.badge} />
-                      )}
-                    </Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {section.description}
+          {currentSection && (
+            <Box sx={{ p: 4, flex: 1 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 2, 
+                mb: 4,
+                p: 2.5,
+                borderRadius: 3,
+                background: darkMode
+                  ? `linear-gradient(90deg, ${alpha('#1a1a1a', 0.4)} 0%, ${alpha('#2a2a2a', 0.4)} 100%)`
+                  : `linear-gradient(90deg, ${alpha('#ffffff', 0.5)} 0%, ${alpha('#f8f9fa', 0.5)} 100%)`,
+                border: `1px solid ${alpha(darkMode ? '#fff' : '#000', 0.1)}`,
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+              }}>
+                <SectionIconWrapper>
+                  {currentSection.icon}
+                </SectionIconWrapper>
+                <Box sx={{ flex: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <Typography variant="h6" fontWeight="700">
+                      {currentSection.title}
                     </Typography>
+                    {currentSection.badge && (
+                      <PremiumChip label={currentSection.badge} />
+                    )}
                   </Box>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {currentSection.description}
+                  </Typography>
                 </Box>
-
-                <Grid container spacing={2}>
-                  {section.fields.map((field) => (
-                    <Grid item xs={12} key={field.key}>
-                      {renderField(field)}
-                    </Grid>
-                  ))}
-                </Grid>
               </Box>
-            </Collapse>
-          ))}
+
+              <Grid container spacing={2}>
+                {currentSection.fields.map((field) => (
+                  <Grid item xs={12} key={field.key}>
+                    {renderField(field)}
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          )}
           
-          {/* Action Buttons */}
+          {/* Action Buttons always visible at bottom */}
           <Box sx={{ 
-            mt: 4, 
-            pt: 3, 
-            borderTop: `1px solid ${alpha(darkMode ? '#333' : '#e0e0e0', 0.3)}`,
+            mt: 'auto', 
+            p: 3, 
+            borderTop: `1px solid ${alpha(darkMode ? '#fff' : '#000', 0.1)}`,
             display: 'flex', 
             justifyContent: 'space-between',
             alignItems: 'center',
             flexWrap: 'wrap',
-            gap: 2
+            gap: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.4)
           }}>
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Button
                 startIcon={<ResetIcon />}

@@ -8,8 +8,9 @@ import SplashScreen from "./components/SplashScreen";
 import QuMailService from "./services/QuMailService";
 import { getTheme } from "./theme";
 
+import { MotionConfig } from "framer-motion";
+import Dashboard from "./pages/Dashboard";
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 const AppContent = () => {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -21,10 +22,24 @@ const AppContent = () => {
   const [animationDone, setAnimationDone] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('qumail_dark_mode') === 'true');
   const [themeName, setThemeName] = useState(() => localStorage.getItem('qumail_theme_name') || 'default');
+  const [bgImage, setBgImage] = useState(() => localStorage.getItem('qumail_bg_image') || null);
+  const [animationLevel, setAnimationLevel] = useState(() => {
+    const saved = localStorage.getItem('qumail_settings');
+    try {
+      return saved ? JSON.parse(saved).animationLevel || 'normal' : 'normal';
+    } catch (e) { return 'normal'; }
+  });
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qumail_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) { return {}; }
+  });
   const { enqueueSnackbar } = useSnackbar();
+
   const navigate = useNavigate();
 
-  const currentTheme = useMemo(() => getTheme(darkMode ? 'dark' : 'light', themeName), [darkMode, themeName]);
+  const currentTheme = useMemo(() => getTheme(darkMode ? 'dark' : 'light', themeName, !!bgImage), [darkMode, themeName, bgImage]);
 
   // Load user profile if token exists
   useEffect(() => {
@@ -39,6 +54,9 @@ const AppContent = () => {
             // Sync theme from user settings if available
             if (profile.user.settings?.theme) {
               setThemeName(profile.user.settings.theme);
+            }
+            if (profile.user.settings?.bgImage) {
+              setBgImage(profile.user.settings.bgImage);
             }
           } else {
             localStorage.removeItem('qumail_token');
@@ -64,6 +82,9 @@ const AppContent = () => {
         setUser(result.user);
         if (result.user.settings?.theme) {
           setThemeName(result.user.settings.theme);
+        }
+        if (result.user.settings?.bgImage) {
+          setBgImage(result.user.settings.bgImage);
         }
         setLoggedIn(true);
         navigate("/");
@@ -117,6 +138,36 @@ const AppContent = () => {
     localStorage.setItem('qumail_theme_name', name);
   };
 
+  const updateBgImage = (image) => {
+    setBgImage(image);
+    if (image) {
+      localStorage.setItem('qumail_bg_image', image);
+    } else {
+      localStorage.removeItem('qumail_bg_image');
+    }
+  };
+
+  useEffect(() => {
+    const handleSettingsUpdate = (e) => {
+      const newSettings = e.detail || {};
+      setSettings(newSettings);
+      if (newSettings.animationLevel) {
+        setAnimationLevel(newSettings.animationLevel);
+      }
+    };
+    window.addEventListener('qumail-settings-updated', handleSettingsUpdate);
+    return () => window.removeEventListener('qumail-settings-updated', handleSettingsUpdate);
+  }, []);
+
+
+
+  const motionTransition = useMemo(() => ({
+    duration: animationLevel === 'minimal' ? 0.1 : animationLevel === 'enhanced' ? 0.6 : 0.35,
+    ease: [0.4, 0, 0.2, 1] // Professional cubic-bezier
+  }), [animationLevel]);
+
+
+
   useEffect(() => {
     if (authChecked && animationDone) {
       setAppInitialized(true);
@@ -140,52 +191,56 @@ const AppContent = () => {
           <CircularProgress />
         </Box>
       }>
-        <Routes>
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-          <Route path="/login" element={
-            loggedIn ? <Navigate to="/" /> : (
-              <Login 
-                onLogin={handleLogin} 
-                loading={loading} 
-                onSwitchToRegister={() => {
-                  setShowRegister(true);
-                  navigate("/register");
-                }} 
-              />
-            )
-          } />
-          <Route path="/register" element={
-            loggedIn ? <Navigate to="/" /> : (
-              <Register 
-                onRegister={handleRegister} 
-                loading={loading} 
-                onToggleLogin={() => {
-                  setShowRegister(false);
-                  navigate("/login");
-                }} 
-              />
-            )
-          } />
-          <Route path="/" element={
-            !loggedIn ? (
-              showRegister ? (
-                <Navigate to="/register" />
-              ) : (
-                <Navigate to="/login" />
+        <MotionConfig transition={motionTransition}>
+          <Routes>
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
+            <Route path="/login" element={
+              loggedIn ? <Navigate to="/" /> : (
+                <Login 
+                  onLogin={handleLogin} 
+                  loading={loading} 
+                  onSwitchToRegister={() => {
+                    setShowRegister(true);
+                    navigate("/register");
+                  }} 
+                />
               )
-            ) : (
-              <Dashboard 
-                user={user} 
-                onLogout={handleLogout} 
-                darkMode={darkMode} 
-                onToggleTheme={toggleTheme} 
-                themeName={themeName}
-                onUpdateTheme={(name) => updateThemeName(name)}
-              />
-            )
-          } />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+            } />
+            <Route path="/register" element={
+              loggedIn ? <Navigate to="/" /> : (
+                <Register 
+                  onRegister={handleRegister} 
+                  loading={loading} 
+                  onToggleLogin={() => {
+                    setShowRegister(false);
+                    navigate("/login");
+                  }} 
+                />
+              )
+            } />
+            <Route path="/" element={
+              !loggedIn ? (
+                showRegister ? (
+                  <Navigate to="/register" />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              ) : (
+                <Dashboard 
+                  user={user} 
+                  onLogout={handleLogout} 
+                  darkMode={darkMode} 
+                  onToggleTheme={toggleTheme} 
+                  themeName={themeName}
+                  onUpdateTheme={(name) => updateThemeName(name)}
+                  bgImage={bgImage}
+                  onUpdateBgImage={updateBgImage}
+                />
+              )
+            } />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </MotionConfig>
       </Suspense>
     </ThemeProvider>
   );

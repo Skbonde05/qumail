@@ -65,6 +65,12 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [processedAttachments, setProcessedAttachments] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [errors, setErrors] = useState({});
+  const [settings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qumail_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) { return {}; }
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -89,16 +95,27 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     }
   }, [draftToEdit]);
 
-  // Auto-save draft every 5 seconds
+  // Load signature for new emails
   useEffect(() => {
+    if (open && !draftToEdit && settings.signature && !body) {
+      setBody("\n\n" + settings.signature);
+    }
+  }, [open, draftToEdit, settings.signature]);
+
+  // Auto-save draft based on settings
+  useEffect(() => {
+    if (!settings.autoSaveDrafts) return;
+
+    const interval = (settings.autoSaveInterval || 5) * 1000;
     const timer = setTimeout(() => {
       if ((subject || body) && !sending) {
         handleSaveDraft();
       }
-    }, 5000);
+    }, interval);
 
     return () => clearTimeout(timer);
-  }, [subject, body, to, cc, bcc, level]);
+  }, [subject, body, to, cc, bcc, level, settings.autoSaveDrafts, settings.autoSaveInterval]);
+
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -130,6 +147,14 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
       });
       return;
     }
+
+    // Confirmation check from settings
+    if (settings.sendConfirmation) {
+      if (!window.confirm("Are you sure you want to send this email?")) {
+        return;
+      }
+    }
+
 
     setSending(true);
     
@@ -648,13 +673,15 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                 variant="standard"
                 InputProps={{ 
                   disableUnderline: true,
-                  readOnly: sending
+                  readOnly: sending,
+                  spellCheck: settings.spellCheck
                 }}
                 placeholder="Type your message here..."
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 error={!!errors.body}
                 helperText={errors.body}
+
                 sx={{ 
                   p: 2,
                   "& .MuiInputBase-root": {

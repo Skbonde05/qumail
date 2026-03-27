@@ -66,7 +66,7 @@ import {
   Folder as FolderIcon,
   Circle
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 
 
 
@@ -81,37 +81,39 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 }));
 
 const HeaderContainer = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(3),
+  padding: theme.spacing(4),
   borderBottom: `1px solid ${theme.palette.divider}`,
   backgroundColor: theme.palette.background.paper,
+  transition: 'all 0.3s ease',
 }));
 
 const ContentContainer = styled(Box)(({ theme }) => ({
   flex: 1,
-  padding: theme.spacing(3),
+  padding: theme.spacing(4, 4, 8, 4),
   overflowY: 'auto',
   backgroundColor: theme.palette.background.default,
 }));
 
 const SecurityBadge = styled(Chip)(({ theme, level }) => ({
-  fontWeight: 600,
-  borderWidth: 2,
+  fontWeight: 700,
+  fontSize: '0.75rem',
+  padding: '6px 8px',
+  borderRadius: '8px',
+  border: 'none',
   ...(level === 'otp' && {
-    backgroundColor: theme.palette.error.light,
-    color: theme.palette.error.contrastText,
-    borderColor: theme.palette.error.main,
+    backgroundColor: alpha(theme.palette.error.main, 0.12),
+    color: theme.palette.error.main,
   }),
   ...(level === 'aes' && {
-    backgroundColor: theme.palette.success.light,
-    color: theme.palette.success.contrastText,
-    borderColor: theme.palette.success.main,
+    backgroundColor: alpha(theme.palette.success.main, 0.12),
+    color: theme.palette.success.main,
   }),
   ...(level === 'none' && {
-    backgroundColor: theme.palette.grey[200],
-    color: theme.palette.grey[700],
-    borderColor: theme.palette.grey[400],
+    backgroundColor: alpha(theme.palette.text.disabled, 0.12),
+    color: theme.palette.text.secondary,
   }),
 }));
+
 
 const AttachmentItem = styled(ListItem)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,

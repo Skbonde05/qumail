@@ -28,7 +28,7 @@ import {
   VpnKey,
   History
 } from "@mui/icons-material";
-import { styled } from "@mui/material/styles";
+import { styled, alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import QuMailService from "../services/QuMailService";
 
@@ -38,26 +38,73 @@ import {
 } from "@mui/material";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(4),
-  borderRadius: "16px",
-  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-  backgroundColor: "rgba(255, 255, 255, 0.95)",
+  padding: theme.spacing(5),
+  borderRadius: "24px",
+  backdropFilter: "blur(20px) saturate(180%)",
+  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+  backgroundColor: theme.palette.mode === 'dark' ? alpha("#1a1f2e", 0.75) : alpha("#ffffff", 0.8),
+  border: `1px solid ${theme.palette.mode === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+  boxShadow: theme.palette.mode === 'dark' ? "0 25px 50px -12px rgba(0, 0, 0, 0.5)" : "0 20px 40px rgba(0, 0, 0, 0.08)",
 }));
 
 const GradientButton = styled(Button)(({ theme }) => ({
-  background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
   color: "white",
   padding: theme.spacing(1.5),
-  borderRadius: "24px",
-  fontWeight: 600,
+  borderRadius: "14px",
+  fontWeight: 700,
   textTransform: "none",
   fontSize: "1rem",
+  boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   "&:hover": {
-    background: "linear-gradient(45deg, #0d47a1 30%, #1a73e8 90%)",
+    transform: "translateY(-2px)",
+    boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
+    filter: 'brightness(1.1)',
   },
+  "&:active": {
+    transform: "scale(0.98)",
+  }
+}));
+
+const BackgroundHero = styled(Box)(({ theme }) => ({
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: -1,
+  background: theme.palette.mode === 'dark' 
+    ? 'radial-gradient(circle at 20% 20%, #1e293b 0%, #0f172a 100%)'
+    : 'radial-gradient(circle at 20% 20%, #eff6ff 0%, #dbeafe 100%)',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: '10%',
+    left: '10%',
+    width: '300px',
+    height: '300px',
+    background: theme.palette.primary.main,
+    filter: 'blur(120px)',
+    opacity: 0.15,
+    borderRadius: '50%',
+  },
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    bottom: '10%',
+    right: '10%',
+    width: '400px',
+    height: '400px',
+    background: theme.palette.secondary.main,
+    filter: 'blur(150px)',
+    opacity: 0.1,
+    borderRadius: '50%',
+  }
 }));
 
 export default function Login({ onLogin, onSwitchToRegister, loading }) {
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -230,60 +277,57 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      }}
-    >
-      <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 3 } }}>
-        <StyledPaper sx={{ p: { xs: 3, sm: 4 } }}>
+    <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: 'relative', overflow: 'hidden' }}>
+      <BackgroundHero />
+      <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 3 }, position: 'relative', zIndex: 1 }}>
+
+        <StyledPaper>
           {/* Header */}
-          <Box sx={{ textAlign: "center", mb: 3 }}>
+          <Box sx={{ textAlign: "center", mb: 4 }}>
             <Avatar
               sx={{
-                width: 80,
-                height: 80,
-                margin: "0 auto 16px",
-                background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+                width: 72,
+                height: 72,
+                margin: "0 auto 20px",
+                background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
               }}
             >
-              <Security sx={{ fontSize: 48, color: "white" }} />
+              <Security sx={{ fontSize: 40, color: "white" }} />
             </Avatar>
 
-            <Typography variant="h4" fontWeight="700" gutterBottom>
-              QuMail Login
+            <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1.5px', mb: 1 }}>
+              QuMail
             </Typography>
 
-            <Typography variant="body1" color="text.secondary">
-              Secure. Private. Quantum-ready.
+            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500 }}>
+              The future of secure communication
             </Typography>
           </Box>
 
           {/* Login Form */}
           <form onSubmit={handleSubmit}>
             {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>
                 {error}
               </Alert>
             )}
 
             <TextField
               fullWidth
-              label="Email"
+              label="Email Address"
               type="email"
               margin="normal"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="yourname@qumail.com"
+              sx={{ mb: 2 }}
               InputProps={{
+                sx: { borderRadius: '12px' },
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Mail />
+                    <Mail sx={{ color: 'primary.main' }} />
                   </InputAdornment>
                 ),
               }}
@@ -297,15 +341,17 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              sx={{ mb: 1 }}
               InputProps={{
+                sx: { borderRadius: '12px' },
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Lock />
+                    <Lock sx={{ color: 'primary.main' }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)}>
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -314,17 +360,16 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
             />
 
             {/* Forgot Password Link */}
-            <Box sx={{ textAlign: "right", mt: 1, mb: 2 }}>
+            <Box sx={{ textAlign: "right", mb: 3 }}>
               <Link
                 component="button"
+                type="button"
                 variant="body2"
                 onClick={() => setOpenForgot(true)}
                 sx={{
+                  fontWeight: 600,
                   textDecoration: "none",
-                  color: "#1a73e8",
-                  "&:hover": {
-                    textDecoration: "underline",
-                  },
+                  "&:hover": { textDecoration: "underline" },
                 }}
               >
                 Forgot Password?
@@ -335,40 +380,40 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               fullWidth
               type="submit"
               disabled={loading}
-              sx={{ mt: 2 }}
             >
               {loading ? (
                 <CircularProgress size={24} color="inherit" />
               ) : (
-                "Sign In"
+                "Sign Into Your Account"
               )}
             </GradientButton>
           </form>
 
           {/* Create Account Section */}
-          <Box sx={{ textAlign: "center", mt: 4, pt: 3, borderTop: "1px solid #e0e0e0" }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              New to QuMail?
+          <Box sx={{ textAlign: "center", mt: 5, pt: 3, borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+              Don't have a secure box yet?
             </Typography>
             <Button
               variant="outlined"
               fullWidth
               onClick={onSwitchToRegister}
               sx={{
-                borderRadius: "24px",
-                borderColor: "#1a73e8",
-                color: "#1a73e8",
+                borderRadius: "14px",
+                py: 1.5,
+                fontWeight: 700,
                 "&:hover": {
-                  borderColor: "#0d47a1",
-                  backgroundColor: "rgba(26, 115, 232, 0.04)",
+                  borderWidth: '1.5px',
+                  backgroundColor: theme => alpha(theme.palette.primary.main, 0.04),
                 },
               }}
             >
-              Create Account
+              Create New Account
             </Button>
           </Box>
         </StyledPaper>
       </Container>
+
 
       {/* Forgot Password Dialog */}
       <Dialog 
@@ -500,8 +545,8 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
                 onClick={handleForgotPassword}
                 disabled={forgotLoading}
                 sx={{ 
-                  borderRadius: "24px", px: 4, py: 1,
-                  background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)"
+                  borderRadius: "14px", px: 4, py: 1,
+                  background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
                 }}
               >
                 {forgotLoading ? <CircularProgress size={24} color="inherit" /> : (resetStep === 2 ? "Save Password" : "Next")}
@@ -512,7 +557,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               fullWidth 
               variant="contained" 
               onClick={closeForgotDialog}
-              sx={{ borderRadius: "24px", py: 1.5, background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)" }}
+              sx={{ borderRadius: "14px", py: 1.5, background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)` }}
             >
               Back to Login
             </Button>
@@ -525,20 +570,20 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
         open={openMfa}
         onClose={() => { setOpenMfa(false); setMfaCode(''); setMfaError(''); }}
         PaperProps={{
-          sx: { borderRadius: "16px", width: "100%", maxWidth: 450 }
+          sx: { borderRadius: "24px", width: "100%", maxWidth: 450 }
         }}
       >
-        <DialogTitle sx={{ textAlign: 'center', pt: 3 }} component="div">
-          <Avatar sx={{ bgcolor: 'primary.main', width: 64, height: 64, mx: 'auto', mb: 2 }}>
+        <DialogTitle sx={{ textAlign: 'center', pt: 4 }} component="div">
+          <Avatar sx={{ bgcolor: 'primary.main', width: 64, height: 64, mx: 'auto', mb: 2, boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.3)}` }}>
             <Security sx={{ fontSize: 40 }} />
           </Avatar>
-          <Typography variant="h5" fontWeight="700">
-            Two-Factor Authentication
+          <Typography variant="h5" fontWeight="800" sx={{ letterSpacing: '-0.5px' }}>
+            Two-Factor Auth
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ px: 4 }}>
-          <DialogContentText sx={{ mb: 3, textAlign: 'center' }}>
-            Please enter the 6-digit code from your linked Authenticator app.
+          <DialogContentText sx={{ mb: 3, textAlign: 'center', fontWeight: 500 }}>
+            Enter the 6-digit code from your linked Authenticator app.
           </DialogContentText>
           <TextField
             fullWidth
@@ -546,8 +591,9 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
             placeholder="123456"
             value={mfaCode}
             onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            inputProps={{ style: { textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem', fontWeight: '700' } }}
+            inputProps={{ style: { textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem', fontWeight: '800' } }}
             InputProps={{
+              sx: { borderRadius: '14px' },
               startAdornment: <InputAdornment position="start"><VpnKey color="primary" /></InputAdornment>
             }}
             error={!!mfaError}
@@ -559,26 +605,28 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               severity={mfaError ? "error" : "info"}
               sx={{ mt: 3, borderRadius: '12px' }}
             >
-              {mfaError || (mfaLoading ? "Verifying..." : "Enter your 6-digit verification code")}
+              {mfaError || (mfaLoading ? "Verifying..." : "Verifying code...")}
             </Alert>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 3, px: 4 }}>
-          <Button onClick={() => { setOpenMfa(false); setMfaCode(''); setMfaError(''); }} color="inherit">Cancel</Button>
+        <DialogActions sx={{ p: 4, pt: 2 }}>
+          <Button onClick={() => { setOpenMfa(false); setMfaCode(''); setMfaError(''); }} color="inherit" sx={{ fontWeight: 600 }}>Cancel</Button>
           <Box sx={{ flex: 1 }} />
           <Button
             variant="contained"
             onClick={handleMfaSubmit}
             disabled={mfaLoading}
             sx={{
-              borderRadius: "24px", px: 4, py: 1,
-              background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)"
+              borderRadius: "14px", px: 4, py: 1,
+              background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              fontWeight: 700
             }}
           >
             {mfaLoading ? <CircularProgress size={24} color="inherit" /> : "Verify & Login"}
           </Button>
         </DialogActions>
       </Dialog>
+
     </Box>
   );
 }
