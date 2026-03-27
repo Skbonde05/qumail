@@ -494,7 +494,56 @@ const Inbox = memo(({
         <AnimatePresence>
           {renderedEmails}
         </AnimatePresence>
+
+        {emails.length === 0 && !loading && (
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            py: 15, 
+            textAlign: 'center',
+            opacity: 0.6
+          }}>
+            <Box sx={{ 
+              width: 120, 
+              height: 120, 
+              borderRadius: '50%', 
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 3,
+              animation: 'pulse 2s infinite'
+            }}>
+              <InboxIcon sx={{ fontSize: 60, color: 'primary.main' }} />
+            </Box>
+            <Typography variant="h6" color="text.secondary" fontWeight="700" gutterBottom>
+              No Messages Found
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
+              This folder is currently empty. You're all caught up!
+            </Typography>
+          </Box>
+        )}
+
+        {loading && emails.length === 0 && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+            <CircularProgress size={32} thickness={5} />
+          </Box>
+        )}
+
+        <style>
+          {`
+            @keyframes pulse {
+              0% { transform: scale(1); opacity: 0.5; }
+              50% { transform: scale(1.05); opacity: 0.8; }
+              100% { transform: scale(1); opacity: 0.5; }
+            }
+          `}
+        </style>
       </List>
+
     </Box>
   );
 });

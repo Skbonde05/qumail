@@ -45,13 +45,16 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     setSearchQuery,
     labels,
     createLabel,
-    deleteLabel
+    deleteLabel,
+    updateLabel
   } = useDashboardActions(user);
 
   const [activeSection, setActiveSection] = useState('inbox');
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState(null);
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState('#1a73e8');
+
 
   const handleDrawerToggle = useCallback(() => setMobileOpen(prev => !prev), []);
 
@@ -129,7 +132,18 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     );
   }, [emails, searchQuery]);
 
+  useEffect(() => {
+    const unreadCount = folderCounts.unread || 0;
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) QuMail - Quantum Secure Email`;
+    } else {
+      document.title = `QuMail - Quantum Secure Email`;
+    }
+  }, [folderCounts.unread]);
+
+
   const renderContent = () => {
+
     if (selectedEmailId) {
       const selectedEmail = emails.find(e => (e.uid || e.id) === selectedEmailId);
       return (
@@ -267,10 +281,12 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             drawerWidth={DRAWER_WIDTH}
             user={user}
             labels={labels}
-            onAddLabel={() => setLabelDialogOpen(true)}
+            onAddLabel={() => { setEditingLabelId(null); setNewLabelName(''); setNewLabelColor('#1a73e8'); setLabelDialogOpen(true); }}
+            onEditLabel={(label) => { setEditingLabelId(label.id); setNewLabelName(label.name); setNewLabelColor(label.color); setLabelDialogOpen(true); }}
             onDeleteLabel={deleteLabel}
           />
         </Drawer>
+
       </Box>
 
       <Box 
@@ -321,7 +337,8 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
 
       {/* Label Dialog */}
       <Dialog open={labelDialogOpen} onClose={() => setLabelDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Create New Label</DialogTitle>
+        <DialogTitle>{editingLabelId ? 'Edit Label' : 'Create New Label'}</DialogTitle>
+
         <DialogContent sx={{ pt: 1 }}>
           <TextField
             autoFocus
@@ -361,16 +378,24 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
           <Button 
             variant="contained" 
             onClick={async () => {
-              if (await createLabel(newLabelName, newLabelColor)) {
-                setLabelDialogOpen(false);
-                setNewLabelName('');
+              if (editingLabelId) {
+                if (await updateLabel(editingLabelId, newLabelName, newLabelColor)) {
+                  setLabelDialogOpen(false);
+                  setEditingLabelId(null);
+                }
+              } else {
+                if (await createLabel(newLabelName, newLabelColor)) {
+                  setLabelDialogOpen(false);
+                  setNewLabelName('');
+                }
               }
             }}
             disabled={!newLabelName}
           >
-            Create
+            {editingLabelId ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
+
       </Dialog>
     </Box>
   );

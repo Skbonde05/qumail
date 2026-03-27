@@ -154,7 +154,31 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
 
       return () => clearInterval(interval);
     }
-  }, [user, activeFolder, fetchEmails, fetchNotifications, settings.syncFrequency]);
+  }, [user, activeFolder, fetchEmails, fetchNotifications, settings.syncFrequency, searchQuery]);
+
+
+  // Server-Side Search Integration
+  useEffect(() => {
+    // Only search if there's a query; otherwise the default fetchEmails handles it
+    if (!searchQuery) {
+      return; 
+    }
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const results = await QuMailService.searchEmails(searchQuery, activeFolder);
+        setEmails(results);
+      } catch (err) {
+        enqueueSnackbar('Search failed', { variant: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeFolder, enqueueSnackbar]);
+
 
 
   const addNotification = useCallback(async (title, message, type = 'info', icon = 'Info') => {
@@ -255,7 +279,25 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
       enqueueSnackbar('Failed to delete label', { variant: 'error' });
     }
     return false;
-  }, [fetchLabels, fetchEmails, enqueueSnackbar]);
+  }, [fetchLabels, fetchEmails, enqueueSnackbar, activeFolder]);
+
+  const updateLabel = useCallback(async (id, name, color) => {
+    try {
+      const res = await QuMailService.updateLabel(id, name, color);
+      if (res.success) {
+        fetchLabels();
+        if (activeFolder === id) {
+           fetchEmails(activeFolder);
+        }
+        enqueueSnackbar('Label updated', { variant: 'success' });
+        return true;
+      }
+    } catch (err) {
+      enqueueSnackbar('Failed to update label', { variant: 'error' });
+    }
+    return false;
+  }, [fetchLabels, enqueueSnackbar, fetchEmails, activeFolder]);
+
 
   useEffect(() => {
     if (user) {

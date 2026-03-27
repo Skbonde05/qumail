@@ -310,6 +310,11 @@ const QuMailService = {
     const response = await axiosInstance.delete(`/api/mail/labels/${id}`);
     return response.data;
   },
+  updateLabel: async (id, name, color) => {
+    const response = await axiosInstance.put(`/api/mail/labels/${id}`, { name, color });
+    return response.data;
+  },
+
 
   // Two-Factor Authentication
   setup2FA: async () => {
