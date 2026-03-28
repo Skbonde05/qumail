@@ -76,11 +76,11 @@ const StatusBadge = ({ type }) => {
   }
 };
 
-export default function SecuritySettings() {
+export default function SecuritySettings({ user: propUser }) {
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
   const [keysInfo, setKeysInfo] = useState({ otp: null, aes256: null });
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(propUser || null);
   const [fullKeys, setFullKeys] = useState({ otp: '', aes256: '' });
   const [showKey, setShowKey] = useState({ otp: false, aes256: false });
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
@@ -205,7 +205,7 @@ export default function SecuritySettings() {
 
   return (
     <Box key="security-center" sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" fontWeight="800" color="primary" sx={{ mb: 4, letterSpacing: '-0.5px' }}>
+      <Typography variant="h4" fontWeight="800" color="primary" sx={{ mb: 4, letterSpacing: '-0.5px', fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
         Security Center
       </Typography>
       <Grid container spacing={4} alignItems="stretch">

@@ -39,6 +39,9 @@ import {
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(5),
+  [theme.breakpoints.down('sm')]: {
+    padding: theme.spacing(3, 2),
+  },
   borderRadius: "24px",
   backdropFilter: "blur(20px) saturate(180%)",
   WebkitBackdropFilter: "blur(20px) saturate(180%)",
@@ -296,11 +299,11 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               <Security sx={{ fontSize: 40, color: "white" }} />
             </Avatar>
 
-            <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1.5px', mb: 1 }}>
+            <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1.5px', mb: 1, fontSize: { xs: '2.2rem', sm: '3rem' } }}>
               QuMail
             </Typography>
 
-            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.9rem', sm: '1rem' } }}>
               The future of secure communication
             </Typography>
           </Box>

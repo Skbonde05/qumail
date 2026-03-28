@@ -24,6 +24,9 @@ import { useNavigate, useParams } from "react-router-dom";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
+  [theme.breakpoints.down('sm')]: {
+    padding: theme.spacing(3, 2),
+  },
   borderRadius: "16px",
   boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
   backgroundColor: "rgba(255, 255, 255, 0.95)",
@@ -184,16 +187,16 @@ export default function ResetPassword() {
           <Box sx={{ textAlign: "center", mb: 3 }}>
             <Avatar
               sx={{
-                width: 80,
-                height: 80,
+                width: { xs: 60, sm: 80 },
+                height: { xs: 60, sm: 80 },
                 margin: "0 auto 16px",
                 background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
               }}
             >
-              <Lock sx={{ fontSize: 48, color: "white" }} />
+              <Lock sx={{ fontSize: { xs: 32, sm: 48 }, color: "white" }} />
             </Avatar>
 
-            <Typography variant="h4" fontWeight="700" gutterBottom>
+            <Typography variant="h4" fontWeight="700" gutterBottom sx={{ fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
               Reset Password
             </Typography>
 

@@ -14,6 +14,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const lastNotifId = useRef(null);
   const emailEmbeddings = useRef({}); // Local store for email vectors
   const [isSemanticSearch, setIsSemanticSearch] = useState(false);
+  const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(false);
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('qumail_settings');
@@ -227,6 +228,12 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
       return; 
     }
 
+    // Only apply semantic search if enabled
+    if (!isAiSearchEnabled) {
+      setIsSemanticSearch(false);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
@@ -261,7 +268,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, activeFolder, enqueueSnackbar, generateMockEmbedding]);
+  }, [searchQuery, activeFolder, enqueueSnackbar, generateMockEmbedding, isAiSearchEnabled]);
 
 
 
@@ -418,7 +425,9 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     createLabel,
     deleteLabel,
     fetchLabels,
-    isSemanticSearch
+    isSemanticSearch,
+    isAiSearchEnabled,
+    setIsAiSearchEnabled
   };
 };
 

@@ -36,8 +36,7 @@ import {
   Wallpaper
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
-import { getProfile, updateProfile, changePassword } from '../services/accountApi';
-import { uploadAvatar } from "../services/accountApi";
+import QuMailService from '../services/QuMailService';
 import { MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 
 // Styled Components
@@ -236,7 +235,11 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
   const fetchProfile = useCallback(async () => {
     try {
       setIsLoadingProfile(true);
-      const profileData = await getProfile();
+      const data = await QuMailService.getProfile();
+      if (!data.success || !data.user) {
+        throw new Error(data.message || "Failed to load profile");
+      }
+      const profileData = data.user;
       setUser(profileData);
       
       // Update form data with user data
@@ -276,7 +279,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
   const savePreferences = useCallback(async (data) => {
     try {
       setLoading(true);
-      await updateProfile({
+      await QuMailService.updateProfile({
         name: data.name || formData.name,
         settings: {
           emailNotifications: data.emailNotifications ?? formData.emailNotifications,
@@ -406,10 +409,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
     setMessage({ type: '', text: '' });
     
     try {
-      console.log(' Saving profile updates...');
-      
-      // Update profile
-      await updateProfile({
+      const res = await QuMailService.updateProfile({
         name: formData.name.trim(),
         settings: {
           emailNotifications: formData.emailNotifications,
@@ -421,17 +421,21 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
         }
       });
       
-      // Change password if provided
-      if (formData.newPassword) {
-        console.log(' Changing password...');
-        await changePassword({
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword,
-          confirmPassword: formData.confirmPassword
-        });
+      if (!res.success) {
+        setMessage({ type: 'error', text: res.message || 'Update failed' });
+        setLoading(false);
+        return;
       }
       
-      // Refresh user data
+      if (formData.newPassword) {
+        const passRes = await QuMailService.changePassword(formData.currentPassword, formData.newPassword);
+        if (!passRes.success) {
+          setMessage({ type: 'error', text: passRes.message || 'Change failed' });
+          setLoading(false);
+          return;
+        }
+      }
+      
       await fetchProfile();
       
       setMessage({ 
@@ -440,7 +444,6 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
       });
       setEditing(false);
       
-      // Clear password fields
       setFormData(prev => ({
         ...prev,
         currentPassword: '',
@@ -451,10 +454,9 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
     } catch (error) {
       console.error(' Save error:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update profile. Please try again.';
       setMessage({ 
         type: 'error', 
-        text: errorMessage
+        text: 'Failed to update profile. Please try again.'
       });
     } finally {
       setLoading(false);
@@ -481,14 +483,14 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64Image = reader.result;
-
-        //  SEND TO BACKEND
-        await uploadAvatar(base64Image);
-
-        setAvatarPreview(base64Image);
-        await fetchProfile();
-
-        setMessage({ type: "success", text: "Profile photo updated!" });
+        const res = await QuMailService.uploadAvatar(base64Image);
+        if (res.success) {
+          setAvatarPreview(res.avatarUrl || base64Image);
+          await fetchProfile();
+          setMessage({ type: "success", text: "Profile photo updated!" });
+        } else {
+          setMessage({ type: "error", text: res.message || "Avatar upload failed" });
+        }
       };
       reader.readAsDataURL(file);
     } catch (err) {

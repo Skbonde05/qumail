@@ -1165,13 +1165,13 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
           flexDirection: 'column'
         }}>
           {currentSection && (
-            <Box sx={{ p: 4, flex: 1 }}>
+            <Box sx={{ p: { xs: 2.5, sm: 4 }, flex: 1 }}>
               <Box sx={{ 
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 2, 
                 mb: 4,
-                p: 2.5,
+                p: { xs: 2, sm: 2.5 },
                 borderRadius: 3,
                 background: darkMode
                   ? `linear-gradient(90deg, ${alpha('#1a1a1a', 0.4)} 0%, ${alpha('#2a2a2a', 0.4)} 100%)`

@@ -183,9 +183,19 @@ const Sidebar = memo(({
   const { t } = useTranslation();
   const theme = useTheme();
   const limit = user?.storageLimit || (15 * 1024 * 1024 * 1024);
-  const storageGB = limit / (1024 * 1024 * 1024);
-  const usedGB = (user?.storageUsed || 0) / (1024 * 1024 * 1024);
-  const storagePercentage = storageGB > 0 ? (usedGB / storageGB) * 100 : 0;
+  const used = user?.storageUsed || 0;
+  
+  const formatSize = (bytes) => {
+    if (bytes === 0) return '0 GB';
+    const mb = bytes / (1024 * 1024);
+    if (mb < 10) return `${mb.toFixed(2)} MB`;
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    const gb = bytes / (1024 * 1024 * 1024);
+    return `${gb.toFixed(2)} GB`;
+  };
+
+  const limitGB = limit / (1024 * 1024 * 1024);
+  const storagePercentage = limit > 0 ? (used / limit) * 100 : 0;
 
   const sections = [
     { id: "inbox", icon: Inbox, text: t("sidebar.inbox"), count: folderCounts.inbox },
@@ -313,7 +323,7 @@ const Sidebar = memo(({
           />
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">
-              {usedGB.toFixed(2)} GB {t('common.of')} {storageGB.toFixed(0)} GB
+              {formatSize(used)} {t('common.of')} {limitGB.toFixed(0)} GB
             </Typography>
             <Typography variant="caption" fontWeight="700" color={storagePercentage > 90 ? 'error' : 'primary'}>
               {storagePercentage.toFixed(1)}%

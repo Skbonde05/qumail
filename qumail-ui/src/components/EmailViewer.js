@@ -80,24 +80,33 @@ const pulse = keyframes`
 // Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
-  overflow: 'hidden',
+  [theme.breakpoints.down('sm')]: {
+    borderRadius: 0,
+  },
+  overflowY: 'auto',
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
+  WebkitOverflowScrolling: 'touch'
 }));
 
 const HeaderContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(4),
+  [theme.breakpoints.down('sm')]: {
+    padding: theme.spacing(2, 2, 2, 2),
+  },
   borderBottom: `1px solid ${theme.palette.divider}`,
   backgroundColor: theme.palette.background.paper,
   transition: 'all 0.3s ease',
 }));
 
 const ContentContainer = styled(Box)(({ theme }) => ({
-  flex: 1,
+  flex: '0 0 auto',
   padding: theme.spacing(4, 4, 8, 4),
-  overflowY: 'auto',
+  [theme.breakpoints.down('sm')]: {
+    padding: theme.spacing(3, 2, 6, 2),
+  },
   backgroundColor: theme.palette.background.default,
 }));
 
@@ -785,8 +794,9 @@ const EmailViewer = memo(({
             variant="outlined" 
             sx={{ 
               mb: 3, 
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-              background: theme.palette.mode === 'dark' 
+              borderRadius: 2, 
+              border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+              background: (theme) => theme.palette.mode === 'dark' 
                 ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.2)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`
                 : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
               position: 'relative',
@@ -922,7 +932,7 @@ const EmailViewer = memo(({
         {/* Header with navigation */}
         <HeaderContainer>
           {/* Top toolbar */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {onBack && (
                 <Tooltip title="Back to inbox">
@@ -937,16 +947,16 @@ const EmailViewer = memo(({
               </Typography>
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, flex: 1 }}>
               <Tooltip title={isStarred ? "Unstar" : "Star"}>
-                <IconButton size="small" onClick={handleStarToggle}>
-                  {isStarred ? <StarIcon sx={{ color: theme.palette.warning.main }} /> : <StarBorderIcon />}
+                <IconButton onClick={() => setIsStarred(!isStarred)} size="small">
+                  {isStarred ? <StarIcon sx={{ color: 'warning.main' }} /> : <StarBorderIcon />}
                 </IconButton>
               </Tooltip>
               
               <Tooltip title={isImportant ? "Mark as not important" : "Mark as important"}>
-                <IconButton size="small" onClick={handleImportantToggle}>
-                  {isImportant ? <LabelImportantIcon sx={{ color: theme.palette.warning.main }} /> : <LabelImportantOutlinedIcon />}
+                <IconButton onClick={() => setIsImportant(!isImportant)} size="small">
+                  {isImportant ? <LabelImportantIcon sx={{ color: 'warning.main' }} /> : <LabelImportantOutlinedIcon />}
                 </IconButton>
               </Tooltip>
               
@@ -995,7 +1005,7 @@ const EmailViewer = memo(({
           </Box>
 
           {/* Subject and security badge */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 3, gap: 1.5 }}>
             <Typography variant="h5" fontWeight="600" sx={{ flex: 1, mr: 2 }}>
               {subject}
             </Typography>
@@ -1009,7 +1019,7 @@ const EmailViewer = memo(({
           </Box>
 
           {/* Sender info and date */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2, gap: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Badge
                 overlap="circular"
@@ -1031,9 +1041,9 @@ const EmailViewer = memo(({
               >
                 <Avatar
                   sx={{
-                    width: 48,
-                    height: 48,
-                    bgcolor: theme.palette.primary.main,
+                    width: { xs: 40, sm: 48 },
+                    height: { xs: 40, sm: 48 },
+                    bgcolor: 'primary.main',
                     fontSize: '1rem',
                   }}
                 >
@@ -1052,7 +1062,7 @@ const EmailViewer = memo(({
             </Box>
 
             {formattedTime && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
                 <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
                   {formattedTime}
@@ -1064,19 +1074,19 @@ const EmailViewer = memo(({
           {/* Recipient info (expandable) */}
           <Collapse in={expanded}>
             <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
                 <strong>From:</strong> {from}
               </Typography>
-              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
                 <strong>To:</strong> {to}
               </Typography>
               {Array.isArray(cc) && cc.length > 0 && (
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
                   <strong>Cc:</strong> {cc.join(', ')}
                 </Typography>
               )}
               {Array.isArray(bcc) && bcc.length > 0 && (
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
                   <strong>Bcc:</strong> {bcc.join(', ')}
                 </Typography>
               )}
@@ -1195,12 +1205,14 @@ const EmailViewer = memo(({
 
         {/* Bottom action bar */}
         <Box sx={{ 
-          p: 2, 
-          borderTop: `1px solid ${theme.palette.divider}`,
+          p: { xs: 2, sm: 3 }, 
+          borderTop: (theme) => `1px solid ${theme.palette.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          bgcolor: 'background.paper'
+          bgcolor: 'background.paper',
+          flexWrap: 'wrap',
+          gap: 1
         }}>
           <Typography variant="caption" color="text.secondary">
             Message ID: {email?.uid || 'N/A'} • {currentSecurity.label.toUpperCase()}

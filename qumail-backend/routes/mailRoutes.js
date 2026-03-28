@@ -13,6 +13,20 @@ const {
   isValidHexKey
 } = require('../utils/encryption');
 
+// ------------------ HELPERS ------------------
+const calculateMailSize = (mail) => {
+  let size = 0;
+  if (mail.body) size += Buffer.from(mail.body, 'utf8').length;
+  if (mail.subject) size += Buffer.from(mail.subject, 'utf8').length;
+  if (mail.attachments && Array.isArray(mail.attachments)) {
+    mail.attachments.forEach(att => {
+      if (att.size) size += att.size;
+      else if (att.data) size += Buffer.from(att.data, 'utf8').length;
+    });
+  }
+  return size;
+};
+
 // ------------------ SEND EMAIL ------------------
 router.post('/send', 
   [
@@ -58,6 +72,15 @@ router.post('/send',
           success: false, 
           message: `Some recipients not found: ${missingEmails.join(', ')}` 
         });
+      }
+
+      // Check Storage Limit for Sender
+      const sender = await User.findOne({ email: from }).session(session);
+      const estimatedSize = calculateMailSize({ body, subject, attachments });
+      if (sender.storageUsed + estimatedSize > sender.storageLimit) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(413).json({ success: false, message: 'Storage limit exceeded. Please free up some space.' });
       }
       
       let encryptedBody = body;
@@ -164,7 +187,21 @@ router.post('/send',
             icon: 'Mail'
           }], { session });
         }
+
+        // Update recipient storage usage
+        const incSize = calculateMailSize(inboxMail);
+        await User.updateOne(
+          { _id: recipientUser._id },
+          { $inc: { storageUsed: incSize } }
+        ).session(session);
       }
+      
+      // Update sender storage usage (Sent copy)
+      const sentSize = calculateMailSize(sentMail);
+      await User.updateOne(
+        { _id: sender._id },
+        { $inc: { storageUsed: sentSize } }
+      ).session(session);
       
       await session.commitTransaction();
       session.endSession();
@@ -579,7 +616,9 @@ router.put('/:mailId/status', verifyToken, async (req, res) => {
       case 'unarchive': update.folder = mail.to === userEmail ? 'INBOX' : 'SENT'; update.trash = false; break;
       case 'trash': 
         if (mail.trash) {
+          const mailSize = calculateMailSize(mail);
           await Mail.deleteOne({ mailId, owner: userEmail });
+          await User.updateOne({ email: userEmail }, { $inc: { storageUsed: -mailSize } });
           return res.json({ success: true, message: 'Email permanently deleted' });
         }
         update.trash = true; 
@@ -587,7 +626,9 @@ router.put('/:mailId/status', verifyToken, async (req, res) => {
         break;
       case 'restore': update.trash = false; break;
       case 'delete': 
+        const delSize = calculateMailSize(mail);
         await Mail.deleteOne({ mailId, owner: userEmail });
+        await User.updateOne({ email: userEmail }, { $inc: { storageUsed: -delSize } });
         return res.json({ success: true, message: 'Email permanently deleted' });
       case 'snooze': 
         update.snoozed = new Date(snoozeDate); 
@@ -661,8 +702,13 @@ router.post('/batch-update', verifyToken, async (req, res) => {
         await User.updateOne({ email: userEmail }, { $addToSet: { spamList: { $each: spamSenders } } });
         break;
       case 'delete':
+        const mailsToDelete = await Mail.find({ mailId: { $in: emailIds }, owner: userEmail });
+        let totalSizeToReclaim = 0;
+        mailsToDelete.forEach(m => totalSizeToReclaim += calculateMailSize(m));
+        
         const del = await Mail.deleteMany({ mailId: { $in: emailIds }, owner: userEmail });
-        return res.json({ success: true, count: del.deletedCount });
+        await User.updateOne({ email: userEmail }, { $inc: { storageUsed: -totalSizeToReclaim } });
+        return res.json({ success: true, count: del.deletedCount, reclaimed: totalSizeToReclaim });
       case 'move': update = { $set: { folder: (folder || 'INBOX').toUpperCase(), trash: false, snoozed: null } }; break;
       case 'label':
         const { labelId } = req.body;
@@ -909,7 +955,18 @@ router.all('/drafts', verifyToken, async (req, res) => {
         owner: req.user.email, 
         read: true 
       });
+
+      const draftSize = calculateMailSize(draft);
+      
+      // Check limit
+      const user = await User.findOne({ email: req.user.email });
+      if (user.storageUsed + draftSize > user.storageLimit) {
+        return res.status(413).json({ success: false, message: 'Storage limit exceeded' });
+      }
+
       await draft.save();
+      await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: draftSize } });
+      
       return res.json({ success: true, email: formatEmail(draft), draftId: draft._id });
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
@@ -923,6 +980,12 @@ router.all('/drafts', verifyToken, async (req, res) => {
 router.put('/drafts/:id', verifyToken, async (req, res) => {
   try {
     const { to, subject, body, cc, bcc, encryptionLevel, attachments } = req.body;
+    
+    const oldDraft = await Mail.findOne({ _id: req.params.id, owner: req.user.email, folder: 'DRAFTS' });
+    if (!oldDraft) return res.status(404).json({ success: false, message: 'Draft not found' });
+    
+    const oldSize = calculateMailSize(oldDraft);
+
     const update = {};
     if (to !== undefined) update.to = to;
     if (subject !== undefined) update.subject = subject;
@@ -940,7 +1003,12 @@ router.put('/drafts/:id', verifyToken, async (req, res) => {
       { new: true }
     );
 
-    if (!draft) return res.status(404).json({ success: false, message: 'Draft not found' });
+    const newSize = calculateMailSize(draft);
+    const sizeDiff = newSize - oldSize;
+
+    if (sizeDiff !== 0) {
+      await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: sizeDiff } });
+    }
     
     res.json({ success: true, draft: formatEmail(draft), draftId: draft._id });
   } catch (error) {
@@ -951,8 +1019,13 @@ router.put('/drafts/:id', verifyToken, async (req, res) => {
 // Delete draft
 router.delete('/drafts/:id', verifyToken, async (req, res) => {
   try {
-    const result = await Mail.findOneAndDelete({ _id: req.params.id, owner: req.user.email });
-    if (!result) return res.status(404).json({ success: false, message: 'Draft not found' });
+    const draft = await Mail.findOne({ _id: req.params.id, owner: req.user.email });
+    if (!draft) return res.status(404).json({ success: false, message: 'Draft not found' });
+    
+    const draftSize = calculateMailSize(draft);
+    await Mail.deleteOne({ _id: req.params.id, owner: req.user.email });
+    await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: -draftSize } });
+    
     res.json({ success: true, message: 'Draft deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

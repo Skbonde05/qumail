@@ -15,7 +15,9 @@ import {
   Card,
   CardContent,
   Divider,
-  InputAdornment
+  InputAdornment,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import {
   Lock as LockIcon,
@@ -62,6 +64,8 @@ const getEncryptionLabel = (encryptionLevel) => {
 };
 
 const DecryptModal = ({ open, onClose, email, onDecrypt, loading = false }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [otpKey, setOtpKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -128,8 +132,9 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading = false }) => {
       onClose={onClose} 
       maxWidth="sm" 
       fullWidth
+      fullScreen={isMobile}
       PaperProps={{
-        sx: { borderRadius: 2 }
+        sx: { borderRadius: isMobile ? 0 : 2 }
       }}
     >
       <DialogTitle sx={{ pb: 1 }}>

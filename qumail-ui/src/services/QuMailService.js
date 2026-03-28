@@ -186,9 +186,18 @@ const QuMailService = {
     return result;
   },
 
-  sendEmail: async (to, subject, body, encryptionLevel = 'none') => {
+  sendEmail: async (to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = []) => {
     cache.invalidate(); // Clear all caches on mutation
-    const response = await axiosInstance.post('/api/mail/send', { to, subject, body, encryptionLevel });
+    const payload = { 
+      to, 
+      subject: subject || '(No Subject)', 
+      body, 
+      encryptionLevel: encryptionLevel === 'aes' ? 'aes256' : encryptionLevel,
+      cc: Array.isArray(cc) ? cc : [],
+      bcc: Array.isArray(bcc) ? bcc : [],
+      attachments: Array.isArray(attachments) ? attachments : []
+    };
+    const response = await axiosInstance.post('/api/mail/send', payload);
     return response.data;
   },
 
@@ -258,6 +267,14 @@ const QuMailService = {
     const response = await axiosInstance.post('/api/auth/reset-password', { token, password });
     return response.data;
   },
+  changePassword: async (oldPassword, newPassword) => {
+    const response = await axiosInstance.post('/api/auth/change-password', { oldPassword, newPassword });
+    return response.data;
+  },
+  uploadAvatar: async (avatarData) => {
+    const response = await axiosInstance.post('/api/auth/upload-avatar', { avatar: avatarData });
+    return response.data;
+  },
 
   // --- Notifications ---
   // These methods are essential for real-time engagement.
@@ -281,13 +298,36 @@ const QuMailService = {
   },
 
   createDraft: async (to, subject, body, options = {}) => {
-    const response = await axiosInstance.post('/api/mail/drafts', { to, subject, body, ...options });
+    const response = await axiosInstance.post('/api/mail/drafts', { 
+      to: to || '', 
+      subject: subject || '', 
+      body: body || '', 
+      ...options 
+    });
     return response.data;
   },
 
   updateDraft: async (id, data) => {
     const response = await axiosInstance.put(`/api/mail/drafts/${id}`, data);
     return response.data;
+  },
+
+  saveDraft: async (id, to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = []) => {
+    const payload = {
+      to: to || '',
+      cc: Array.isArray(cc) ? cc : (cc ? cc.split(',').map(e => e.trim()).filter(e => e) : []),
+      bcc: Array.isArray(bcc) ? bcc : (bcc ? bcc.split(',').map(e => e.trim()).filter(e => e) : []),
+      subject: subject || '',
+      body: body || '',
+      encryptionLevel: encryptionLevel === 'aes' ? 'aes256' : encryptionLevel,
+      attachments: Array.isArray(attachments) ? attachments : []
+    };
+    
+    if (id) {
+      return await QuMailService.updateDraft(id, payload);
+    } else {
+      return await QuMailService.createDraft(to, subject, body, payload);
+    }
   },
 
   deleteDraft: async (id) => {

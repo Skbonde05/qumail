@@ -1,15 +1,20 @@
 import React, { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Box, Typography, List, ListItem, ListItemText, ListItemIcon, ListItemAvatar, Avatar, IconButton, Tooltip, Checkbox, Badge, CircularProgress, Button, Menu, MenuItem, Divider, useTheme } from "@mui/material";
+import { keyframes, styled, alpha } from "@mui/material/styles";
 import { 
   Star, StarBorder, Delete, Archive, Refresh, Inbox as InboxIcon, Lock, AttachFile as AttachFileIcon,
   MarkEmailRead, Report, AccessTime, PlaylistAdd, DriveFileMove, Label, MoreVert, Close,
   RestoreFromTrash, SettingsBackupRestore, Circle, FlashOn as Zap
 } from "@mui/icons-material";
-import { styled, alpha } from "@mui/material/styles";
-
+import QuMailService from "../services/QuMailService";
 import { motion, AnimatePresence } from "framer-motion";
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
+
+const pulse = keyframes`
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.15); opacity: 1; }
+`;
 
 const EmailListItem = styled(ListItem, {
   shouldForwardProp: (prop) => prop !== 'unread' && prop !== 'selected',
@@ -49,6 +54,7 @@ const EmailListItem = styled(ListItem, {
 
 
 const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSelect, availableLabels = [] }) => {
+  const theme = useTheme();
   const emailLabels = useMemo(() => {
     if (!email.labels) return [];
     return email.labels.map(lId => availableLabels.find(l => l.id === lId)).filter(Boolean);
@@ -65,7 +71,7 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
       onClick={() => onEmailClick(email)}
       selected={selected}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: { xs: 80, sm: 100 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: { xs: 40, sm: 100 } }}>
         <Checkbox 
           size="small" 
           checked={selected}
@@ -75,7 +81,7 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
         <IconButton 
           size="small" 
           onClick={(e) => { e.stopPropagation(); onAction(email.id, email.starred ? 'unstar' : 'star'); }}
-          sx={{ color: email.starred ? 'warning.main' : 'text.disabled' }}
+          sx={{ color: email.starred ? 'warning.main' : 'text.disabled', display: { xs: 'none', sm: 'inline-flex' } }}
         >
           {email.starred ? <Star sx={{ fontSize: 20 }} /> : <StarBorder sx={{ fontSize: 20 }} />}
         </IconButton>
@@ -85,12 +91,12 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
         <Badge
           overlap="circular"
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          badgeContent={email.encrypted ? <Box sx={{ bgcolor: 'secondary.main', borderRadius: '50%', p: 0.2, display: 'flex', border: '2px solid white' }}><Lock sx={{ fontSize: 10, color: 'white' }} /></Box> : null}
+          badgeContent={email.encrypted ? <Box sx={{ bgcolor: 'primary.main', borderRadius: '50%', p: 0.2, display: 'flex', border: '2px solid white' }}><Lock sx={{ fontSize: 10, color: 'white' }} /></Box> : null}
         >
           <Avatar sx={{ 
               width: 38, 
               height: 38, 
-              bgcolor: email.encrypted ? 'secondary.main' : 'primary.main', 
+              bgcolor: 'primary.main', 
               fontSize: '14px',
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}>
@@ -101,27 +107,29 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
 
       <ListItemText
         primary={
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', gap: 0.2, flex: 1, minWidth: 0 }}>
             <Typography variant="body2" sx={{ 
                 fontWeight: !email.read ? 700 : 500, 
                 color: !email.read ? 'text.primary' : 'text.secondary',
-                fontSize: '0.9rem'
+                fontSize: { xs: '0.85rem', sm: '0.9rem' },
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: 1.2
             }}>
               {email.from}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-              {formatDistanceToNow(new Date(email.date), { addSuffix: true })}
             </Typography>
           </Box>
         }
         primaryTypographyProps={{ component: 'div' }}
         secondary={
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
               <Typography variant="body2" sx={{ 
                   fontWeight: !email.read ? 600 : 400, 
                   color: !email.read ? 'text.primary' : 'text.disabled',
-                  maxWidth: { xs: '200px', sm: '400px', md: '600px' }
+                  maxWidth: { xs: '180px', sm: '400px', md: '600px' }
               }} noWrap>
                 {email.subject}
               </Typography>
@@ -134,9 +142,9 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
                   sx={{ 
                     bgcolor: alpha(label.color, 0.15), 
                     color: label.color,
-                    px: 0.8,
-                    py: 0.1,
-                    borderRadius: '4px',
+                    p: 0.5,
+                    pr: { xs: 0.5, sm: 1.5 },
+                    borderRadius: '24px',
                     fontSize: '0.65rem',
                     fontWeight: 700,
                     ml: 0.5,
@@ -155,11 +163,32 @@ const EmailRow = memo(({ email, onEmailClick, onAction, isTrash, selected, onSel
         secondaryTypographyProps={{ component: 'div' }}
       />
       
+      <Box sx={{ 
+          ml: 'auto', 
+          display: { xs: 'none', sm: 'flex' }, 
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          minWidth: 90,
+          whiteSpace: 'nowrap',
+          px: 2
+      }}>
+        <Typography variant="caption" sx={{ 
+            color: (theme) => theme.palette.mode === 'dark' ? '#ffffff' : '#000000', 
+            fontWeight: !email.read ? 800 : 500,
+            fontSize: '0.75rem'
+        }}>
+          {format(new Date(email.date), 'p')}
+        </Typography>
+        <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)', fontSize: '0.65rem' }}>
+          {format(new Date(email.date), 'MMM d')}
+        </Typography>
+      </Box>
+      
       {!email.read && (
         <Box sx={{ width: 8, height: 8, bgcolor: 'primary.main', borderRadius: '50%', ml: 2, display: { xs: 'block', md: 'none' } }} />
       )}
 
-      <Box className="actions" sx={{ display: 'none', alignItems: 'center', ml: 2, gap: 1 }}>
+      <Box className="actions" sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', ml: 2, gap: 1 }}>
          <Tooltip title={isTrash ? "Restore" : "Archive"}>
            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, isTrash ? 'restore' : 'archive'); }}>
              {isTrash ? <RestoreFromTrash sx={{ fontSize: 18 }} /> : <Archive sx={{ fontSize: 18 }} />}
@@ -477,7 +506,7 @@ const Inbox = memo(({
           </Menu>
         </Box>
       ) : (
-        <Box sx={{ p: 2, px: 3, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+        <Box sx={{ p: 2, px: { xs: 1.5, sm: 3 }, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
           <Typography variant="h6" sx={{ fontWeight: 800, textTransform: 'capitalize', letterSpacing: '-0.5px' }}>
             {displayFolderName}
           </Typography>
@@ -494,56 +523,7 @@ const Inbox = memo(({
         <AnimatePresence>
           {renderedEmails}
         </AnimatePresence>
-
-        {emails.length === 0 && !loading && (
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            py: 15, 
-            textAlign: 'center',
-            opacity: 0.6
-          }}>
-            <Box sx={{ 
-              width: 120, 
-              height: 120, 
-              borderRadius: '50%', 
-              bgcolor: alpha(theme.palette.primary.main, 0.1),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mb: 3,
-              animation: 'pulse 2s infinite'
-            }}>
-              <InboxIcon sx={{ fontSize: 60, color: 'primary.main' }} />
-            </Box>
-            <Typography variant="h6" color="text.secondary" fontWeight="700" gutterBottom>
-              No Messages Found
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
-              This folder is currently empty. You're all caught up!
-            </Typography>
-          </Box>
-        )}
-
-        {loading && emails.length === 0 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
-            <CircularProgress size={32} thickness={5} />
-          </Box>
-        )}
-
-        <style>
-          {`
-            @keyframes pulse {
-              0% { transform: scale(1); opacity: 0.5; }
-              50% { transform: scale(1.05); opacity: 0.8; }
-              100% { transform: scale(1); opacity: 0.5; }
-            }
-          `}
-        </style>
       </List>
-
     </Box>
   );
 });

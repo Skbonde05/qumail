@@ -9,8 +9,9 @@ import AppSettings from '../components/AppSettings';
 import AccountSettings from '../components/AccountSettings';
 import SecuritySettings from '../components/SecuritySettings';
 import EmailViewer from '../components/EmailViewer';
-import HelpSupport from '../components/HelpSupport';
+import PrivacyPolicy from '../components/PrivacyPolicy';
 import AboutQuMail from '../components/AboutQuMail';
+import HelpSupport from '../components/HelpSupport';
 import { useDashboardActions } from '../hooks/useDashboardActions';
 import QuMailService from '../services/QuMailService';
 
@@ -48,7 +49,9 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     deleteLabel,
     updateLabel,
     fetchLabels,
-    isSemanticSearch
+    isSemanticSearch,
+    isAiSearchEnabled,
+    setIsAiSearchEnabled
   } = useDashboardActions(user);
 
   const [activeSection, setActiveSection] = useState('inbox');
@@ -124,16 +127,6 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     addNotification('Email Sent', `To: ${to}`, 'success', 'CheckCircle');
   }, [fetchEmails, addNotification]);
 
-  const filteredEmails = useMemo(() => {
-    if (!searchQuery) return emails;
-    const lowerQuery = searchQuery.toLowerCase();
-    return emails.filter(e => 
-      e.subject?.toLowerCase().includes(lowerQuery) || 
-      e.from?.toLowerCase().includes(lowerQuery) || 
-      e.body?.toLowerCase().includes(lowerQuery)
-    );
-  }, [emails, searchQuery]);
-
   useEffect(() => {
     const unreadCount = folderCounts.unread || 0;
     if (unreadCount > 0) {
@@ -162,15 +155,16 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     }
 
     switch (activeSection) {
-      case 'settings': return <AppSettings darkMode={darkMode} onToggleTheme={onToggleTheme} userEmail={user?.email} onBack={() => setActiveFolder('inbox')} />;
+      case 'settings': return <AppSettings darkMode={darkMode} onToggleTheme={onToggleTheme} userEmail={user?.email} />;
       case 'account': return <AccountSettings user={user} themeName={themeName} onUpdateTheme={onUpdateTheme} bgImage={bgImage} onUpdateBgImage={onUpdateBgImage} />;
       case 'security': return <SecuritySettings user={user} />;
-      case 'help': return <HelpSupport onCompose={() => setComposeOpen(true)} />;
       case 'about': return <AboutQuMail />;
+      case 'privacy': return <PrivacyPolicy />;
+      case 'help': return <HelpSupport onCompose={() => setComposeOpen(true)} />;
       default:
         return (
           <Inbox 
-            emails={filteredEmails} 
+            emails={emails} 
             folderName={activeFolder} 
             loading={loading}
             labels={labels}
@@ -215,6 +209,8 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
         isSemanticSearch={isSemanticSearch}
+        isAiSearchEnabled={isAiSearchEnabled}
+        onToggleAiSearch={() => setIsAiSearchEnabled(!isAiSearchEnabled)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -269,8 +265,8 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
               width: DRAWER_WIDTH, 
               borderRight: 1, 
               borderColor: 'divider',
-              mt: '64px', // Space for TopBar
-              height: 'calc(100vh - 64px)'
+              mt: '72px', // Space for TopBar
+              height: 'calc(100vh - 72px)'
             },
           }}
           open
@@ -299,9 +295,11 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
           flexGrow: 1, 
           p: 0, 
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` }, 
-          mt: '64px', 
+          mt: '72px', 
           overflowY: 'auto',
-          height: 'calc(100vh - 64px)'
+          display: 'flex',
+          flexDirection: 'column',
+          height: 'calc(100vh - 72px)'
         }}
       >
         {renderContent()}
@@ -332,7 +330,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         onAppSettings={() => handleSectionChange('settings')}
         onAccountSettings={() => handleSectionChange('account')}
         onThemes={() => handleSectionChange('account')}
-        onPrivacy={() => handleSectionChange('about')}
+        onPrivacy={() => handleSectionChange('privacy')}
         onHelp={() => handleSectionChange('help')}
         user={user}
       />

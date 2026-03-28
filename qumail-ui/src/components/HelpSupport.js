@@ -5,6 +5,7 @@ import {
 import {
   HelpOutline as HelpIcon, ExpandMore, Email, Chat, Phone, Security, Speed, Storage
 } from "@mui/icons-material";
+import { styled } from '@mui/material/styles';
 
 export default function HelpSupport({ onCompose }) {
   const theme = useTheme();
@@ -72,7 +73,7 @@ export default function HelpSupport({ onCompose }) {
   return (
     <Box sx={{ maxWidth: 850, mx: "auto", p: { xs: 2, md: 4 } }}>
       <Box sx={{ mb: 6, textAlign: 'center' }}>
-        <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1px', mb: 2 }}>
+        <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1px', mb: 2, fontSize: { xs: '2.4rem', sm: '3rem' } }}>
           How can we help?
         </Typography>
         <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.8, maxWidth: 600, mx: 'auto' }}>
@@ -82,7 +83,7 @@ export default function HelpSupport({ onCompose }) {
 
       {/* FAQs */}
       <Box sx={{ mb: 6 }}>
-        <Typography variant="h5" fontWeight="700" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Typography variant="h5" fontWeight="700" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5, fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
           <HelpIcon color="primary" /> Common Questions
         </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>

@@ -27,6 +27,7 @@ import {
   Email,
   Language
 } from "@mui/icons-material";
+import { styled } from '@mui/material/styles';
 
 export default function AboutQuMail() {
   const theme = useTheme();
@@ -72,8 +73,8 @@ export default function AboutQuMail() {
     <Box sx={{ maxWidth: 1000, mx: "auto", p: 3 }}>
       {/* Header */}
       <Box sx={{ mb: 6, textAlign: "center" }}>
-        <Typography variant="h3" fontWeight="800" gutterBottom>
-          <InfoIcon sx={{ mr: 2, verticalAlign: "middle", fontSize: 48 }} />
+        <Typography variant="h3" fontWeight="800" gutterBottom sx={{ fontSize: { xs: '2.4rem', sm: '3rem' } }}>
+          <InfoIcon sx={{ mr: 2, verticalAlign: "middle", fontSize: { xs: 32, sm: 48 } }} />
           About QuMail
         </Typography>
         <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600, mx: "auto" }}>
@@ -82,11 +83,11 @@ export default function AboutQuMail() {
       </Box>
 
       {/* Mission */}
-      <Paper sx={{ p: 4, mb: 4, textAlign: "center" }}>
-        <Typography variant="h4" fontWeight="700" gutterBottom color="primary">
+      <Paper sx={{ p: { xs: 3, md: 6 }, mb: 4, textAlign: "center", borderRadius: 4 }}>
+        <Typography variant="h4" fontWeight="700" gutterBottom color="primary" sx={{ fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
           Our Mission
         </Typography>
-        <Typography variant="body1" sx={{ maxWidth: 800, mx: "auto", fontSize: "1.1rem", lineHeight: 1.8 }}>
+        <Typography variant="body1" sx={{ maxWidth: 800, mx: "auto", fontSize: { xs: '1rem', sm: '1.1rem' }, lineHeight: 1.8 }}>
           To revolutionize email communication by providing a secure, intuitive, and feature-rich platform 
           that empowers individuals and teams to communicate more effectively. We believe email should be 
           fast, reliable, and privacy-focused.

@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { AppBar, Toolbar, IconButton, Typography, Badge, Box, Avatar, Tooltip, InputBase, useTheme } from '@mui/material';
-import { Menu as MenuIcon, Search, Brightness4, Brightness7, Notifications, FlashOn as Zap } from '@mui/icons-material';
+import { Menu as MenuIcon, Search, Brightness4, Brightness7, Notifications, FlashOn as Zap, Close } from '@mui/icons-material';
 import { styled, alpha, keyframes } from '@mui/material/styles';
 
 const pulse = keyframes`
@@ -70,6 +70,8 @@ const TopBar = memo(({
   onToggleTheme,
   isProfileMenuOpen,
   isSemanticSearch,
+  isAiSearchEnabled,
+  onToggleAiSearch,
   searchQuery,
   onSearchChange
 }) => {
@@ -88,14 +90,14 @@ const TopBar = memo(({
           <MenuIcon />
         </IconButton>
         
-        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: { md: 240 } }}>
+        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', minWidth: { md: 240 } }}>
           <Box component="img" src="/qumail_logo.png" sx={{ height: 36, mr: 1.5 }} alt="QuMail Logo" />
-          <Typography variant="h5" color="primary" noWrap component="div" sx={{ fontWeight: 800, letterSpacing: '-1px' }}>
+          <Typography variant="h5" color="primary" noWrap component="div" sx={{ fontWeight: 800, letterSpacing: '-1px', display: { xs: 'none', md: 'block' } }}>
             QuMail
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', flexGrow: 1, justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', flexGrow: 1, justifyContent: { xs: 'flex-start', sm: 'center' }, ml: { xs: 0, sm: 2 } }}>
           <SearchBar sx={{
              border: isSemanticSearch ? `1px solid ${alpha(theme.palette.primary.main, 0.4)}` : '1px solid transparent',
              boxShadow: isSemanticSearch ? `0 0 15px ${alpha(theme.palette.primary.main, 0.1)}` : 'none'
@@ -104,11 +106,37 @@ const TopBar = memo(({
               {isSemanticSearch ? <Zap fontSize="small" color="primary" sx={{ animation: `${pulse} 1s infinite alternate` }} /> : <Search fontSize="small" />}
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder={isSemanticSearch ? "AI Semantic Search Results..." : "Search in mail"}
+              placeholder={isAiSearchEnabled ? "AI Semantic Search..." : "Search in mail"}
               inputProps={{ 'aria-label': 'search' }}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
             />
+            {searchQuery && (
+              <IconButton 
+                size="small" 
+                onClick={() => onSearchChange('')}
+                sx={{ mr: 0.5, color: 'text.secondary' }}
+              >
+                <Close fontSize="small" />
+              </IconButton>
+            )}
+            <Tooltip title={isAiSearchEnabled ? "Disable AI Search" : "Enable AI Semantic Search"}>
+              <IconButton 
+                onClick={onToggleAiSearch}
+                size="small"
+                sx={{ 
+                  mr: 1, 
+                  color: isAiSearchEnabled ? 'primary.main' : 'text.disabled',
+                  bgcolor: isAiSearchEnabled ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                  '&:hover': {
+                    bgcolor: isAiSearchEnabled ? alpha(theme.palette.primary.main, 0.2) : alpha(theme.palette.common.black, 0.04),
+                  },
+                  animation: (isAiSearchEnabled && !searchQuery) ? `${pulse} 2s infinite` : 'none'
+                }}
+              >
+                <Zap fontSize="small" />
+              </IconButton>
+            </Tooltip>
             {isSemanticSearch && (
                <Box sx={{ 
                  mr: 2, 
@@ -121,7 +149,7 @@ const TopBar = memo(({
                  fontWeight: 800,
                  letterSpacing: '0.5px',
                  animation: `${pulse} 1.5s infinite alternate`,
-                 display: 'flex',
+                 display: { xs: 'none', sm: 'flex' },
                  alignItems: 'center',
                  gap: 0.5
                }}>
@@ -134,7 +162,7 @@ const TopBar = memo(({
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Tooltip title={darkMode ? "Appearance: Dark" : "Appearance: Light"}>
-            <IconButton onClick={onToggleTheme} color="inherit">
+            <IconButton onClick={onToggleTheme} color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
               {darkMode ? <Brightness7 fontSize="small" /> : <Brightness4 fontSize="small" />}
             </IconButton>
           </Tooltip>
@@ -154,7 +182,7 @@ const TopBar = memo(({
               display: 'flex',
               alignItems: 'center',
               p: 0.5,
-              pr: 1.5,
+              pr: { xs: 0.5, sm: 1.5 },
               borderRadius: '24px',
               transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               backgroundColor: isProfileMenuOpen 

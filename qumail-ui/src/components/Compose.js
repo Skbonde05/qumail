@@ -44,7 +44,13 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
-import EmailService from "../services/EmailService";
+import QuMailService from "../services/QuMailService";
+import { keyframes } from "@mui/material/styles";
+
+const pulse = keyframes`
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.15); opacity: 1; }
+`;
 
 // API Base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -208,8 +214,8 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
       const ccArray = cc ? cc.split(',').map(e => e.trim()).filter(e => e) : [];
       const bccArray = bcc ? bcc.split(',').map(e => e.trim()).filter(e => e) : [];
 
-      // Use standard EmailService
-      const result = await EmailService.sendEmail(
+      // Use unified QuMailService
+      const result = await QuMailService.sendEmail(
         to.trim(),
         subject.trim() || "(No Subject)",
         body.trim(),
@@ -229,7 +235,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
         // If this was a draft, delete it
         if (draftId) {
           try {
-            await EmailService.deleteDraft(draftId);
+            await QuMailService.deleteDraft(draftId);
           } catch (e) {
             console.error("Error deleting draft:", e);
           }
@@ -268,7 +274,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     setSaving(true);
 
     try {
-      const result = await EmailService.saveDraft(
+      const result = await QuMailService.saveDraft(
         draftId,
         to.trim(),
         subject.trim() || "(No Subject)",
@@ -298,7 +304,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
     if (window.confirm("Are you sure you want to discard this draft? It will be permanently deleted.")) {
       try {
-        await EmailService.deleteDraft(draftId);
+        await QuMailService.deleteDraft(draftId);
         onClose();
         resetForm();
         setSnackbar({
@@ -813,8 +819,8 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
           bgcolor: "#f8f9fa",
           borderTop: "1px solid #e0e0e0"
         }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-            <Box sx={{ display: "flex", alignItems: "center" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", flexWrap: 'wrap', gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: 'wrap', gap: 1 }}>
               <input
                 accept="*"
                 style={{ display: 'none' }}
