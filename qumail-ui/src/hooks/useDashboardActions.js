@@ -12,6 +12,8 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const [labels, setLabels] = useState([]);
   const { enqueueSnackbar } = useSnackbar();
   const lastNotifId = useRef(null);
+  const emailEmbeddings = useRef({}); // Local store for email vectors
+  const [isSemanticSearch, setIsSemanticSearch] = useState(false);
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('qumail_settings');
@@ -180,6 +182,88 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   }, [searchQuery, activeFolder, enqueueSnackbar]);
 
 
+  // --- Privacy-Preserving AI Semantic Search Logic (Prototype) ---
+  
+  // 1. Mock Embedding Generator (Simplification of transformers.js)
+  const generateMockEmbedding = useCallback((text) => {
+    if (!text) return new Array(32).fill(0);
+    const words = text.toLowerCase().match(/\w+/g) || [];
+    const vector = new Array(32).fill(0);
+    words.forEach(word => {
+      // Use a simple hash to distribute word weights into a 32-dim vector
+      let hash = 0;
+      for (let i = 0; i < word.length; i++) hash = (hash << 5) - hash + word.charCodeAt(i);
+      vector[Math.abs(hash) % 32] += 1;
+    });
+    // Normalize vector
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0)) || 1;
+    return vector.map(v => v / magnitude);
+  }, []);
+
+  // 2. Cosine Similarity Calculator
+  const calculateCosineSimilarity = (vecA, vecB) => {
+    let dotProduct = 0;
+    for (let i = 0; i < vecA.length; i++) dotProduct += vecA[i] * vecB[i];
+    return dotProduct;
+  };
+
+  // 3. Index emails for semantic search when they are fetched
+  useEffect(() => {
+    if (emails.length > 0) {
+      emails.forEach(email => {
+        const id = email.id || email.uid;
+        if (!emailEmbeddings.current[id]) {
+          const textToIndex = `${email.subject} ${email.from} ${email.preview || ''}`;
+          emailEmbeddings.current[id] = generateMockEmbedding(textToIndex);
+        }
+      });
+    }
+  }, [emails, generateMockEmbedding]);
+
+  // 4. Enhanced Search with Semantic Relevance
+  useEffect(() => {
+    if (!searchQuery) {
+      setIsSemanticSearch(false);
+      return; 
+    }
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        // Step A: Get keyword results from server
+        let results = await QuMailService.searchEmails(searchQuery, activeFolder);
+        
+        // Step B: Apply Semantic Scoring locally (Privacy-Preserving)
+        const queryVector = generateMockEmbedding(searchQuery);
+        
+        const scoredResults = results.map(email => {
+          const id = email.id || email.uid;
+          const vector = emailEmbeddings.current[id] || generateMockEmbedding(`${email.subject} ${email.from}`);
+          const semanticScore = calculateCosineSimilarity(queryVector, vector);
+          
+          return {
+            ...email,
+            relevanceScore: semanticScore,
+            isSemanticMatch: semanticScore > 0.4
+          };
+        });
+
+        // Step C: Sort by Semantic Relevance
+        scoredResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
+        
+        setEmails(scoredResults);
+        setIsSemanticSearch(scoredResults.some(r => r.isSemanticMatch));
+      } catch (err) {
+        enqueueSnackbar('AI Search failed', { variant: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeFolder, enqueueSnackbar, generateMockEmbedding]);
+
+
 
   const addNotification = useCallback(async (title, message, type = 'info', icon = 'Info') => {
     // Note: We don't have a POST /notifications for custom client-side notifications yet,
@@ -334,6 +418,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     createLabel,
     deleteLabel,
     fetchLabels,
+    isSemanticSearch
   };
 };
 

@@ -65,6 +65,8 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [processedAttachments, setProcessedAttachments] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [errors, setErrors] = useState({});
+  const [suggestion, setSuggestion] = useState("");
+  const [showAiPulse, setShowAiPulse] = useState(false);
   const [settings] = useState(() => {
     try {
       const saved = localStorage.getItem('qumail_settings');
@@ -115,6 +117,49 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
     return () => clearTimeout(timer);
   }, [subject, body, to, cc, bcc, level, settings.autoSaveDrafts, settings.autoSaveInterval]);
+
+  // AI Smart Compose Mock Logic
+  const mockAiCompletions = {
+    "how are": " you doing today?",
+    "i hope": " this email finds you well.",
+    "please let": " me know if you have any questions.",
+    "thanks for": " your quick response.",
+    "best": " regards,",
+    "i will": " get back to you soon.",
+    "attached": " is the document we discussed.",
+    "looking forward": " to hearing from you."
+  };
+
+  const handleBodyChange = (e) => {
+    const value = e.target.value;
+    setBody(value);
+    setErrors({ ...errors, body: null });
+
+    // Check for suggestions at the end of the text
+    const lastLines = value.split('\n');
+    const lastLine = lastLines[lastLines.length - 1].toLowerCase();
+    
+    let foundSuggestion = "";
+    if (lastLine.length > 2) {
+      for (const [prefix, completion] of Object.entries(mockAiCompletions)) {
+        if (lastLine.endsWith(prefix)) {
+          foundSuggestion = completion;
+          setShowAiPulse(true);
+          setTimeout(() => setShowAiPulse(false), 2000);
+          break;
+        }
+      }
+    }
+    setSuggestion(foundSuggestion);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Tab' && suggestion) {
+      e.preventDefault();
+      setBody(prev => prev + suggestion);
+      setSuggestion("");
+    }
+  };
 
 
   // Reset form when dialog closes
@@ -663,33 +708,82 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                     <InsertPhoto fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                <Box sx={{ flexGrow: 1 }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', pr: 1 }}>
+                  <Zap sx={{ 
+                    fontSize: 16, 
+                    color: suggestion ? 'primary.main' : 'text.disabled',
+                    opacity: showAiPulse ? 1 : 0.6,
+                    animation: showAiPulse ? 'pulse 0.5s infinite alternate' : 'none'
+                  }} />
+                  <Typography variant="caption" sx={{ ml: 0.5, color: 'text.disabled', fontSize: '0.65rem', fontWeight: 700 }}>
+                    AI SMART COMPOSE
+                  </Typography>
+                </Box>
               </Box>
 
               {/* Message Text Area */}
-              <TextField
-                fullWidth
-                multiline
-                rows={12}
-                variant="standard"
-                InputProps={{ 
-                  disableUnderline: true,
-                  readOnly: sending,
-                  spellCheck: settings.spellCheck
-                }}
-                placeholder="Type your message here..."
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                error={!!errors.body}
-                helperText={errors.body}
-
-                sx={{ 
-                  p: 2,
-                  "& .MuiInputBase-root": {
-                    fontSize: "0.95rem",
-                    lineHeight: 1.6
-                  }
-                }}
-              />
+              <Box sx={{ position: 'relative' }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={12}
+                  variant="standard"
+                  InputProps={{ 
+                    disableUnderline: true,
+                    readOnly: sending,
+                    spellCheck: settings.spellCheck
+                  }}
+                  placeholder="Type your message here..."
+                  value={body}
+                  onChange={handleBodyChange}
+                  onKeyDown={handleKeyDown}
+                  error={!!errors.body}
+                  helperText={errors.body}
+                  sx={{ 
+                    p: 2,
+                    "& .MuiInputBase-root": {
+                      fontSize: "0.95rem",
+                      lineHeight: 1.6,
+                      zIndex: 2
+                    }
+                  }}
+                />
+                {suggestion && (
+                  <Box sx={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    right: 0, 
+                    p: 2, 
+                    pointerEvents: 'none',
+                    userSelect: 'none'
+                  }}>
+                    <Typography sx={{ 
+                      fontSize: "0.95rem", 
+                      lineHeight: 1.6, 
+                      whiteSpace: 'pre-wrap',
+                      color: 'transparent'
+                    }}>
+                      {body}
+                      <Box component="span" sx={{ color: 'text.disabled', opacity: 0.5 }}>
+                        {suggestion}
+                        <Box component="span" sx={{ 
+                          ml: 0.5, 
+                          bgcolor: alpha(theme.palette.primary.main, 0.1), 
+                          color: 'primary.main', 
+                          px: 0.5, 
+                          borderRadius: '4px',
+                          fontSize: '0.65rem',
+                          fontWeight: 700
+                        }}>
+                          TAB
+                        </Box>
+                      </Box>
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             </Box>
 
             {/* Attachments */}

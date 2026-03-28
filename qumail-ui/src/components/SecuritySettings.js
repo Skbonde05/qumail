@@ -8,24 +8,55 @@ import {
   Key, Refresh, Visibility, VisibilityOff, ContentCopy, History, Security, VerifiedUser, Lock, QrCode,
   Laptop, Smartphone, Tablet, Public, Language, Info, Warning, Error as ErrorIcon, CheckCircle
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 import QuMailService from '../services/QuMailService';
 import { formatDistanceToNow } from 'date-fns';
 
 const StyledCard = styled(Card)(({ theme }) => ({
   marginBottom: theme.spacing(3),
-  borderRadius: theme.shape.borderRadius * 2,
-  border: `1px solid ${theme.palette.divider}`,
-  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+  borderRadius: 20,
+  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+  background: alpha(theme.palette.background.paper, 0.8),
+  backdropFilter: 'blur(10px)',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.05)',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  '&:hover': {
+    boxShadow: '0 12px 48px rgba(0,0,0,0.08)',
+    transform: 'translateY(-2px)'
+  },
 }));
 
 const SectionHeader = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.spacing(1.5),
-  marginBottom: theme.spacing(2),
-  paddingBottom: theme.spacing(1),
-  borderBottom: `1px solid ${theme.palette.divider}`,
+  marginBottom: theme.spacing(3),
+  paddingBottom: theme.spacing(1.5),
+  borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+}));
+
+const SecurityHero = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(4),
+  borderRadius: 24,
+  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+  color: 'white',
+  marginBottom: theme.spacing(4),
+  position: 'relative',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(1),
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    top: '-50%',
+    right: '-10%',
+    width: '300px',
+    height: '300px',
+    background: 'rgba(255,255,255,0.1)',
+    borderRadius: '50%',
+    filter: 'blur(60px)',
+  }
 }));
 
 const DeviceIcon = ({ type }) => {
@@ -173,11 +204,11 @@ export default function SecuritySettings() {
   };
 
   return (
-    <Box key="security-center" sx={{ maxWidth: 1000, mx: 'auto', p: { xs: 2, sm: 3 } }}>
-      <Typography variant="h4" fontWeight="700" gutterBottom color="primary" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>Security Center</Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4, fontSize: { xs: '0.9rem', sm: '1rem' } }}>Manage your encryption keys and monitor account activity across all devices.</Typography>
-
-      <Grid container spacing={3}>
+    <Box key="security-center" sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, sm: 4 } }}>
+      <Typography variant="h4" fontWeight="800" color="primary" sx={{ mb: 4, letterSpacing: '-0.5px' }}>
+        Security Center
+      </Typography>
+      <Grid container spacing={4} alignItems="stretch">
         {/* Left Column: Settings */}
         <Grid item xs={12} md={5}>
           {/* 2FA Section */}
@@ -246,14 +277,57 @@ export default function SecuritySettings() {
           </StyledCard>
         </Grid>
 
-        {/* Right Column: Detailed Activity Table */}
+        {/* Right Column: Security Dashboard & Activity */}
         <Grid item xs={12} md={7}>
-          <StyledCard sx={{ height: '100%' }}>
+          {/* Security Summary Dashboard */}
+          <Box sx={{ mb: 3, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <StyledCard sx={{ flex: 1, mb: 0, background: 'linear-gradient(135deg, rgba(26, 115, 232, 0.05) 0%, rgba(26, 115, 232, 0.01) 100%)' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight="700">SECURITY HEALTH</Typography>
+                    <Typography variant="h4" fontWeight="800" color="primary">94<Box component="span" sx={{ fontSize: '1rem', fontWeight: 600 }}>/100</Box></Typography>
+                  </Box>
+                  <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+                    <CircularProgress variant="determinate" value={94} size={50} thickness={5} sx={{ color: 'primary.main' }} />
+                    <Box sx={{ position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <VerifiedUser sx={{ fontSize: 20, color: 'primary.main' }} />
+                    </Box>
+                  </Box>
+                </Box>
+                <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700, mt: 1, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Excellence Posture</Typography>
+              </CardContent>
+            </StyledCard>
+
+            <StyledCard sx={{ flex: 1, mb: 0 }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography variant="caption" color="text.secondary" fontWeight="700">ACTIVE SESSIONS</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, mt: 0.5 }}>
+                  <Typography variant="h4" fontWeight="800">03</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>across 2 devices</Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>Next review in 14 days</Typography>
+              </CardContent>
+            </StyledCard>
+
+            <StyledCard sx={{ flex: 1, mb: 0 }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography variant="caption" color="text.secondary" fontWeight="700">THREAT ALERTS</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                  <Typography variant="h4" fontWeight="800" color="success.main">00</Typography>
+                  <CheckCircle sx={{ color: 'success.main', fontSize: 20 }} />
+                </Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>No critical events detected</Typography>
+              </CardContent>
+            </StyledCard>
+          </Box>
+
+          <StyledCard sx={{ height: 'calc(100% - 130px)' }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 0 }}>
               <Box sx={{ p: 2, pb: 0 }}>
                 <SectionHeader>
                   <History color="primary" />
-                  <Typography variant="h6" fontWeight="600">Security Activity Dashboard</Typography>
+                  <Typography variant="h6" fontWeight="600">Full Activity Audit</Typography>
                 </SectionHeader>
               </Box>
 

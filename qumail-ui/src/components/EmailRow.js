@@ -17,11 +17,13 @@ import {
   Checkbox,
   Typography,
   Chip,
-  Box
+  Box,
+  useTheme,
+  alpha
 } from '@mui/material';
 
 // Encryption label helper
-import { Lock, Security as ShieldCheck, Mail } from '@mui/icons-material';
+import { Lock, Security as ShieldCheck, Mail, FlashOn as Zap } from '@mui/icons-material';
 
 
 const getEncryptionLabel = (encryptionLevel) => {
@@ -87,6 +89,7 @@ const EmailRow = ({
   onMarkAsRead,
   onClick
 }) => {
+  const theme = useTheme();
   const encryptionLabel = getEncryptionLabel(email?.encryptionLevel);
   const previewText = formatEncryptionPreview(email?.encryptionLevel, email?.body || email?.preview || '');
   
@@ -191,6 +194,29 @@ const EmailRow = ({
               <AttachFileIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(45deg)' }} />
             )}
             
+            {/* AI Semantic Match Badge */}
+            {email?.isSemanticMatch && (
+              <Chip
+                icon={<Zap sx={{ fontSize: '12px !important' }} />}
+                label={`AI Match ${Math.round(email.relevanceScore * 100)}%`}
+                size="small"
+                variant="filled"
+                sx={{
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                  color: 'primary.main',
+                  fontWeight: 'bold',
+                  fontSize: '0.65rem',
+                  height: '20px',
+                  border: 'none',
+                  animation: 'pulse 2s infinite',
+                  '& .MuiChip-icon': {
+                    color: 'primary.main',
+                    ml: 0.5
+                  }
+                }}
+              />
+            )}
+
             {/* Unread dot */}
             {!isRead && (
               <Box

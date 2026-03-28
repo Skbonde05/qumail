@@ -46,7 +46,9 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     labels,
     createLabel,
     deleteLabel,
-    updateLabel
+    updateLabel,
+    fetchLabels,
+    isSemanticSearch
   } = useDashboardActions(user);
 
   const [activeSection, setActiveSection] = useState('inbox');
@@ -212,6 +214,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         unreadNotifications={notifications.filter(n => !n.read).length}
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
+        isSemanticSearch={isSemanticSearch}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />

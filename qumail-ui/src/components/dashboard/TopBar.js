@@ -1,7 +1,12 @@
 import React, { memo } from 'react';
 import { AppBar, Toolbar, IconButton, Typography, Badge, Box, Avatar, Tooltip, InputBase, useTheme } from '@mui/material';
-import { Menu as MenuIcon, Search, Brightness4, Brightness7, Notifications } from '@mui/icons-material';
-import { styled, alpha } from '@mui/material/styles';
+import { Menu as MenuIcon, Search, Brightness4, Brightness7, Notifications, FlashOn as Zap } from '@mui/icons-material';
+import { styled, alpha, keyframes } from '@mui/material/styles';
+
+const pulse = keyframes`
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.1); }
+`;
 
 const SearchBar = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -64,6 +69,7 @@ const TopBar = memo(({
   darkMode, 
   onToggleTheme,
   isProfileMenuOpen,
+  isSemanticSearch,
   searchQuery,
   onSearchChange
 }) => {
@@ -90,16 +96,39 @@ const TopBar = memo(({
         </Box>
 
         <Box sx={{ display: 'flex', flexGrow: 1, justifyContent: 'center' }}>
-          <SearchBar>
+          <SearchBar sx={{
+             border: isSemanticSearch ? `1px solid ${alpha(theme.palette.primary.main, 0.4)}` : '1px solid transparent',
+             boxShadow: isSemanticSearch ? `0 0 15px ${alpha(theme.palette.primary.main, 0.1)}` : 'none'
+          }}>
             <SearchIconWrapper>
-              <Search fontSize="small" />
+              {isSemanticSearch ? <Zap fontSize="small" color="primary" sx={{ animation: `${pulse} 1s infinite alternate` }} /> : <Search fontSize="small" />}
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder="Search in mail"
+              placeholder={isSemanticSearch ? "AI Semantic Search Results..." : "Search in mail"}
               inputProps={{ 'aria-label': 'search' }}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
             />
+            {isSemanticSearch && (
+               <Box sx={{ 
+                 mr: 2, 
+                 bgcolor: alpha(theme.palette.primary.main, 0.1),
+                 color: 'primary.main',
+                 px: 1.2,
+                 py: 0.3,
+                 borderRadius: '12px',
+                 fontSize: '0.65rem',
+                 fontWeight: 800,
+                 letterSpacing: '0.5px',
+                 animation: `${pulse} 1.5s infinite alternate`,
+                 display: 'flex',
+                 alignItems: 'center',
+                 gap: 0.5
+               }}>
+                 <Zap sx={{ fontSize: 12 }} />
+                 AI ACTIVE
+               </Box>
+            )}
           </SearchBar>
         </Box>
 

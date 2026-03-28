@@ -64,9 +64,16 @@ import {
   Report as ReportIcon,
   ReportOff as ReportOffIcon,
   Folder as FolderIcon,
-  Circle
+  Circle,
+  Close,
+  AutoFixHigh as SparklesIcon
 } from '@mui/icons-material';
-import { styled, alpha } from '@mui/material/styles';
+import { styled, alpha, keyframes } from '@mui/material/styles';
+
+const pulse = keyframes`
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.1); }
+`;
 
 
 
@@ -374,6 +381,8 @@ const EmailViewer = memo(({
   const [attachments, setAttachments] = useState([]);
   const [snoozeDialogOpen, setSnoozeDialogOpen] = useState(false);
   const [labelAnchorEl, setLabelAnchorEl] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   // Extract email data with safe defaults
   const emailData = email || {};
@@ -578,6 +587,34 @@ const EmailViewer = memo(({
     return securityLevel === 'otp' && !isDecrypted;
   };
 
+  // --- AI Summarization Logic (Prototype) ---
+  const handleSummarize = () => {
+    if (!decryptedContent && !body) return;
+    
+    setIsSummarizing(true);
+    setSummary(null);
+
+    // Simulate AI processing delay
+    setTimeout(() => {
+      const textToSummarize = typeof decryptedContent === 'string' ? decryptedContent : (body || "");
+      const sentences = textToSummarize.split(/[.!?]/).filter(s => s.trim().length > 10);
+      
+      let aiSummary = "";
+      if (sentences.length > 2) {
+        aiSummary = [
+          `• ${sentences[0].trim()}.`,
+          `• ${sentences[Math.floor(sentences.length / 2)].trim()}.`,
+          `• ${sentences[sentences.length - 1].trim()}.`
+        ].join('\n');
+      } else {
+        aiSummary = "• This email appears to be concise. " + (textToSummarize.substring(0, 100) || "No additional Context.") + "...";
+      }
+
+      setSummary(aiSummary);
+      setIsSummarizing(false);
+    }, 1800);
+  };
+
   // Render encryption notice
   const renderEncryptionNotice = () => {
     if (securityLevel === 'none') return null;
@@ -741,11 +778,67 @@ const EmailViewer = memo(({
 
     // Decrypted or standard email
     return (
-      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
-        <Typography variant="body1" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-          {decryptedContent || body || 'No content available'}
-        </Typography>
-      </Paper>
+      <Box>
+        {/* AI Summary Panel */}
+        <Collapse in={!!summary || isSummarizing}>
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              mb: 3, 
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+              background: theme.palette.mode === 'dark' 
+                ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.2)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`
+                : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            <CardContent sx={{ p: '20px !important' }}>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <SparklesIcon sx={{ 
+                    color: 'primary.main', 
+                    fontSize: 20,
+                    animation: isSummarizing ? `${pulse} 1.5s infinite alternate` : 'none'
+                  }} />
+                  <Typography variant="subtitle2" fontWeight="800" color="primary.main" sx={{ letterSpacing: '0.5px' }}>
+                    AI THREAD SUMMARY
+                  </Typography>
+                </Box>
+                {!isSummarizing && (
+                   <IconButton size="small" onClick={() => setSummary(null)}>
+                     <Close sx={{ fontSize: 16 }} />
+                   </IconButton>
+                )}
+              </Box>
+              
+              {isSummarizing ? (
+                <Box display="flex" alignItems="center" gap={2} py={1}>
+                  <CircularProgress size={20} thickness={6} />
+                  <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                    AI is analyzing thread content and distilling key points...
+                  </Typography>
+                </Box>
+              ) : (
+                <Typography variant="body2" sx={{ 
+                  whiteSpace: 'pre-wrap', 
+                  color: 'text.primary', 
+                  lineHeight: 1.7,
+                  fontWeight: 500
+                }}>
+                  {summary}
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Collapse>
+
+        <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
+          <Typography variant="body1" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            {decryptedContent || body || 'No content available'}
+          </Typography>
+        </Paper>
+      </Box>
     );
   };
 
@@ -857,6 +950,20 @@ const EmailViewer = memo(({
                 </IconButton>
               </Tooltip>
               
+              <Tooltip title="AI Summarize Thread">
+                <IconButton 
+                  size="small" 
+                  onClick={handleSummarize} 
+                  disabled={isSummarizing || !isDecrypted}
+                  sx={{ 
+                    color: (summary || isSummarizing) ? 'primary.main' : 'inherit',
+                    animation: isSummarizing ? `${pulse} 1.5s infinite alternate` : 'none'
+                  }}
+                >
+                  <SparklesIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="Snooze">
                 <IconButton size="small" onClick={() => setSnoozeDialogOpen(true)}>
                   <AccessTimeIcon />
@@ -939,7 +1046,7 @@ const EmailViewer = memo(({
                   {senderName}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  to me • {formattedDate}
+                  to me <Box component="span" sx={{ mx: 0.8, opacity: 0.5 }}>|</Box> {formattedDate}
                 </Typography>
               </Box>
             </Box>
@@ -991,6 +1098,25 @@ const EmailViewer = memo(({
 
           {/* Action buttons */}
           <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={isSummarizing ? <CircularProgress size={16} color="inherit" /> : <SparklesIcon />}
+              onClick={handleSummarize}
+              disabled={isSummarizing || !isDecrypted}
+              size="small"
+              sx={{ 
+                borderRadius: '20px',
+                px: 2,
+                fontWeight: 800,
+                letterSpacing: '0.5px',
+                borderWidth: '2px',
+                '&:hover': { borderWidth: '2px' }
+              }}
+            >
+              {isSummarizing ? 'Analyzing...' : 'AI Summarize'}
+            </Button>
+
             <Button
               variant="contained"
               startIcon={<ReplyIcon />}

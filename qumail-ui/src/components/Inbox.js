@@ -4,7 +4,7 @@ import { Box, Typography, List, ListItem, ListItemText, ListItemIcon, ListItemAv
 import { 
   Star, StarBorder, Delete, Archive, Refresh, Inbox as InboxIcon, Lock, AttachFile as AttachFileIcon,
   MarkEmailRead, Report, AccessTime, PlaylistAdd, DriveFileMove, Label, MoreVert, Close,
-  RestoreFromTrash, SettingsBackupRestore, Circle
+  RestoreFromTrash, SettingsBackupRestore, Circle, FlashOn as Zap
 } from "@mui/icons-material";
 import { styled, alpha } from "@mui/material/styles";
 

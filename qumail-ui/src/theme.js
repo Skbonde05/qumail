@@ -69,24 +69,34 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
         main: isDark ? "#38bdf8" : "#0ea5e9"
       },
       background: {
-        default: isDark ? "#0a0e14" : "#f8fafc",
+        default: isDark 
+          ? (themeName === 'default' ? "#0a0e14" : alpha(config.primary.dark, 0.03)) 
+          : (themeName === 'default' ? "#f8fafc" : alpha(config.primary.light, 0.02)),
         paper: hasBgImage 
-          ? (isDark ? alpha("#141b26", 0.5) : alpha("#ffffff", 0.5))
-          : (isDark ? "#141b26" : "#ffffff")
+          ? (isDark ? alpha("#141b26", 0.4) : alpha("#ffffff", 0.4))
+          : (isDark 
+              ? (themeName === 'default' ? "#141b26" : alpha(config.primary.dark, 0.08)) 
+              : (themeName === 'default' ? "#ffffff" : alpha(config.primary.light, 0.03)))
       },
       text: {
         primary: hasBgImage 
           ? (isDark ? "#ffffff" : "#000000") 
-          : (isDark ? "#f1f5f9" : "#1e293b"),
+          : (isDark 
+              ? alpha("#f1f5f9", 0.95) 
+              : (themeName === 'default' ? "#1e293b" : alpha(config.primary.light, 0.9))),
         secondary: hasBgImage 
           ? (isDark ? alpha("#ffffff", 0.8) : alpha("#000000", 0.7))
-          : (isDark ? "#94a3b8" : "#64748b"),
+          : (isDark 
+              ? alpha("#94a3b8", 0.9) 
+              : (themeName === 'default' ? "#64748b" : alpha(config.primary.light, 0.6))),
         disabled: isDark ? "#4b5563" : "#9ca3af"
       },
-      divider: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+      divider: isDark 
+        ? (themeName === 'default' ? "rgba(255,255,255,0.08)" : alpha(config.primary.dark, 0.1)) 
+        : (themeName === 'default' ? "rgba(0,0,0,0.08)" : alpha(config.primary.light, 0.08)),
       action: {
-        hover: isDark ? alpha(config.primary.dark, 0.12) : "rgba(0, 0, 0, 0.04)",
-        selected: isDark ? alpha(config.primary.dark, 0.18) : alpha(config.primary.light, 0.12),
+        hover: isDark ? alpha(config.primary.dark, 0.12) : alpha(config.primary.light, 0.04),
+        selected: isDark ? alpha(config.primary.dark, 0.18) : alpha(config.primary.light, 0.08),
         disabled: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"
       }
     },

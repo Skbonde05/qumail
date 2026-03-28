@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -86,26 +86,32 @@ const PasswordStrengthBar = styled(LinearProgress)(({ theme, strength }) => {
 });
 
 // Auto-save preferences after 1 second of inactivity
+// Stable Auto-save Hook
 const useAutoSave = (saveFunction, delay = 1000) => {
-  const [timeoutId, setTimeoutId] = useState(null);
+  const timeoutId = React.useRef(null);
+  const saveFnRef = React.useRef(saveFunction);
+
+  // Sync ref with function
+  React.useEffect(() => {
+    saveFnRef.current = saveFunction;
+  }, [saveFunction]);
 
   const autoSave = useCallback((updatedData) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
+    if (timeoutId.current) {
+      clearTimeout(timeoutId.current);
     }
     
-    const newTimeoutId = setTimeout(() => {
-      saveFunction(updatedData);
+    timeoutId.current = setTimeout(() => {
+      saveFnRef.current(updatedData);
     }, delay);
-    
-    setTimeoutId(newTimeoutId);
-    
+  }, [delay]);
+
+  // Cleanup on unmount
+  React.useEffect(() => {
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId.current) clearTimeout(timeoutId.current);
     };
-  }, [timeoutId, delay, saveFunction]);
+  }, []);
 
   return autoSave;
 };
@@ -124,6 +130,80 @@ const commonBackgrounds = [
   { id: 'art', name: 'Canvas Oil', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80' },
   { id: 'dawn', name: 'Golden Dawn', url: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&q=80' }
 ];
+
+const themes = [
+  { id: 'default', name: 'QuMail Blue', color: '#1a73e8', gradient: 'linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)' },
+  { id: 'dark', name: 'Midnight', color: '#121212', gradient: 'linear-gradient(45deg, #1e1e1e 30%, #121212 90%)' },
+  { id: 'sunset', name: 'Sunset', color: '#f43f5e', gradient: 'linear-gradient(45deg, #f43f5e 30%, #fbbf24 90%)' },
+  { id: 'emerald', name: 'Emerald', color: '#059669', gradient: 'linear-gradient(45deg, #059669 30%, #10b981 90%)' },
+  { id: 'ocean', name: 'Ocean', color: '#0d9488', gradient: 'linear-gradient(45deg, #0d9488 30%, #06b6d4 90%)' },
+  { id: 'purple', name: 'Royal', color: '#7c3aed', gradient: 'linear-gradient(45deg, #7c3aed 30%, #c026d3 90%)' },
+  { id: 'gold', name: 'Golden Hour', color: '#d97706', gradient: 'linear-gradient(45deg, #d97706 30%, #fcd34d 90%)' },
+];
+
+const ThemeOption = memo(({ theme: t, isSelected, onClick }) => (
+  <Box
+    onClick={() => onClick(t.id)}
+    sx={{
+      width: 75,
+      height: 75,
+      borderRadius: 2,
+      background: t.gradient,
+      cursor: 'pointer',
+      border: isSelected ? '3px solid' : '1px solid transparent',
+      borderColor: 'primary.main',
+      position: 'relative',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      '&:hover': { transform: 'scale(1.08)', boxShadow: '0 6px 15px rgba(0,0,0,0.2)' }
+    }}
+  >
+    <Typography variant="caption" sx={{ color: 'white', fontWeight: 700, textAlign: 'center', fontSize: '0.65rem', textShadow: '0 1px 2px rgba(0,0,0,0.5)', p: 0.5, lineHeight: 1.1 }}>
+      {t.name}
+    </Typography>
+    {isSelected && (
+      <Box sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'primary.main', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+         <Save sx={{ fontSize: 12, color: 'white' }} />
+      </Box>
+    )}
+  </Box>
+));
+
+const BackgroundOption = memo(({ bg, isSelected, onClick }) => (
+  <Box
+    onClick={() => onClick(bg.url)}
+    sx={{
+      width: 75,
+      height: 75,
+      borderRadius: 2,
+      background: bg.url ? `url(${bg.url}) center/cover` : bg.preview,
+      cursor: 'pointer',
+      border: isSelected ? '3px solid' : '1px solid transparent',
+      borderColor: 'primary.main',
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      '&:hover': { transform: 'scale(1.08)', boxShadow: '0 6px 15px rgba(0,0,0,0.2)' }
+    }}
+  >
+    {!bg.url && <Wallpaper sx={{ color: 'text.secondary', opacity: 0.5 }} />}
+    <Typography 
+      variant="caption" 
+      sx={{ 
+        position: 'absolute', bottom: 0, width: '100%', color: 'white', bgcolor: 'rgba(0,0,0,0.5)', fontWeight: 700, textAlign: 'center', fontSize: '0.65rem', p: 0.2
+      }}
+    >
+      {bg.name}
+    </Typography>
+  </Box>
+));
 
 export default function AccountSettings({ user: initialUser, themeName, onUpdateTheme, bgImage, onUpdateBgImage }) {
   const { t, i18n: i18nInstance } = useTranslation();
@@ -153,19 +233,10 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [preferencesChanged, setPreferencesChanged] = useState(false);
 
-  // Fetch user profile on component mount
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setIsLoadingProfile(true);
-      console.log(' Starting to fetch profile...');
-      
       const profileData = await getProfile();
-      console.log(' Profile data loaded:', profileData);
-      
       setUser(profileData);
       
       // Update form data with user data
@@ -182,95 +253,87 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
         theme: profileData.settings?.theme || themeName || 'default'
       }));
       
-      // Set avatar preview
       if (profileData.avatar) {
         setAvatarPreview(profileData.avatar);
       }
     } catch (error) {
-      console.error(' Failed to fetch profile:', error);
+      console.error('Failed to fetch profile:', error);
       setMessage({ 
         type: 'error', 
-        text: error.response?.data?.message || 'Failed to load profile. Please login again.' 
+        text: 'Failed to load profile. Please login again.' 
       });
     } finally {
       setIsLoadingProfile(false);
     }
-  };
+  }, [themeName]);
+
+  // Fetch user profile on component mount
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   // Save preferences function
-  const savePreferences = async (data) => {
+  const savePreferences = useCallback(async (data) => {
     try {
       setLoading(true);
       await updateProfile({
-        name: formData.name,
+        name: data.name || formData.name,
         settings: {
-          emailNotifications: data.emailNotifications,
-          autoSaveDrafts: data.autoSaveDrafts,
-          signature: data.signature,
-          twoFactorEnabled: data.twoFactorEnabled,
-          timezone: data.timezone,
-          language: data.language,
-          theme: data.theme
+          emailNotifications: data.emailNotifications ?? formData.emailNotifications,
+          autoSaveDrafts: data.autoSaveDrafts ?? formData.autoSaveDrafts,
+          signature: data.signature ?? formData.signature,
+          twoFactorEnabled: data.twoFactorEnabled ?? formData.twoFactorEnabled,
+          timezone: data.timezone ?? formData.timezone,
+          language: data.language ?? formData.language,
+          theme: data.theme ?? formData.theme
         }
       });
       
-      // Update user data
-      const updatedUser = { ...user };
-      if (!updatedUser.settings) updatedUser.settings = {};
-      updatedUser.settings.emailNotifications = data.emailNotifications;
-      updatedUser.settings.autoSaveDrafts = data.autoSaveDrafts;
-      updatedUser.settings.signature = data.signature;
-      updatedUser.settings.twoFactorEnabled = data.twoFactorEnabled;
-      updatedUser.settings.timezone = data.timezone;
-      updatedUser.settings.language = data.language;
-      updatedUser.settings.theme = data.theme;
-      setUser(updatedUser);
+      setUser(prev => ({
+        ...prev,
+        settings: {
+          ...(prev?.settings || {}),
+          ...data
+        }
+      }));
       
       setPreferencesChanged(false);
       
-      // Show success message only if it's not an auto-save
       if (message.text === '') {
-        setMessage({ 
-          type: 'success', 
-          text: 'Preferences saved successfully!' 
-        });
+        setMessage({ type: 'success', text: 'Preferences saved successfully!' });
         setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       }
     } catch (error) {
-      console.error(' Save preferences error:', error);
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to save preferences' 
-      });
+      console.error('Save preferences error:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData]);
 
   // Initialize auto-save
   const autoSave = useAutoSave(savePreferences);
 
   // Handle preferences changes
-  const handlePreferenceChange = (field, value) => {
-    const updated = { ...formData, [field]: value };
-    setFormData(updated);
-    setPreferencesChanged(true);
-    
-    // Switch language immediately if changed
-    if (field === 'language') {
-      i18nInstance.changeLanguage(value);
-    }
+  const handlePreferenceChange = useCallback((field, value) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      setPreferencesChanged(true);
+      
+      if (field === 'language') {
+        i18nInstance.changeLanguage(value);
+      }
 
-    // Auto-save preferences (except when editing profile)
-    if (!editing) {
-      autoSave(updated);
-    }
+      if (field === 'theme' && onUpdateTheme) {
+        onUpdateTheme(value);
+      }
 
-    // Call onUpdateTheme immediately for visual feedback
-    if (field === 'theme' && onUpdateTheme) {
-      onUpdateTheme(value);
-    }
-  };
+      if (!editing) {
+        autoSave(updated);
+      }
+      
+      return updated;
+    });
+  }, [editing, autoSave, i18nInstance, onUpdateTheme]);
 
   // Password strength calculator
   const calculatePasswordStrength = (password) => {
@@ -533,15 +596,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
     );
   }
 
-  const themes = [
-    { id: 'default', name: 'QuMail Blue', color: '#1a73e8', gradient: 'linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)' },
-    { id: 'dark', name: 'Midnight', color: '#121212', gradient: 'linear-gradient(45deg, #1e1e1e 30%, #121212 90%)' },
-    { id: 'sunset', name: 'Sunset', color: '#f43f5e', gradient: 'linear-gradient(45deg, #f43f5e 30%, #fbbf24 90%)' },
-    { id: 'emerald', name: 'Emerald', color: '#059669', gradient: 'linear-gradient(45deg, #059669 30%, #10b981 90%)' },
-    { id: 'ocean', name: 'Ocean', color: '#0d9488', gradient: 'linear-gradient(45deg, #0d9488 30%, #06b6d4 90%)' },
-    { id: 'purple', name: 'Royal', color: '#7c3aed', gradient: 'linear-gradient(45deg, #7c3aed 30%, #c026d3 90%)' },
-    { id: 'gold', name: 'Golden Hour', color: '#d97706', gradient: 'linear-gradient(45deg, #d97706 30%, #fcd34d 90%)' },
-  ];
+
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto', p: { xs: 2, md: 3 } }}>
@@ -888,61 +943,12 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
                 {themes.map((t) => (
-                  <Box
+                  <ThemeOption
                     key={t.id}
-                    onClick={() => handlePreferenceChange('theme', t.id)}
-                    sx={{
-                      width: 75,
-                      height: 75,
-                      borderRadius: 2,
-                      background: t.gradient,
-                      cursor: 'pointer',
-                      border: formData.theme === t.id ? '3px solid' : '1px solid transparent',
-                      borderColor: 'primary.main',
-                      position: 'relative',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      '&:hover': { 
-                        transform: 'scale(1.08)',
-                        boxShadow: '0 6px 15px rgba(0,0,0,0.2)'
-                      }
-                    }}
-                  >
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: 'white', 
-                        fontWeight: 700, 
-                        textAlign: 'center', 
-                        fontSize: '0.65rem',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                        p: 0.5, 
-                        lineHeight: 1.1 
-                      }}
-                    >
-                      {t.name}
-                    </Typography>
-                    {formData.theme === t.id && (
-                      <Box sx={{ 
-                        position: 'absolute', 
-                        top: -8, 
-                        right: -8, 
-                        bgcolor: 'primary.main', 
-                        borderRadius: '50%', 
-                        width: 20, 
-                        height: 20, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center' 
-                      }}>
-                         <Save sx={{ fontSize: 12, color: 'white' }} />
-                      </Box>
-                    )}
-                  </Box>
+                    theme={t}
+                    isSelected={formData.theme === t.id}
+                    onClick={(id) => handlePreferenceChange('theme', id)}
+                  />
                 ))}
               </Box>
 
@@ -951,47 +957,12 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                 {commonBackgrounds.map((bg) => (
-                  <Box
+                  <BackgroundOption
                     key={bg.id}
-                    onClick={() => onUpdateBgImage(bg.url)}
-                    sx={{
-                      width: 75,
-                      height: 75,
-                      borderRadius: 2,
-                      background: bg.url ? `url(${bg.url}) center/cover` : bg.preview,
-                      cursor: 'pointer',
-                      border: bgImage === bg.url ? '3px solid' : '1px solid transparent',
-                      borderColor: 'primary.main',
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      '&:hover': { 
-                        transform: 'scale(1.08)',
-                        boxShadow: '0 6px 15px rgba(0,0,0,0.2)'
-                      }
-                    }}
-                  >
-                    {!bg.url && <Wallpaper sx={{ color: 'text.secondary', opacity: 0.5 }} />}
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        position: 'absolute',
-                        bottom: 0,
-                        width: '100%',
-                        color: 'white', 
-                        bgcolor: 'rgba(0,0,0,0.5)',
-                        fontWeight: 700, 
-                        textAlign: 'center', 
-                        fontSize: '0.65rem',
-                        p: 0.2
-                      }}
-                    >
-                      {bg.name}
-                    </Typography>
-                  </Box>
+                    bg={bg}
+                    isSelected={bgImage === bg.url}
+                    onClick={onUpdateBgImage}
+                  />
                 ))}
                 
                 {/* Custom Upload */}
