@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Button, Card, CardContent, Chip, IconButton, TextField, Grid, Snackbar,
   Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Alert,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Tooltip
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Tooltip, useTheme
 } from '@mui/material';
 import {
   Key, Refresh, Visibility, VisibilityOff, ContentCopy, History, Security, VerifiedUser, Lock, QrCode,
@@ -38,7 +38,7 @@ const SectionHeader = styled(Box)(({ theme }) => ({
 const SecurityHero = styled(Box)(({ theme }) => ({
   padding: theme.spacing(4),
   borderRadius: 24,
-  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+  backgroundColor: theme.palette.primary.main,
   color: 'white',
   marginBottom: theme.spacing(4),
   position: 'relative',
@@ -46,17 +46,6 @@ const SecurityHero = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.spacing(1),
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    top: '-50%',
-    right: '-10%',
-    width: '300px',
-    height: '300px',
-    background: 'rgba(255,255,255,0.1)',
-    borderRadius: '50%',
-    filter: 'blur(60px)',
-  }
 }));
 
 const DeviceIcon = ({ type }) => {
@@ -77,6 +66,7 @@ const StatusBadge = ({ type }) => {
 };
 
 export default function SecuritySettings({ user: propUser }) {
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
   const [keysInfo, setKeysInfo] = useState({ otp: null, aes256: null });
@@ -281,7 +271,7 @@ export default function SecuritySettings({ user: propUser }) {
         <Grid item xs={12} md={7}>
           {/* Security Summary Dashboard */}
           <Box sx={{ mb: 3, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-            <StyledCard sx={{ flex: 1, mb: 0, background: 'linear-gradient(135deg, rgba(26, 115, 232, 0.05) 0%, rgba(26, 115, 232, 0.01) 100%)' }}>
+            <StyledCard sx={{ flex: 1, mb: 0, backgroundColor: alpha(theme.palette.primary.main, 0.04) }}>
               <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>

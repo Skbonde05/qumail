@@ -227,13 +227,13 @@ const Sidebar = memo(({
             py: 1.5, 
             textTransform: "none", 
             fontWeight: "700", 
-            boxShadow: theme.palette.mode === 'dark' ? '0 8px 20px rgba(0,0,0,0.4)' : '0 8px 20px rgba(37, 99, 235, 0.2)',
-            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+            boxShadow: theme.palette.mode === 'dark' ? '0 8px 20px rgba(0,0,0,0.4)' : '0 8px 16px rgba(37, 99, 235, 0.15)',
+            backgroundColor: theme.palette.primary.main,
             color: 'white',
             '&:hover': { 
                 transform: 'translateY(-2px)',
-                boxShadow: theme.palette.mode === 'dark' ? '0 12px 24px rgba(0,0,0,0.5)' : '0 12px 24px rgba(37, 99, 235, 0.3)',
-                filter: 'brightness(1.1)'
+                boxShadow: theme.palette.mode === 'dark' ? '0 12px 24px rgba(0,0,0,0.5)' : '0 12px 24px rgba(37, 99, 235, 0.25)',
+                backgroundColor: theme.palette.primary.dark,
             },
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}

@@ -104,46 +104,39 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
     typography: {
       fontFamily: '"Inter", "system-ui", "-apple-system", sans-serif',
       h1: {
-        fontFamily: '"Outfit", sans-serif',
-        fontSize: '3rem',
+        fontSize: '3.5rem',
         fontWeight: 800,
         lineHeight: 1.1,
         letterSpacing: '-0.03em'
       },
       h2: {
-        fontFamily: '"Outfit", sans-serif',
-        fontSize: '2.25rem',
+        fontSize: '2.5rem',
         fontWeight: 700,
         lineHeight: 1.2,
         letterSpacing: '-0.02em'
       },
       h3: {
-        fontFamily: '"Outfit", sans-serif',
-        fontSize: '1.875rem',
+        fontSize: '2rem',
         fontWeight: 700,
         lineHeight: 1.3,
         letterSpacing: '-0.01em'
       },
       h4: {
-        fontFamily: '"Outfit", sans-serif',
         fontSize: '1.5rem',
         fontWeight: 600,
         lineHeight: 1.4
       },
       h5: {
-        fontFamily: '"Outfit", sans-serif',
         fontSize: '1.25rem',
         fontWeight: 600,
         lineHeight: 1.5
       },
       h6: {
-        fontFamily: '"Outfit", sans-serif',
         fontSize: '1.125rem',
         fontWeight: 600,
         lineHeight: 1.6
       },
       subtitle1: {
-        fontFamily: '"Outfit", sans-serif',
         fontWeight: 600,
         fontSize: '1rem'
       },
@@ -158,7 +151,6 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
         letterSpacing: '0.01em'
       },
       button: {
-        fontFamily: '"Outfit", sans-serif',
         fontWeight: 600,
         textTransform: 'none',
         letterSpacing: '0.02em'

@@ -14,7 +14,7 @@ const StyledCard = styled(Card)(({ theme }) => ({
 }));
 
 const HeroSection = styled(Box)(({ theme }) => ({
-  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
+  backgroundColor: alpha(theme.palette.primary.main, 0.05),
   borderRadius: 24,
   padding: theme.spacing(6, 4),
   [theme.breakpoints.down('sm')]: {
@@ -59,9 +59,7 @@ const PrivacyPolicy = () => {
       <HeroSection>
         <Shield sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
         <Typography variant="h3" fontWeight="800" gutterBottom sx={{
-          background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
+          color: 'primary.main',
           fontSize: { xs: '2.4rem', sm: '3rem', md: '3.75rem' }
         }}>
           Privacy Manifest

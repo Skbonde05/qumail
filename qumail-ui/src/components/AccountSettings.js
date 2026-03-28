@@ -116,7 +116,7 @@ const useAutoSave = (saveFunction, delay = 1000) => {
 };
 
 const commonBackgrounds = [
-  { id: 'none', name: 'Default', url: null, preview: 'linear-gradient(45deg, #f1f5f9 30%, #cbd5e1 90%)' },
+  { id: 'none', name: 'Default', url: null, preview: '#f1f5f9' },
   { id: 'nature', name: 'Mountain Lake', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80' },
   { id: 'space', name: 'Deep Space', url: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=80' },
   { id: 'abstract', name: 'Modern Abstract', url: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80' },
@@ -131,13 +131,13 @@ const commonBackgrounds = [
 ];
 
 const themes = [
-  { id: 'default', name: 'QuMail Blue', color: '#1a73e8', gradient: 'linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)' },
-  { id: 'dark', name: 'Midnight', color: '#121212', gradient: 'linear-gradient(45deg, #1e1e1e 30%, #121212 90%)' },
-  { id: 'sunset', name: 'Sunset', color: '#f43f5e', gradient: 'linear-gradient(45deg, #f43f5e 30%, #fbbf24 90%)' },
-  { id: 'emerald', name: 'Emerald', color: '#059669', gradient: 'linear-gradient(45deg, #059669 30%, #10b981 90%)' },
-  { id: 'ocean', name: 'Ocean', color: '#0d9488', gradient: 'linear-gradient(45deg, #0d9488 30%, #06b6d4 90%)' },
-  { id: 'purple', name: 'Royal', color: '#7c3aed', gradient: 'linear-gradient(45deg, #7c3aed 30%, #c026d3 90%)' },
-  { id: 'gold', name: 'Golden Hour', color: '#d97706', gradient: 'linear-gradient(45deg, #d97706 30%, #fcd34d 90%)' },
+  { id: 'default', name: 'QuMail Blue', color: '#1a73e8' },
+  { id: 'dark', name: 'Midnight', color: '#121212' },
+  { id: 'sunset', name: 'Sunset', color: '#f43f5e' },
+  { id: 'emerald', name: 'Emerald', color: '#059669' },
+  { id: 'ocean', name: 'Ocean', color: '#0d9488' },
+  { id: 'purple', name: 'Royal', color: '#7c3aed' },
+  { id: 'gold', name: 'Golden Hour', color: '#d97706' },
 ];
 
 const ThemeOption = memo(({ theme: t, isSelected, onClick }) => (
@@ -147,7 +147,7 @@ const ThemeOption = memo(({ theme: t, isSelected, onClick }) => (
       width: 75,
       height: 75,
       borderRadius: 2,
-      background: t.gradient,
+      backgroundColor: t.color,
       cursor: 'pointer',
       border: isSelected ? '3px solid' : '1px solid transparent',
       borderColor: 'primary.main',

@@ -32,8 +32,8 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   backgroundColor: "rgba(255, 255, 255, 0.95)",
 }));
 
-const GradientButton = styled(Button)(({ theme }) => ({
-  background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+const ActionButton = styled(Button)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.main,
   color: "white",
   padding: theme.spacing(1.5),
   borderRadius: "24px",
@@ -41,7 +41,7 @@ const GradientButton = styled(Button)(({ theme }) => ({
   textTransform: "none",
   fontSize: "1rem",
   "&:hover": {
-    background: "linear-gradient(45deg, #0d47a1 30%, #1a73e8 90%)",
+    backgroundColor: theme.palette.primary.dark,
   },
 }));
 
@@ -130,7 +130,7 @@ export default function ResetPassword() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          backgroundColor: '#f8fafc',
         }}
       >
         <Container maxWidth="sm">
@@ -141,7 +141,7 @@ export default function ResetPassword() {
                   width: 80,
                   height: 80,
                   margin: "0 auto 16px",
-                  background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+                  backgroundColor: "#1a73e8",
                 }}
               >
                 <Security sx={{ fontSize: 48, color: "white" }} />
@@ -160,7 +160,7 @@ export default function ResetPassword() {
                 onClick={() => navigate("/login")}
                 sx={{
                   borderRadius: "24px",
-                  background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+                  backgroundColor: "#1a73e8",
                 }}
               >
                 Back to Login
@@ -179,7 +179,7 @@ export default function ResetPassword() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        backgroundColor: '#f1f5f9',
       }}
     >
       <Container maxWidth="sm">
@@ -190,7 +190,7 @@ export default function ResetPassword() {
                 width: { xs: 60, sm: 80 },
                 height: { xs: 60, sm: 80 },
                 margin: "0 auto 16px",
-                background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+                backgroundColor: "#1a73e8",
               }}
             >
               <Lock sx={{ fontSize: { xs: 32, sm: 48 }, color: "white" }} />
@@ -266,7 +266,7 @@ export default function ResetPassword() {
               }}
             />
 
-            <GradientButton
+            <ActionButton
               fullWidth
               type="submit"
               disabled={loading}
@@ -277,7 +277,7 @@ export default function ResetPassword() {
               ) : (
                 "Reset Password"
               )}
-            </GradientButton>
+            </ActionButton>
 
             <Box sx={{ textAlign: "center", mt: 2 }}>
               <Button

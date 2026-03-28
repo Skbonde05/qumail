@@ -17,7 +17,8 @@ import {
   DialogContent,
   DialogActions,
   DialogContentText,
-  Tooltip
+  Tooltip,
+  useTheme
 } from "@mui/material";
 import {
   Visibility,
@@ -44,20 +45,20 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   boxShadow: theme.palette.mode === 'dark' ? "0 25px 50px -12px rgba(0, 0, 0, 0.5)" : "0 20px 40px rgba(0, 0, 0, 0.08)",
 }));
 
-const GradientButton = styled(Button)(({ theme }) => ({
-  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-  color: "white",
+const ActionButton = styled(Button)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
   padding: theme.spacing(1.5),
   borderRadius: "14px",
   fontWeight: 700,
   textTransform: "none",
   fontSize: "1rem",
-  boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
+  boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.2)}`,
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   "&:hover": {
     transform: "translateY(-2px)",
-    boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
-    filter: 'brightness(1.1)',
+    backgroundColor: theme.palette.primary.dark,
+    boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.3)}`,
   },
   "&:active": {
     transform: "scale(0.98)",
@@ -71,9 +72,7 @@ const BackgroundHero = styled(Box)(({ theme }) => ({
   right: 0,
   bottom: 0,
   zIndex: -1,
-  background: theme.palette.mode === 'dark' 
-    ? 'radial-gradient(circle at 20% 20%, #1a2e3b 0%, #0a0e14 100%)'
-    : 'radial-gradient(circle at 20% 20%, #eff6ff 0%, #dbeafe 100%)',
+  backgroundColor: theme.palette.mode === 'dark' ? '#0a0e14' : '#f8fafc',
   '&::before': {
     content: '""',
     position: 'absolute',
@@ -81,9 +80,8 @@ const BackgroundHero = styled(Box)(({ theme }) => ({
     left: '10%',
     width: '300px',
     height: '300px',
-    background: theme.palette.primary.main,
+    backgroundColor: alpha(theme.palette.primary.main, 0.1),
     filter: 'blur(120px)',
-    opacity: 0.15,
     borderRadius: '50%',
   },
   '&::after': {
@@ -93,15 +91,15 @@ const BackgroundHero = styled(Box)(({ theme }) => ({
     right: '10%',
     width: '400px',
     height: '400px',
-    background: theme.palette.secondary.main,
+    backgroundColor: alpha(theme.palette.secondary.main, 0.05),
     filter: 'blur(150px)',
-    opacity: 0.1,
     borderRadius: '50%',
   }
 }));
 
 
 export default function Register({ onRegister, loading, onToggleLogin }) {
+  const theme = useTheme();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -178,8 +176,8 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
                 width: 72,
                 height: 72,
                 margin: "0 auto 20px",
-                background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
+                backgroundColor: theme.palette.primary.main,
+                boxShadow: `0 8px 16px ${alpha(theme.palette.primary.main, 0.2)}`,
               }}
             >
               <Security sx={{ fontSize: 40, color: "white" }} />
@@ -284,7 +282,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
               }}
             />
 
-            <GradientButton
+            <ActionButton
               fullWidth
               type="submit"
               disabled={loading}
@@ -294,7 +292,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
               ) : (
                 "Create Secure Account"
               )}
-            </GradientButton>
+            </ActionButton>
           </form>
 
           {/* Footer */}
@@ -384,7 +382,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
             }}
             sx={{ 
               borderRadius: "24px",
-              background: "linear-gradient(45deg, #1a73e8 30%, #0d47a1 90%)",
+              backgroundColor: "primary.main",
               py: 1.5
             }}
           >

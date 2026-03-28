@@ -14,8 +14,7 @@ const SplashContainer = styled(Box)(({ theme }) => ({
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: '#000814',
-  background: 'linear-gradient(135deg, #000814 0%, #001d3d 100%)',
+  backgroundColor: '#0a0e14',
   zIndex: 9999,
   overflow: 'hidden',
 }));
@@ -43,9 +42,7 @@ const Title = styled(Typography)(({ theme }) => ({
   fontSize: '3rem',
   fontWeight: 'bold',
   marginBottom: theme.spacing(1),
-  background: 'linear-gradient(45deg, #00b4d8, #90e0ef)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
+  color: '#00b4d8',
   [theme.breakpoints.down('sm')]: {
     fontSize: '2rem',
   },

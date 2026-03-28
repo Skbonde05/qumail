@@ -796,9 +796,9 @@ const EmailViewer = memo(({
               mb: 3, 
               borderRadius: 2, 
               border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-              background: (theme) => theme.palette.mode === 'dark' 
-                ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.2)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`
-                : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
+              bgcolor: theme => theme.palette.mode === 'dark' 
+                ? alpha(theme.palette.primary.dark, 0.15)
+                : alpha(theme.palette.primary.light, 0.15),
               position: 'relative',
               overflow: 'hidden'
             }}

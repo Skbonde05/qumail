@@ -17,7 +17,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  DialogContentText
+  DialogContentText,
+  useTheme
 } from "@mui/material";
 import {
   Visibility,
@@ -50,20 +51,20 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   boxShadow: theme.palette.mode === 'dark' ? "0 25px 50px -12px rgba(0, 0, 0, 0.5)" : "0 20px 40px rgba(0, 0, 0, 0.08)",
 }));
 
-const GradientButton = styled(Button)(({ theme }) => ({
-  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-  color: "white",
+const ActionButton = styled(Button)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
   padding: theme.spacing(1.5),
   borderRadius: "14px",
   fontWeight: 700,
   textTransform: "none",
   fontSize: "1rem",
-  boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
+  boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.2)}`,
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   "&:hover": {
     transform: "translateY(-2px)",
-    boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
-    filter: 'brightness(1.1)',
+    backgroundColor: theme.palette.primary.dark,
+    boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.3)}`,
   },
   "&:active": {
     transform: "scale(0.98)",
@@ -77,9 +78,7 @@ const BackgroundHero = styled(Box)(({ theme }) => ({
   right: 0,
   bottom: 0,
   zIndex: -1,
-  background: theme.palette.mode === 'dark' 
-    ? 'radial-gradient(circle at 20% 20%, #1e293b 0%, #0f172a 100%)'
-    : 'radial-gradient(circle at 20% 20%, #eff6ff 0%, #dbeafe 100%)',
+  backgroundColor: theme.palette.mode === 'dark' ? '#0a0e14' : '#f8fafc',
   '&::before': {
     content: '""',
     position: 'absolute',
@@ -87,9 +86,8 @@ const BackgroundHero = styled(Box)(({ theme }) => ({
     left: '10%',
     width: '300px',
     height: '300px',
-    background: theme.palette.primary.main,
+    backgroundColor: alpha(theme.palette.primary.main, 0.1),
     filter: 'blur(120px)',
-    opacity: 0.15,
     borderRadius: '50%',
   },
   '&::after': {
@@ -99,14 +97,14 @@ const BackgroundHero = styled(Box)(({ theme }) => ({
     right: '10%',
     width: '400px',
     height: '400px',
-    background: theme.palette.secondary.main,
+    backgroundColor: alpha(theme.palette.secondary.main, 0.05),
     filter: 'blur(150px)',
-    opacity: 0.1,
     borderRadius: '50%',
   }
 }));
 
 export default function Login({ onLogin, onSwitchToRegister, loading }) {
+  const theme = useTheme();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -116,15 +114,10 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
   const navigate = useNavigate();
 
   // Forgot password state
+  // Forgot password state
   const [openForgot, setOpenForgot] = useState(false);
-  const [resetStep, setResetStep] = useState(0); // 0: Email, 1: Code/OTP, 2: New Password, 3: Success
+  const [resetStep, setResetStep] = useState(0); // 0: Email, 3: Success
   const [forgotEmail, setForgotEmail] = useState("");
-  const [recoveryCode, setRecoveryCode] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [resetToken, setResetToken] = useState("");
-  const [resetMode, setResetMode] = useState(0); // 0 for OTP, 1 for recovery code
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState("");
   const [forgotError, setForgotError] = useState("");
@@ -191,77 +184,24 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
     setForgotError("");
     setForgotSuccess("");
 
-    if (resetStep === 0) {
-      if (!forgotEmail || !forgotEmail.toLowerCase().endsWith('@qumail.com')) {
-        setForgotError("Please enter a valid @qumail.com address");
-        return;
+    if (!forgotEmail || !forgotEmail.toLowerCase().endsWith('@qumail.com')) {
+      setForgotError("Please enter a valid @qumail.com address");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      // The backend now generates a token and sends a link via email
+      const res = await QuMailService.forgotPassword(forgotEmail);
+      if (res.success) {
+        setForgotSuccess(res.message);
+        setResetStep(3); // Go straight to success message
+      } else {
+        setForgotError(res.message);
       }
-      setForgotLoading(true);
-      try {
-        const res = await QuMailService.forgotPassword(forgotEmail);
-        if (res.success) {
-          setForgotSuccess(res.message);
-          setResetStep(1);
-        } else {
-          setForgotError(res.message);
-        }
-      } catch (err) {
-        setForgotError("Connection error");
-      } finally {
-        setForgotLoading(false);
-      }
-    } else if (resetStep === 1) {
-      if (resetMode === 0 && (!otpCode || otpCode.length !== 6)) {
-        setForgotError("Please enter the 6-digit code");
-        return;
-      }
-      if (resetMode === 1 && !recoveryCode) {
-        setForgotError("Please enter your recovery code");
-        return;
-      }
-
-      setForgotLoading(true);
-      try {
-        const res = resetMode === 0 
-          ? await QuMailService.verifyResetOTP(forgotEmail, otpCode)
-          : await QuMailService.verifyRecoveryCode(forgotEmail, recoveryCode);
-        
-        if (res.success) {
-          setResetToken(res.resetToken);
-          setResetStep(2);
-          setForgotSuccess("Identity verified! Now create a new password.");
-        } else {
-          setForgotError(res.message);
-        }
-      } catch (err) {
-        setForgotError("Verification failed");
-      } finally {
-        setForgotLoading(false);
-      }
-    } else if (resetStep === 2) {
-      if (newPassword.length < 8) {
-        setForgotError("Password must be at least 8 characters");
-        return;
-      }
-      if (newPassword !== confirmNewPassword) {
-        setForgotError("Passwords do not match");
-        return;
-      }
-
-      setForgotLoading(true);
-      try {
-        const res = await QuMailService.resetPassword(resetToken, newPassword);
-        if (res.success) {
-          setResetStep(3);
-          setForgotSuccess("Account recovered! Your password has been updated.");
-        } else {
-          setForgotError(res.message);
-        }
-      } catch (err) {
-        setForgotError("Failed to reset password");
-      } finally {
-        setForgotLoading(false);
-      }
+    } catch (err) {
+      setForgotError("Connection error");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -270,10 +210,6 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
     setTimeout(() => {
       setResetStep(0);
       setForgotEmail("");
-      setOtpCode("");
-      setRecoveryCode("");
-      setNewPassword("");
-      setConfirmNewPassword("");
       setForgotError("");
       setForgotSuccess("");
     }, 300);
@@ -292,8 +228,8 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
                 width: 72,
                 height: 72,
                 margin: "0 auto 20px",
-                background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
+                backgroundColor: theme.palette.primary.main,
+                boxShadow: `0 8px 16px ${alpha(theme.palette.primary.main, 0.2)}`,
               }}
             >
               <Security sx={{ fontSize: 40, color: "white" }} />
@@ -379,7 +315,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               </Link>
             </Box>
 
-            <GradientButton
+            <ActionButton
               fullWidth
               type="submit"
               disabled={loading}
@@ -389,7 +325,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               ) : (
                 "Sign Into Your Account"
               )}
-            </GradientButton>
+            </ActionButton>
           </form>
 
           {/* Create Account Section */}
@@ -435,7 +371,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
           {resetStep === 0 && (
             <>
               <DialogContentText sx={{ mb: 3, textAlign: 'center' }}>
-                Enter your @qumail.com email to start the recovery process.
+                Enter your @qumail.com email address. We'll send you a secure link to reset your password.
               </DialogContentText>
               <TextField
                 fullWidth
@@ -443,89 +379,30 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
                 value={forgotEmail}
                 onChange={(e) => setForgotEmail(e.target.value)}
                 autoFocus
+                placeholder="identity@qumail.com"
                 InputProps={{
+                  sx: { borderRadius: '12px' },
                   startAdornment: <InputAdornment position="start"><Mail color="primary" /></InputAdornment>
                 }}
               />
             </>
           )}
 
-          {resetStep === 1 && (
-            <>
-              <Tabs 
-                value={resetMode} 
-                onChange={(e, val) => setResetMode(val)} 
-                variant="fullWidth" 
-                sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
-              >
-                <Tab label="6-Digit OTP" />
-                <Tab label="Recovery Code" />
-              </Tabs>
-              
-              <DialogContentText sx={{ mb: 3, textAlign: 'center' }}>
-                {resetMode === 0 
-                  ? "Enter the 6-digit code we sent to your email (check console)."
-                  : "Enter the secure master recovery code given during registration."}
-              </DialogContentText>
-
-              {resetMode === 0 ? (
-                <TextField
-                  fullWidth
-                  label="Verification Code"
-                  placeholder="123456"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  inputProps={{ style: { textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem', fontWeight: '700' } }}
-                />
-              ) : (
-                <TextField
-                  fullWidth
-                  label="Master Recovery Code"
-                  placeholder="QU-XXXX-XXXX"
-                  value={recoveryCode}
-                  onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><VpnKey color="primary" /></InputAdornment>
-                  }}
-                />
-              )}
-            </>
-          )}
-
-          {resetStep === 2 && (
-            <>
-              <DialogContentText sx={{ mb: 3, textAlign: 'center' }}>
-                Identity verified. Please choose a strong new password.
-              </DialogContentText>
-              <TextField
-                fullWidth
-                type="password"
-                label="New Password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                sx={{ mb: 2 }}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start"><Lock color="primary" /></InputAdornment>
-                }}
-              />
-              <TextField
-                fullWidth
-                type="password"
-                label="Confirm New Password"
-                value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
-              />
-            </>
-          )}
-
           {resetStep === 3 && (
             <Box sx={{ textAlign: 'center', py: 2 }}>
-              <Avatar sx={{ bgcolor: 'success.main', width: 64, height: 64, mx: 'auto', mb: 2 }}>
-                <History sx={{ fontSize: 40 }} />
+              <Avatar sx={{ bgcolor: 'success.main', width: 64, height: 64, mx: 'auto', mb: 2, boxShadow: `0 4px 12px ${alpha('#10b981', 0.2)}` }}>
+                <Mail sx={{ fontSize: 40, color: 'white' }} />
               </Avatar>
-              <Typography variant="body1" fontWeight="500">
-                Your password has been successfully updated. You can now sign in with your new credentials.
+              <Typography variant="h6" fontWeight="700" gutterBottom>
+                Reset Link Sent
               </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                We've sent a recovery link to <strong>{forgotEmail}</strong>. 
+                Please click the link in the email to set a new password.
+              </Typography>
+              <Alert severity="info" sx={{ borderRadius: '12px', textAlign: 'left' }}>
+                Note: In this development environment, check the backend console logs to see the generated reset URL.
+              </Alert>
             </Box>
           )}
 
@@ -549,7 +426,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
                 disabled={forgotLoading}
                 sx={{ 
                   borderRadius: "14px", px: 4, py: 1,
-                  background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
+                  backgroundColor: theme.palette.primary.main
                 }}
               >
                 {forgotLoading ? <CircularProgress size={24} color="inherit" /> : (resetStep === 2 ? "Save Password" : "Next")}
@@ -560,7 +437,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
               fullWidth 
               variant="contained" 
               onClick={closeForgotDialog}
-              sx={{ borderRadius: "14px", py: 1.5, background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)` }}
+              sx={{ borderRadius: "14px", py: 1.5, backgroundColor: theme.palette.primary.main }}
             >
               Back to Login
             </Button>
@@ -577,7 +454,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
         }}
       >
         <DialogTitle sx={{ textAlign: 'center', pt: 4 }} component="div">
-          <Avatar sx={{ bgcolor: 'primary.main', width: 64, height: 64, mx: 'auto', mb: 2, boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.3)}` }}>
+          <Avatar sx={{ bgcolor: 'primary.main', width: 64, height: 64, mx: 'auto', mb: 2, boxShadow: `0 8px 16px ${alpha('#2563eb', 0.2)}` }}>
             <Security sx={{ fontSize: 40 }} />
           </Avatar>
           <Typography variant="h5" fontWeight="800" sx={{ letterSpacing: '-0.5px' }}>
@@ -621,7 +498,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
             disabled={mfaLoading}
             sx={{
               borderRadius: "14px", px: 4, py: 1,
-              background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              backgroundColor: 'primary.main',
               fontWeight: 700
             }}
           >

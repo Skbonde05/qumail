@@ -318,11 +318,12 @@ const Inbox = memo(({
             borderRadius: '12px', 
             px: 4, 
             py: 1.2,
-            background: theme => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-            boxShadow: theme => `0 8px 16px ${alpha(theme.palette.primary.main, 0.2)}`,
+            backgroundColor: theme.palette.primary.main,
+            color: 'white',
+            boxShadow: `0 8px 16px ${alpha(theme.palette.primary.main, 0.2)}`,
             '&:hover': {
-              boxShadow: theme => `0 12px 24px ${alpha(theme.palette.primary.main, 0.3)}`,
-              transform: 'translateY(-2px)'
+              backgroundColor: theme.palette.primary.dark,
+              boxShadow: `0 12px 24px ${alpha(theme.palette.primary.main, 0.3)}`,
             }
           }}
         >

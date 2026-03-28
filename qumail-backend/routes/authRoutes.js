@@ -13,6 +13,7 @@ const Notification = require('../models/Notification');
 const { verifyToken, validateQumailEmail } = require('../middleware/authMiddleware');
 const { generateOTPKey, generateAESKey } = require('../utils/encryption');
 const { authLimiter } = require('../middleware/rateLimit');
+const { sendPasswordResetEmail } = require('../utils/emailService');
 
 // Helper to log security actions
 const addLog = async (userId, action, details, type = 'info', req = null) => {
@@ -217,26 +218,27 @@ router.post('/forgot-password', authLimiter, [
       return res.json({ success: true, message: 'If that email is in our system, a reset link will be sent.' });
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.resetOTP = otp;
-    user.resetOTPExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    // Generate random 32-char token
+    const rawResetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Hash it for DB storage
+    user.resetPasswordToken = crypto.createHash('sha256').update(rawResetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
 
     await user.save();
 
-    // In production, send email. Simulation here.
-    console.log(`[PASS_RESET] OTP for ${email}: ${otp}`);
+    // Send the email with the RAW token (not hashed)
+    await sendPasswordResetEmail(user.email, rawResetToken);
 
     res.json({ 
       success: true, 
-      message: 'A 6-digit verification code was sent to your email (check console)',
-      otp: process.env.NODE_ENV === 'development' ? otp : undefined 
+      message: 'A password reset link was sent to your email (check console or inbox)'
     });
 
-    addLog(user._id, 'PASSWORD_RESET_OTP_SENT', `Reset OTP sent to ${email}`, 'warning', req);
+    addLog(user._id, 'PASSWORD_RESET_LINK_SENT', `Reset link sent to ${email}`, 'warning', req);
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    res.status(500).json({ success: false, message: 'Internal server error while sending reset link' });
   }
 });
 

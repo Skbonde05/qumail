@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, LinearProgress, useTheme } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { styled } from '@mui/material/styles';
+
+import { styled, alpha } from '@mui/material/styles';
 
 const SplashScreenContainer = styled(Box)(({ theme }) => ({
   height: '100vh',
@@ -10,9 +11,7 @@ const SplashScreenContainer = styled(Box)(({ theme }) => ({
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  background: theme.palette.mode === 'dark' 
-    ? 'radial-gradient(circle at center, #1a237e 0%, #000 70%)' 
-    : 'radial-gradient(circle at center, #e3f2fd 0%, #fff 70%)',
+  backgroundColor: theme.palette.mode === 'dark' ? '#0a0e14' : '#f8fafc',
   position: 'fixed',
   top: 0,
   left: 0,
@@ -111,9 +110,7 @@ const SplashScreen = ({ onComplete }) => {
                     fontWeight: '900',
                     letterSpacing: '-3px',
                     display: 'inline-block',
-                    background: 'linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
+                    color: '#1a73e8',
                     filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.1))',
                   }}
                 >
@@ -130,7 +127,7 @@ const SplashScreen = ({ onComplete }) => {
                 bottom: -5,
                 left: 0,
                 height: '3px',
-                background: 'linear-gradient(90deg, transparent, #1a73e8, transparent)',
+                backgroundColor: '#1a73e8',
                 opacity: 0.6
               }}
             />
@@ -155,32 +152,15 @@ const SplashScreen = ({ onComplete }) => {
         </motion.div>
 
         {/* Dynamic Background Glows */}
-        <Box sx={{ 
-            position: 'absolute', 
-            top: '50%', 
-            left: '50%', 
-            transform: 'translate(-50%, -50%)',
-            width: '100%',
-            height: '100%',
-            overflow: 'hidden',
-            pointerEvents: 'none',
-            opacity: 0.5
-        }}>
-            <motion.div 
-               animate={{ 
-                 scale: [1, 1.2, 1],
-                 opacity: [0.3, 0.5, 0.3],
-                 x: [-100, 100, -100],
-                 y: [-50, 50, -50]
-               }}
-               transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-               style={{
+        <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', height: '100%', overflow: 'hidden', pointerEvents: 'none', opacity: 0.1 }}>
+            <Box
+               sx={{
                  position: 'absolute',
                  width: '600px',
                  height: '600px',
                  borderRadius: '50%',
-                 background: 'radial-gradient(circle, rgba(26, 115, 232, 0.15) 0%, transparent 70%)',
-                 filter: 'blur(60px)',
+                 backgroundColor: alpha('#1a73e8', 0.1),
+                 filter: 'blur(100px)',
                }}
             />
         </Box>

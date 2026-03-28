@@ -83,9 +83,9 @@ import { styled, alpha } from '@mui/material/styles';
 const ProfessionalPaper = styled(Paper)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius * 1.5,
   border: `1px solid ${theme.palette.divider}`,
-  background: theme.palette.mode === 'dark'
-    ? `linear-gradient(145deg, ${alpha(theme.palette.background.paper, 0.4)} 0%, ${alpha(theme.palette.background.default, 0.4)} 100%)`
-    : `linear-gradient(145deg, ${alpha(theme.palette.background.paper, 0.2)} 0%, ${alpha(theme.palette.grey[50], 0.2)} 100%)`,
+  backgroundColor: theme.palette.mode === 'dark' 
+    ? alpha(theme.palette.background.paper, 0.4)
+    : alpha(theme.palette.background.paper, 0.2),
   backdropFilter: 'blur(10px)',
   boxShadow: theme.shadows[1],
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -103,14 +103,14 @@ const SectionIconWrapper = styled(Box)(({ theme }) => ({
   width: 48,
   height: 48,
   borderRadius: '12px',
-  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+  backgroundColor: theme.palette.primary.main,
   color: theme.palette.primary.contrastText,
   boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
   marginRight: theme.spacing(2)
 }));
 
 const PremiumChip = styled(Chip)(({ theme }) => ({
-  background: `linear-gradient(45deg, ${theme.palette.secondary.main} 30%, ${theme.palette.primary.main} 90%)`,
+  backgroundColor: theme.palette.secondary.main,
   color: 'white',
   fontWeight: 600,
   fontSize: '0.7rem',
@@ -1012,7 +1012,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
                 borderRadius: 4,
                 backgroundColor: alpha('#ccc', 0.2),
                 '& .MuiLinearProgress-bar': {
-                  background: `linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%)`,
+                  backgroundColor: '#4f46e5',
                   borderRadius: 4
                 }
               }}
@@ -1173,9 +1173,9 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
                 mb: 4,
                 p: { xs: 2, sm: 2.5 },
                 borderRadius: 3,
-                background: darkMode
-                  ? `linear-gradient(90deg, ${alpha('#1a1a1a', 0.4)} 0%, ${alpha('#2a2a2a', 0.4)} 100%)`
-                  : `linear-gradient(90deg, ${alpha('#ffffff', 0.5)} 0%, ${alpha('#f8f9fa', 0.5)} 100%)`,
+                backgroundColor: darkMode
+                  ? alpha('#1a1a1a', 0.4)
+                  : alpha('#ffffff', 0.5),
                 border: `1px solid ${alpha(darkMode ? '#fff' : '#000', 0.1)}`,
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
               }}>
@@ -1263,10 +1263,10 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
                   borderRadius: 2,
                   px: 4,
                   py: 1,
-                  background: `linear-gradient(45deg, #4f46e5 30%, #7c3aed 90%)`,
+                  backgroundColor: '#4f46e5',
                   boxShadow: '0 4px 20px rgba(79, 70, 229, 0.3)',
                   '&:hover': {
-                    background: `linear-gradient(45deg, #4338ca 30%, #6d28d9 90%)`,
+                    backgroundColor: '#4338ca',
                     boxShadow: '0 6px 25px rgba(79, 70, 229, 0.4)'
                   },
                   '&:disabled': {
