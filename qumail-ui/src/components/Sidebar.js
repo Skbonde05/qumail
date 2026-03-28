@@ -26,8 +26,9 @@ const StyledListItem = styled(ListItemButton)(({ theme, selected }) => ({
   "&:hover": {
     backgroundColor: selected 
       ? alpha(theme.palette.primary.main, 0.18)
-      : alpha(theme.palette.action.hover, 0.5),
-    transform: 'translateX(2px)',
+      : 'transparent',
+    boxShadow: `inset 0 0 0 1.5px ${alpha(theme.palette.primary.main, 0.6)}`,
+    transform: 'translateX(3px)',
   },
   "& .MuiListItemIcon-root": {
     color: selected ? theme.palette.primary.main : theme.palette.text.secondary,
@@ -110,7 +111,14 @@ const ProfileMenu = ({
       onClose={onClose}
       onClick={onClose}
       PaperProps={{
-        sx: { width: 320, mt: 1, borderRadius: 3, boxShadow: theme.shadows[8] }
+        sx: { 
+          width: 320, 
+          mt: 1, 
+          borderRadius: 3, 
+          boxShadow: theme.shadows[8],
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+          backgroundImage: 'none'
+        }
       }}
       transformOrigin={{ horizontal: 'right', vertical: 'top' }}
       anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}

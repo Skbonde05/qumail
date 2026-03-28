@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { AppBar, Toolbar, IconButton, Typography, Badge, Box, Avatar, Tooltip, InputBase } from '@mui/material';
+import { AppBar, Toolbar, IconButton, Typography, Badge, Box, Avatar, Tooltip, InputBase, useTheme } from '@mui/material';
 import { Menu as MenuIcon, Search, Brightness4, Brightness7, Notifications } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 
@@ -63,9 +63,12 @@ const TopBar = memo(({
   unreadNotifications, 
   darkMode, 
   onToggleTheme,
+  isProfileMenuOpen,
   searchQuery,
   onSearchChange
 }) => {
+  const theme = useTheme();
+
   return (
     <AppBar 
       position="fixed" 
@@ -115,24 +118,51 @@ const TopBar = memo(({
             </IconButton>
           </Tooltip>
 
-          <Box sx={{ ml: 1, cursor: 'pointer' }} onClick={onProfileMenuOpen}>
+          <Box 
+            sx={{ 
+              ml: 1, 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              p: 0.5,
+              pr: 1.5,
+              borderRadius: '24px',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              backgroundColor: isProfileMenuOpen 
+                ? (darkMode ? alpha(theme.palette.common.white, 0.1) : alpha(theme.palette.primary.main, 0.08))
+                : 'transparent',
+              border: `1.5px solid ${isProfileMenuOpen 
+                ? alpha(theme.palette.primary.main, 0.6) 
+                : 'transparent'}`,
+              boxShadow: isProfileMenuOpen 
+                ? (darkMode ? 'none' : `0 2px 8px ${alpha(theme.palette.primary.main, 0.15)}`)
+                : 'none',
+              '&:hover': {
+                backgroundColor: isProfileMenuOpen 
+                  ? (darkMode ? alpha(theme.palette.common.white, 0.1) : alpha(theme.palette.primary.main, 0.08))
+                  : (darkMode ? alpha(theme.palette.common.white, 0.05) : alpha(theme.palette.primary.main, 0.04)),
+              }
+            }} 
+            onClick={onProfileMenuOpen}
+          >
             <Avatar 
               src={user?.avatar} 
               sx={{ 
-                width: 36, 
-                height: 36, 
+                width: 34, 
+                height: 34, 
                 bgcolor: 'primary.main', 
                 fontSize: '14px',
-                border: theme => `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  borderColor: 'primary.main',
-                  transform: 'scale(1.05)'
-                }
+                border: theme => `2px solid ${darkMode ? alpha(theme.palette.common.white, 0.2) : 'white'}`,
+                boxShadow: 1
               }}
             >
               {user?.name?.charAt(0) || user?.email?.charAt(0)}
             </Avatar>
+            <Box sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}>
+               <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, lineHeight: 1, color: isProfileMenuOpen ? 'primary.main' : 'text.primary' }}>
+                 {user?.name}
+               </Typography>
+            </Box>
           </Box>
         </Box>
       </Toolbar>

@@ -22,9 +22,9 @@ const EmailListItem = styled(ListItem, {
   '&:hover': {
     zIndex: 1,
     backgroundColor: selected 
-      ? alpha(theme.palette.primary.main, 0.1)
-      : alpha(theme.palette.action.hover, 0.5),
-    boxShadow: theme.palette.mode === 'dark' ? '0 4px 12px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.04)',
+      ? alpha(theme.palette.primary.main, 0.08)
+      : 'transparent',
+    boxShadow: `inset 0 0 0 1.5px ${alpha(theme.palette.primary.main, 0.6)}`,
     transform: 'translateY(-1px)',
     '& .actions': {
       display: 'flex',

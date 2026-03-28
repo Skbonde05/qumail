@@ -207,6 +207,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         user={user}
         onDrawerToggle={handleDrawerToggle}
         onProfileMenuOpen={(e) => setProfileAnchor(e.currentTarget)}
+        isProfileMenuOpen={Boolean(profileAnchor)}
         onNotificationsOpen={(e) => setNotifAnchor(e.currentTarget)}
         unreadNotifications={notifications.filter(n => !n.read).length}
         darkMode={darkMode}

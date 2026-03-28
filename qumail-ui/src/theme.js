@@ -85,8 +85,8 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
       },
       divider: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
       action: {
-        hover: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-        selected: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+        hover: isDark ? alpha(config.primary.dark, 0.12) : "rgba(0, 0, 0, 0.04)",
+        selected: isDark ? alpha(config.primary.dark, 0.18) : alpha(config.primary.light, 0.12),
         disabled: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"
       }
     },
@@ -268,14 +268,17 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
           contained: {
             boxShadow: "none",
             "&:hover": {
-              boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.1)",
-              transform: "translateY(-1px)"
+              boxShadow: isDark 
+                ? `0 6px 16px ${alpha(config.primary.dark, 0.4)}` 
+                : `0 6px 16px ${alpha(config.primary.light, 0.2)}`,
+              transform: "translateY(-1px)",
+              filter: "brightness(1.05)"
             }
           },
           outlined: {
             borderColor: isDark ? alpha("#ffffff", 0.1) : alpha("#000000", 0.1),
             "&:hover": {
-              backgroundColor: isDark ? alpha("#ffffff", 0.05) : alpha("#000000", 0.02)
+              backgroundColor: isDark ? alpha(config.primary.dark, 0.1) : alpha(config.primary.light, 0.05)
             }
           }
         }
@@ -315,7 +318,7 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
             borderRadius: "10px",
             transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:hover": {
-              backgroundColor: isDark ? alpha("#ffffff", 0.08) : alpha("#000000", 0.05),
+              backgroundColor: isDark ? alpha(config.primary.dark, 0.12) : alpha(config.primary.light, 0.08),
               transform: "translateY(-1px)"
             },
             "&:active": {
