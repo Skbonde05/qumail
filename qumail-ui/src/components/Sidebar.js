@@ -195,7 +195,8 @@ const Sidebar = memo(({
   };
 
   const limitGB = limit / (1024 * 1024 * 1024);
-  const storagePercentage = limit > 0 ? (used / limit) * 100 : 0;
+  const rawPercentage = limit > 0 ? (used / limit) * 100 : 0;
+  const storagePercentage = (used > 0 && rawPercentage < 2) ? 2 : rawPercentage;
 
   const sections = [
     { id: "inbox", icon: Inbox, text: t("sidebar.inbox"), count: folderCounts.inbox },
@@ -212,8 +213,8 @@ const Sidebar = memo(({
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', height: '100%', overflow: 'hidden' }}>
       <Box sx={{ p: 2, pt: 3, display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
-          <Box component="img" src="/qumail_logo.png" sx={{ height: 32, mr: 1 }} alt="QuMail Logo" />
-          <Typography variant="h6" fontWeight="700">QuMail</Typography>
+          <Box component="img" src="/qumail_logo.png" sx={{ height: 32, mr: 1 }} alt="Qumail Logo" />
+          <Typography variant="h6" fontWeight="700">Qumail</Typography>
       </Box>
 
       <Box sx={{ p: 2, pt: { xs: 1, md: 3 } }}>
@@ -319,14 +320,30 @@ const Sidebar = memo(({
           <LinearProgress 
             variant="determinate" 
             value={storagePercentage} 
-            sx={{ height: 6, borderRadius: 3, mb: 1, bgcolor: alpha(theme.palette.primary.main, 0.1) }}
+            sx={{ 
+              height: 8, 
+              borderRadius: 4, 
+              mb: 1.5, 
+              bgcolor: theme.palette.mode === 'dark' ? alpha('#fff', 0.05) : alpha('#000', 0.05),
+              '& .MuiLinearProgress-bar': {
+                borderRadius: 4,
+                bgcolor: storagePercentage > 90 ? '#ef4444' : (storagePercentage > 60 ? '#f59e0b' : '#3b82f6'),
+                backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent)',
+                backgroundSize: '20px 20px',
+                animation: storagePercentage > 80 ? 'stripes 1s linear infinite' : 'none',
+              },
+              '@keyframes stripes': {
+                '0%': { backgroundPosition: '0 0' },
+                '100%': { backgroundPosition: '20px 0' }
+              }
+            }}
           />
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">
               {formatSize(used)} {t('common.of')} {limitGB.toFixed(0)} GB
             </Typography>
-            <Typography variant="caption" fontWeight="700" color={storagePercentage > 90 ? 'error' : 'primary'}>
-              {storagePercentage.toFixed(1)}%
+            <Typography variant="caption" fontWeight="700" color={rawPercentage > 90 ? 'error' : 'primary'}>
+              {rawPercentage.toFixed(1)}%
             </Typography>
           </Box>
           {storagePercentage > 80 && (

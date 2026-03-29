@@ -74,7 +74,7 @@ const PrivacyPolicy = () => {
           <PolicySection
             icon={Lock}
             title="Zero-Knowledge Infrastructure"
-            content="At QuMail, we operate on a strictly zero-knowledge principle. Your encryption keys are generated locally on your device and never transit across our servers in a readable format. This means that even if legally compelled, we cannot access the content of your communications."
+            content="At Qumail, we operate on a strictly zero-knowledge principle. Your encryption keys are generated locally on your device and never transit across our servers in a readable format. This means that even if legally compelled, we cannot access the content of your communications."
             delay={0.1}
           />
 
@@ -83,7 +83,7 @@ const PrivacyPolicy = () => {
           <PolicySection
             icon={Security}
             title="Quantum-Resistant Encryption"
-            content="We employ post-quantum cryptographic standards to ensure your data remains secure not just today, but against the computational threats of tomorrow. Every email sent through QuMail is encapsulated in a quantum-resistant layer, protecting your legacy from future decryption attempts."
+            content="We employ post-quantum cryptographic standards to ensure your data remains secure not just today, but against the computational threats of tomorrow. Every email sent through Qumail is encapsulated in a quantum-resistant layer, protecting your legacy from future decryption attempts."
             delay={0.2}
           />
 
@@ -110,7 +110,7 @@ const PrivacyPolicy = () => {
           <PolicySection
             icon={Gavel}
             title="Legal Transparency"
-            content="QuMail is committed to the highest standards of legal transparency. We will only comply with valid, legally-binding requests from competent authorities, and even then, can only provide encrypted data which we cannot unlock. We operate under jurisdictions with the strongest privacy protections globally."
+            content="Qumail is committed to the highest standards of legal transparency. We will only comply with valid, legally-binding requests from competent authorities, and even then, can only provide encrypted data which we cannot unlock. We operate under jurisdictions with the strongest privacy protections globally."
             delay={0.5}
           />
 

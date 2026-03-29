@@ -1,6 +1,6 @@
-# 🎨 QuMail Frontend (UI)
+# 🎨 Qumail Frontend (UI)
 
-The high-performance React dashboard for the QuMail ecosystem. Built with a focus on 'Glassmorphism' aesthetics and responsive controls.
+The high-performance React dashboard for the Qumail ecosystem. Built with a focus on 'Glassmorphism' aesthetics and responsive controls.
 
 ---
 

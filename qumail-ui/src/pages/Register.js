@@ -155,7 +155,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
 
   const handleDownload = () => {
     const element = document.createElement("a");
-    const file = new Blob([`QuMail Account Recovery Code\n\nName: ${name}\nEmail: ${email}\nRecovery Code: ${recoveryCode}\n\nKeep this file safe and offline.`], {type: 'text/plain'});
+    const file = new Blob([`Qumail Account Recovery Code\n\nName: ${name}\nEmail: ${email}\nRecovery Code: ${recoveryCode}\n\nKeep this file safe and offline.`], {type: 'text/plain'});
     element.href = URL.createObjectURL(file);
     element.download = `qumail_recovery_${email}.txt`;
     document.body.appendChild(element);
@@ -221,7 +221,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
 
             <TextField
               fullWidth
-              label="QuMail Address"
+              label="Qumail Address"
               type="email"
               placeholder="user@qumail.com"
               margin="normal"
@@ -333,7 +333,7 @@ export default function Register({ onRegister, loading, onToggleLogin }) {
         <DialogContent sx={{ textAlign: 'center' }}>
           <DialogContentText sx={{ mb: 3 }}>
             This is the <strong>only way</strong> to recover your account if you forget your password.
-            QuMail is quantum-secure; we cannot reset it for you without this code.
+            Qumail is quantum-secure; we cannot reset it for you without this code.
           </DialogContentText>
           
           <Box 

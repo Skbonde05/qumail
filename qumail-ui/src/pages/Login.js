@@ -134,7 +134,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
     setError("");
 
     if (!email || !password) {
-      setError("Please enter your QuMail email and password");
+      setError("Please enter your Qumail email and password");
       return;
     }
 
@@ -236,7 +236,7 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
             </Avatar>
 
             <Typography variant="h3" fontWeight="800" sx={{ letterSpacing: '-1.5px', mb: 1, fontSize: { xs: '2.2rem', sm: '3rem' } }}>
-              QuMail
+              Qumail
             </Typography>
 
             <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.9rem', sm: '1rem' } }}>

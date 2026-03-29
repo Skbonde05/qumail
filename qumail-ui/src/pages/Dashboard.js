@@ -130,9 +130,9 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
   useEffect(() => {
     const unreadCount = folderCounts.unread || 0;
     if (unreadCount > 0) {
-      document.title = `(${unreadCount}) QuMail - Quantum Secure Email`;
+      document.title = `(${unreadCount}) Qumail - Quantum Secure Email`;
     } else {
-      document.title = `QuMail - Quantum Secure Email`;
+      document.title = `Qumail - Quantum Secure Email`;
     }
   }, [folderCounts.unread]);
 

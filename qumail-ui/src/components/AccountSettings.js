@@ -561,9 +561,10 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
 };
 
 
-  const storagePercentage = user?.storageLimit 
+  const rawPercentage = user?.storageLimit 
     ? (user.storageUsed / user.storageLimit) * 100 
     : 0;
+  const storagePercentage = (user?.storageUsed > 0 && rawPercentage < 2) ? 2 : rawPercentage;
 
   // Manual save preferences button
   const handleSavePreferences = async () => {
@@ -1123,15 +1124,25 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                   <LinearProgress 
                     variant="determinate" 
                     value={storagePercentage} 
-                    sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
-                    color={storagePercentage > 90 ? 'error' : storagePercentage > 70 ? 'warning' : 'primary'}
+                    sx={{ 
+                      flexGrow: 1, 
+                      height: 10, 
+                      borderRadius: 5,
+                      bgcolor: theme.palette.mode === 'dark' ? alpha('#fff', 0.05) : alpha('#000', 0.05),
+                      '& .MuiLinearProgress-bar': {
+                        borderRadius: 5,
+                        backgroundImage: rawPercentage > 85 ? 'linear-gradient(90deg, rgba(255,255,255,0.1) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.1) 75%, transparent 75%, transparent)' : 'none',
+                        backgroundSize: '20px 20px'
+                      }
+                    }}
+                    color={rawPercentage > 90 ? 'error' : rawPercentage > 70 ? 'warning' : 'primary'}
                   />
                   <Typography variant="body2" fontWeight="500">
                     {formatStorage(user?.storageUsed || 0)} / {formatStorage(user?.storageLimit || (15 * 1024 * 1024 * 1024))}
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  {storagePercentage.toFixed(1)}% used
+                  {rawPercentage.toFixed(2)}% used
                 </Typography>
               </Box>
             </Grid>

@@ -93,7 +93,7 @@ const SplashScreen = ({ onComplete }) => {
                   filter: 'drop-shadow(0 12px 24px rgba(26, 115, 232, 0.4))',
                   animation: 'float 4s infinite ease-in-out'
               }}
-              alt="QuMail Logo"
+              alt="Qumail Logo"
             />
           </motion.div>
           

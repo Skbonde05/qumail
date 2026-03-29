@@ -91,9 +91,9 @@ const TopBar = memo(({
         </IconButton>
         
         <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', minWidth: { md: 240 } }}>
-          <Box component="img" src="/qumail_logo.png" sx={{ height: 36, mr: 1.5 }} alt="QuMail Logo" />
+          <Box component="img" src="/qumail_logo.png" sx={{ height: 36, mr: 1.5 }} alt="Qumail Logo" />
           <Typography variant="h5" color="primary" noWrap component="div" sx={{ fontWeight: 800, letterSpacing: '-1px', display: { xs: 'none', md: 'block' } }}>
-            QuMail
+            Qumail
           </Typography>
         </Box>
 

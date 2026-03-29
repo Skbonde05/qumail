@@ -1,4 +1,4 @@
-# 🛡️ QuMail: Quantum-Secure Email Platform
+# 🛡️ Qumail: Quantum-Secure Email Platform
 
 [![React](https://img.shields.io/badge/Frontend-React-61DAFB?logo=react&logoColor=black)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Backend-Node.js-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -6,7 +6,7 @@
 [![Material UI](https://img.shields.io/badge/UI-Material%20UI-007FFF?logo=mui&logoColor=white)](https://mui.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**QuMail** is a state-of-the-art, zero-knowledge email platform designed for the quantum age. Built with a focus on privacy, security, and premium user experience, it leverages a distributed architecture to provide truly confidential communication.
+**Qumail** is a state-of-the-art, zero-knowledge email platform designed for the quantum age. Built with a focus on privacy, security, and premium user experience, it leverages a distributed architecture to provide truly confidential communication.
 
 ---
 
@@ -22,7 +22,7 @@
 
 ## 🏗️ Architecture
 
-The QuMail ecosystem is split into three core services:
+The Qumail ecosystem is split into three core services:
 
 1.  **`qumail-ui`**: The React-based frontend dashboard.
 2.  **`qumail-backend`**: The primary API service handling mail, users, and storage.
@@ -84,7 +84,7 @@ Your dashboard will be available at `http://localhost:3000`.
 
 ## 🔐 Zero-Knowledge Infrastructure
 
-Unlike traditional email providers, QuMail ensures that the server never sees your raw communication:
+Unlike traditional email providers, Qumail ensures that the server never sees your raw communication:
 - **E2E Encryption**: Emails are encrypted on the client side before hitting the wire.
 - **Isolated Key Management**: Key generation and storage are handled by the separate `qumail-km` service, ensuring a breach in the primary backend doesn't compromise your encryption.
 
@@ -94,4 +94,4 @@ Unlike traditional email providers, QuMail ensures that the server never sees yo
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Developed with ❤️ by the QuMail Team.
+Developed with ❤️ by the Qumail Team.

@@ -29,7 +29,7 @@ import {
 } from "@mui/icons-material";
 import { styled } from '@mui/material/styles';
 
-export default function AboutQuMail() {
+export default function AboutQumail() {
   const theme = useTheme();
 
   const teamMembers = [
@@ -75,7 +75,7 @@ export default function AboutQuMail() {
       <Box sx={{ mb: 6, textAlign: "center" }}>
         <Typography variant="h3" fontWeight="800" gutterBottom sx={{ fontSize: { xs: '2.4rem', sm: '3rem' } }}>
           <InfoIcon sx={{ mr: 2, verticalAlign: "middle", fontSize: { xs: 32, sm: 48 } }} />
-          About QuMail
+          About Qumail
         </Typography>
         <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600, mx: "auto" }}>
           A modern email platform designed for productivity, security, and seamless communication
@@ -114,7 +114,7 @@ export default function AboutQuMail() {
 
       {/* Features */}
       <Typography variant="h4" fontWeight="700" gutterBottom sx={{ mb: 4 }}>
-        Why Choose QuMail?
+        Why Choose Qumail?
       </Typography>
       <Grid container spacing={3} sx={{ mb: 6 }}>
         {features.map((feature, index) => (
@@ -203,7 +203,7 @@ export default function AboutQuMail() {
           ))}
         </Box>
         <Typography variant="body1" color="text.secondary">
-          We use modern, scalable technologies to ensure QuMail remains fast, reliable, and secure 
+          We use modern, scalable technologies to ensure Qumail remains fast, reliable, and secure 
           as we continue to grow and serve millions of users worldwide.
         </Typography>
       </Paper>
@@ -292,7 +292,7 @@ export default function AboutQuMail() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="body2" color="text.secondary">
-           {new Date().getFullYear()} QuMail Inc. All rights reserved.
+           {new Date().getFullYear()} Qumail Inc. All rights reserved.
           <br />
           <Link href="#" color="inherit">Privacy Policy</Link> • 
           <Link href="#" color="inherit" sx={{ mx: 1 }}>Terms of Service</Link> • 
