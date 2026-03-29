@@ -85,7 +85,7 @@ export default function HelpSupport({ onCompose }) {
 
       {/* FAQs Section */}
       <Grid container spacing={4}>
-        <Grid item xs={12} md={7}>
+        <Grid size={{ xs: 12, md: 7 }}>
           <Typography variant="h4" fontWeight="800" sx={{ mb: 1, letterSpacing: '-1px' }}>
             Frequently Asked Questions
           </Typography>
@@ -110,7 +110,7 @@ export default function HelpSupport({ onCompose }) {
         </Grid>
 
         {/* Support Sidebar */}
-        <Grid item xs={12} md={5}>
+        <Grid size={{ xs: 12, md: 5 }}>
           <Box sx={{ position: 'sticky', top: 100, p: 5, borderRadius: '40px', bgcolor: theme.palette.mode === 'dark' ? alpha('#fff', 0.02) : alpha('#000', 0.01), border: 1, borderColor: 'divider' }}>
             <Typography variant="h5" fontWeight="900" gutterBottom sx={{ letterSpacing: '-0.5px' }}>
               Still stuck?
@@ -138,11 +138,6 @@ export default function HelpSupport({ onCompose }) {
         </Grid>
       </Grid>
 
-      <Box sx={{ mt: 15, textAlign: 'left', opacity: 0.5 }}>
-        <Typography variant="caption" fontWeight="800">
-          QUMAIL SECURE NETWORK • NODE REF: SUPPORT-v5.0.2
-        </Typography>
-      </Box>
     </Box>
   );
 }

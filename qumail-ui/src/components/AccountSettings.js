@@ -16,6 +16,7 @@ import {
   CardContent,
   LinearProgress,
   Chip,
+  Tooltip,
   useTheme
 } from '@mui/material';
 import {
@@ -33,7 +34,10 @@ import {
   Settings,
   Image,
   AddPhotoAlternate,
-  Wallpaper
+  Wallpaper,
+  ArrowBack as ArrowBackIcon,
+  Delete,
+  Close
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import QuMailService from '../services/QuMailService';
@@ -200,7 +204,7 @@ const BackgroundOption = memo(({ bg, isSelected, onClick }) => (
   </Box>
 ));
 
-export default function AccountSettings({ user: initialUser, themeName, onUpdateTheme, bgImage, onUpdateBgImage }) {
+export default function AccountSettings({ user: initialUser, onUserUpdate, themeName, onUpdateTheme, bgImage, onUpdateBgImage, onBack }) {
   const { t, i18n: i18nInstance } = useTranslation();
   const theme = useTheme();
   const [user, setUser] = useState(null);
@@ -459,6 +463,25 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
     }
   };
 
+  const handleAvatarDelete = async () => {
+    setIsUploadingAvatar(true);
+    try {
+      const res = await QuMailService.deleteAvatar();
+      if (res.success) {
+        setAvatarPreview(null);
+        await fetchProfile();
+        if (onUserUpdate) onUserUpdate({ ...user, avatar: '' });
+        setMessage({ type: "success", text: "Profile photo removed!" });
+      } else {
+        setMessage({ type: "error", text: res.message || "Failed to remove photo" });
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: "Delete failed" });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleAvatarUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -483,6 +506,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
         if (res.success) {
           setAvatarPreview(res.avatarUrl || base64Image);
           await fetchProfile();
+          if (onUserUpdate) onUserUpdate({ ...user, avatar: res.avatarUrl || base64Image });
           setMessage({ type: "success", text: "Profile photo updated!" });
         } else {
           setMessage({ type: "error", text: res.message || "Avatar upload failed" });
@@ -581,6 +605,16 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
   if (!user) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', p: { xs: 2, md: 3 } }}>
+        {onBack && (
+          <Button 
+            startIcon={<ArrowBackIcon />} 
+            onClick={onBack} 
+            sx={{ mb: 2, borderRadius: 2 }}
+            color="primary"
+          >
+            Back to Dashboard
+          </Button>
+        )}
         <Alert severity="error" sx={{ mt: 3 }}>
           {message.text || 'Failed to load profile data. Please check your connection and try again.'}
         </Alert>
@@ -599,14 +633,29 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto', p: { xs: 2, md: 3 } }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight="700" gutterBottom color="primary">
-          {t('settings.account')}
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          {t('settings.profileSub')}
-        </Typography>
+      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {onBack && (
+            <IconButton onClick={onBack} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }} color="primary">
+              <ArrowBackIcon />
+            </IconButton>
+          )}
+          <Box>
+            <Typography variant="h4" fontWeight="700" color="primary">
+              {t('settings.account')}
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              {t('settings.profileSub')}
+            </Typography>
+          </Box>
+        </Box>
+        {onBack && (
+          <Tooltip title="Close Profile Settings">
+            <IconButton onClick={onBack} sx={{ '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) } }}>
+              <Close />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
 
       {/* Message Alert */}
@@ -668,7 +717,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
 
           <Grid container spacing={4}>
             {/* Avatar Section */}
-            <Grid item xs={12} md={4} lg={3}>
+            <Grid size={{ xs: 12, md: 4, lg: 3 }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <Box sx={{ position: 'relative', mb: 2 }}>
                   <ProfileAvatar
@@ -695,6 +744,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                         right: 0,
                         bgcolor: 'primary.main',
                         color: 'white',
+                        zIndex: 2,
                         '&:hover': {
                           bgcolor: 'primary.dark',
                         }
@@ -708,6 +758,29 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                       )}
                     </IconButton>
                   </label>
+                  {avatarPreview && (
+                    <IconButton
+                      size="small"
+                      onClick={handleAvatarDelete}
+                      sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        bgcolor: 'background.paper',
+                        color: 'error.main',
+                        border: 1,
+                        borderColor: 'divider',
+                        zIndex: 2,
+                        '&:hover': {
+                          bgcolor: 'error.main',
+                          color: 'white',
+                        }
+                      }}
+                      disabled={isUploadingAvatar || loading}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  )}
                 </Box>
                 
                 <Typography variant="body2" color="text.secondary" align="center">
@@ -732,11 +805,11 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
             </Grid>
 
             {/* Form Section */}
-            <Grid item xs={12} md={8} lg={9}>
+            <Grid size={{ xs: 12, md: 8, lg: 9 }}>
               {editing ? (
                 <>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <TextField
                         fullWidth
                         label={t('settings.name')}
@@ -750,7 +823,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                       />
                     </Grid>
                     
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <TextField
                         fullWidth
                         label={t('settings.email')}
@@ -771,7 +844,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                     </Typography>
                     
                     <Grid container spacing={2}>
-                      <Grid item xs={12}>
+                      <Grid size={12}>
                         <TextField
                           fullWidth
                           type="password"
@@ -786,7 +859,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                         />
                       </Grid>
                       
-                      <Grid item xs={12} md={6}>
+                      <Grid size={{ xs: 12, md: 6 }}>
                         <TextField
                           fullWidth
                           type="password"
@@ -814,7 +887,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                         )}
                       </Grid>
                       
-                      <Grid item xs={12} md={6}>
+                      <Grid size={{ xs: 12, md: 6 }}>
                         <TextField
                           fullWidth
                           type="password"
@@ -833,7 +906,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                 </>
               ) : (
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                         {t('settings.name')}
@@ -853,7 +926,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                     </Box>
                   </Grid>
                   
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                         Account Created
@@ -903,7 +976,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
 
           <Grid container spacing={4}>
             {/* Language and Timezone */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth margin="normal" disabled={loading}>
                 <InputLabel>{t('settings.language')}</InputLabel>
                 <Select
@@ -936,7 +1009,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
             </Grid>
 
             {/* Themes Section */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1, fontWeight: 600 }}>
                 Choose Visual Theme
               </Typography>
@@ -1018,7 +1091,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                 </Typography>
             </SectionHeader>
             <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 4 }}>
                  <FormControlLabel
                   control={
                     <Switch
@@ -1030,7 +1103,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                   label="Email Notifications"
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1042,7 +1115,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
                   label="Auto-save Drafts"
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1086,7 +1159,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
           </SectionHeader>
 
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Account ID
@@ -1097,7 +1170,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
               </Box>
             </Grid>
             
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   User Role
@@ -1111,7 +1184,7 @@ export default function AccountSettings({ user: initialUser, themeName, onUpdate
               </Box>
             </Grid>
             
-            <Grid item xs={12}>
+            <Grid size={12}>
               <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Storage Usage

@@ -8,7 +8,6 @@
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "@tanstack/react-query": "^5.67.1",
-    "@tanstack/react-query-devtools": "^5.67.1",
     "axios": "^1.13.2",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.26",
@@ -24,7 +23,7 @@
   "scripts": {
     "start": "react-scripts start",
     "electron": "electron ./public/electron.js",
-    "dev": "concurrently \"npm start\" \"npm run electron\"",
+    "dev": "concurrently \"npm start\" \"wait-on http://127.0.0.1:3000 && electron ./public/electron.js\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -49,6 +48,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "electron": "^39.2.7"
+    "electron": "^39.2.7",
+    "wait-on": "^8.0.5"
   }
 }

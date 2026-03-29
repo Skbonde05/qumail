@@ -105,12 +105,13 @@ const HeaderContainer = styled(Box)(({ theme }) => ({
 }));
 
 const ContentContainer = styled(Box)(({ theme }) => ({
-  flex: '0 0 auto',
-  padding: theme.spacing(3, 4, 6, 4),
+  flex: '0 1 auto',
+  padding: theme.spacing(3, 4, 3, 4),
   [theme.breakpoints.down('sm')]: {
-    padding: theme.spacing(2, 2, 4, 2),
+    padding: theme.spacing(2, 2, 2, 2),
   },
   backgroundColor: theme.palette.background.default,
+  minHeight: '20vh',
 }));
 
 const SecurityBadge = styled(Chip)(({ theme, level }) => ({
@@ -224,7 +225,7 @@ const formatTime = (dateInput) => {
 const getSecurityConfig = (securityLevel, theme) => {
   const configs = {
     otp: {
-      label: 'OTP Encrypted',
+      label: 'OTP Quantum-Pad',
       icon: <LockIcon sx={{ fontSize: 16 }} />,
       color: 'error',
       description: 'One-Time Pad - Maximum Security',
@@ -233,26 +234,39 @@ const getSecurityConfig = (securityLevel, theme) => {
       alertIcon: <VerifiedUserIcon />,
     },
     aes: {
-      label: 'AES Encrypted',
+      label: 'AES-256 Quantum',
       icon: <FlashOnIcon sx={{ fontSize: 16 }} />,
       color: 'success',
-      description: 'AES-256 - Fast & Secure',
+      description: 'Advanced Encryption - High Security',
+      badgeColor: theme.palette.success.main,
+      severity: 'success',
+      alertIcon: <SecurityIcon />,
+    },
+    aes256: {
+      label: 'AES-256 Quantum',
+      icon: <FlashOnIcon sx={{ fontSize: 16 }} />,
+      color: 'success',
+      description: 'Advanced Encryption - High Security',
       badgeColor: theme.palette.success.main,
       severity: 'success',
       alertIcon: <SecurityIcon />,
     },
     none: {
-      label: 'Standard',
+      label: 'Standard Security',
       icon: <MailIcon sx={{ fontSize: 16 }} />,
       color: 'default',
-      description: 'No Encryption',
+      description: 'Standard Communication (No Encryption)',
       badgeColor: theme.palette.grey[500],
       severity: 'warning',
       alertIcon: <ErrorIcon />,
     },
   };
   
-  return configs[securityLevel.toLowerCase()] || configs.none;
+  const level = (securityLevel || 'none').toString().toLowerCase();
+  // Handle various AES formats
+  if (level.includes('aes')) return configs.aes256;
+  if (level === 'otp') return configs.otp;
+  return configs[level] || configs.none;
 };
 
 // DecryptModal Component
@@ -403,7 +417,7 @@ const EmailViewer = memo(({
     subject = 'No Subject',
     date = new Date(),
     body = '',
-    encryptionLevel = 'none',
+    encryptionLevel = null,
     cc = EMPTY_ARRAY,
     bcc = EMPTY_ARRAY,
     flags = EMPTY_ARRAY,
@@ -431,8 +445,12 @@ const EmailViewer = memo(({
     .toUpperCase()
     .substring(0, 2) || '?';
 
-  // Determine security level (handle both encryptionLevel and security props)
-  const securityLevel = encryptionLevel || 'none';
+  // Determine security level (handle both encryptionLevel, encryption and security props)
+  // We prioritize non-'none' values
+  const rawLevel = encryptionLevel || emailData.encryption || emailData.securityLevel || emailData.security || 'none';
+  const securityLevel = (rawLevel === 'none' || rawLevel === 'NONE') && (emailData.encryption && emailData.encryption !== 'NONE') 
+    ? emailData.encryption 
+    : rawLevel;
   
   // Get security configuration
   const currentSecurity = getSecurityConfig(securityLevel, theme);
@@ -470,11 +488,15 @@ const EmailViewer = memo(({
   useEffect(() => {
     if (!email) return;
 
-    // Check if email is already decrypted
+    // Check if email is already decrypted (e.g., in the 'Sent' folder)
     const isAES = securityLevel === 'aes' || securityLevel === 'aes256';
-    const emailIsDecrypted = alreadyDecrypted || 
-                            (securityLevel === 'none') || 
-                            (isAES && body && !body.trim().startsWith('{"iv":'));
+    const isOTP = securityLevel === 'otp';
+    const bodyIsPlain = body && typeof body === 'string' && (
+      (isAES && !body.trim().startsWith('{"iv":')) || 
+      (isOTP && !body.trim().startsWith('[otp|'))
+    );
+
+    const emailIsDecrypted = alreadyDecrypted || (securityLevel === 'none') || bodyIsPlain;
     
     // Only update if state actually changed
     setIsDecrypted(prev => prev !== emailIsDecrypted ? emailIsDecrypted : prev);
@@ -682,7 +704,7 @@ const EmailViewer = memo(({
         <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
           <Box>
             <Typography variant="subtitle2" fontWeight="600">
-              {securityLevel === 'otp' ? 'OTP Encrypted' : 'AES Encrypted'}
+              {currentSecurity.label}
             </Typography>
             <Typography variant="body2">
               This email is encrypted with {currentSecurity.description}.
@@ -746,7 +768,7 @@ const EmailViewer = memo(({
             <Box display="flex" alignItems="center" justifyContent="center" flexDirection="column" py={4}>
               <LockIcon sx={{ fontSize: 48, color: currentSecurity.badgeColor, mb: 2 }} />
               <Typography variant="h6" gutterBottom align="center">
-                {securityLevel === 'otp' ? 'OTP Encrypted' : 'AES Encrypted'}
+                {currentSecurity.label}
               </Typography>
               <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
                 This message is encrypted with {currentSecurity.description}.
@@ -1148,6 +1170,14 @@ const EmailViewer = memo(({
                   <strong>Bcc:</strong> {bcc.join(', ')}
                 </Typography>
               )}
+              <Divider sx={{ my: 1, opacity: 0.5 }} />
+              <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={1}>
+                <strong>Security:</strong> 
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: currentSecurity.badgeColor }}>
+                  {currentSecurity.icon} {currentSecurity.label}
+                </Box>
+                <span>— {currentSecurity.description}</span>
+              </Typography>
             </Box>
           </Collapse>
 
@@ -1166,7 +1196,7 @@ const EmailViewer = memo(({
 
         {/* Bottom action bar - Sticky */}
         <Box sx={{ 
-          p: { xs: 1.5, sm: 2 }, 
+          p: { xs: 1, sm: 1.25 }, 
           borderTop: (theme) => `1px solid ${theme.palette.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
@@ -1177,28 +1207,36 @@ const EmailViewer = memo(({
           position: 'sticky',
           bottom: 0,
           zIndex: 10,
-          boxShadow: theme => theme.palette.mode === 'dark' ? '0 -4px 12px rgba(0,0,0,0.4)' : '0 -4px 12px rgba(0,0,0,0.05)'
+          boxShadow: theme => theme.palette.mode === 'dark' ? '0 -4px 12px rgba(0,0,0,0.4)' : '0 -4px 12px rgba(0,0,0,0.05)',
+          minHeight: '48px'
         }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.6rem', opacity: 0.8 }}>
              Quick Actions
           </Typography>
           
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
+          <Stack 
+            direction="row" 
+            spacing={1} 
+            sx={{ 
+              width: { xs: '100%', sm: 'auto' }, 
+              justifyContent: { xs: 'center', sm: 'flex-end' } 
+            }}
+          >
+            <Button 
+              size="small" 
+              variant="outlined" 
               startIcon={<ReplyIcon />}
-              onClick={() => onReply && onReply(email)}
-              size="small"
-              disabled={!isDecrypted}
+              onClick={() => onAction(email, 'reply')}
+              sx={{ borderRadius: '10px', textTransform: 'none', fontWeight: 700, px: 2 }}
             >
               Reply
             </Button>
-            <Button
-              variant="outlined"
+            <Button 
+              size="small" 
+              variant="outlined" 
               startIcon={<ForwardIcon />}
-              onClick={() => onForward && onForward(email)}
-              size="small"
-              disabled={!isDecrypted}
+              onClick={() => onAction(email, 'forward')}
+              sx={{ borderRadius: '10px', textTransform: 'none', fontWeight: 700, px: 2 }}
             >
               Forward
             </Button>

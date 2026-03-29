@@ -155,9 +155,6 @@ const SplashScreen = ({ onComplete }) => {
             animate={{ opacity: 0.4, y: 0 }}
             transition={{ delay: 2.5, duration: 1 }}
           >
-            <Typography variant="caption" sx={{ letterSpacing: '4px', fontWeight: '900', fontSize: '0.7rem' }}>
-              ENGINEERED FOR SUPREME PRIVACY
-            </Typography>
           </motion.div>
         </Box>
 

@@ -26,7 +26,7 @@ Create a `.env` file in the root of this folder:
 PORT=5000
 MONGODB_URI=your_mongodb_uri
 JWT_SECRET=your_jwt_secret
-KM_SERVER_URL=http://localhost:5001
+KM_SERVER_URL=http://localhost:6000
 REFRESH_TOKEN_SECRET=your_refresh_secret
 NODE_ENV=development
 ```

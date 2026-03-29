@@ -13,6 +13,10 @@ const EmailViewer = lazy(() => import('../components/EmailViewer'));
 const PrivacyPolicy = lazy(() => import('../components/PrivacyPolicy'));
 const AboutQuMail = lazy(() => import('../components/AboutQuMail'));
 const HelpSupport = lazy(() => import('../components/HelpSupport'));
+const AccountSettings = lazy(() => import('../components/AccountSettings'));
+const AppSettings = lazy(() => import('../components/AppSettings'));
+const SecuritySettings = lazy(() => import('../components/SecuritySettings'));
+
 
 
 const DRAWER_WIDTH = 260;
@@ -87,6 +91,7 @@ const Dashboard = ({
     markNotificationAsRead,
     deleteNotification,
     markAllNotificationsAsRead,
+    deleteAllNotifications,
     fetchEmails,
     searchQuery,
     setSearchQuery,
@@ -132,16 +137,17 @@ const Dashboard = ({
   }, [isMobile, setActiveFolder]);
 
   const handleSectionChange = useCallback((section) => {
-    if (['settings', 'account', 'security', 'themes'].includes(section)) {
+    // Quick drawer only for profile menu quick actions (legacy)
+    if (['quick-settings', 'quick-account'].includes(section)) {
       setQuickSettingsOpen(prev => !prev);
       return;
     }
+    // Full page navigation
     setActiveSection(section);
-    if (section !== 'inbox' && section !== 'folder') {
-      setSelectedEmailId(null);
-    }
-    setMobileOpen(false);
-  }, []);
+    setSelectedEmailId(null);
+    setQuickSettingsOpen(false);
+    if (isMobile) setMobileOpen(false);
+  }, [isMobile]);
 
   const handleReply = useCallback((email) => {
     setComposeOpen(true);
@@ -208,6 +214,17 @@ const Dashboard = ({
     setLabelDialogOpen(true);
   }, []);
 
+  const handleEmailClick = useCallback((email) => {
+    if (activeFolder === 'drafts') {
+      setDraftToEdit(email);
+      setComposeOpen(true);
+    } else {
+      setSelectedEmailId(email.uid || email.id);
+    }
+  }, [activeFolder]);
+
+  const handleRefresh = useCallback(() => fetchEmails(), [fetchEmails]);
+
   useEffect(() => {
     const unreadCount = folderCounts.unread || 0;
     if (unreadCount > 0) {
@@ -236,32 +253,61 @@ const Dashboard = ({
             onReplyAll={handleReplyAll}
             onForward={handleForward}
           />
-
         ) : (
-          activeSection === 'about' ? <AboutQuMail /> :
-          activeSection === 'privacy' ? <PrivacyPolicy /> :
-          activeSection === 'help' ? <HelpSupport onCompose={() => setComposeOpen(true)} /> :
-          <Inbox 
-            emails={emails} 
-            folderName={activeFolder} 
-            loading={loading}
-            labels={labels}
-            page={page}
-            setPage={setPage}
-            total={total}
-            limit={limit}
-            density={density}
-            onEmailClick={(email) => {
-              if (activeFolder === 'drafts') {
-                setDraftToEdit(email);
-                setComposeOpen(true);
-              } else {
-                setSelectedEmailId(email.uid || email.id);
-              }
-            }}
-            onAction={handleAction}
-            onRefresh={() => fetchEmails()}
-          />
+          <Box sx={{ flexGrow: 1 }}>
+
+            {activeSection === 'settings' && (
+              <AppSettings 
+                user={user}
+                darkMode={darkMode} 
+                onToggleTheme={onToggleTheme}
+                onBack={() => handleSectionChange('inbox')}
+              />
+            )}
+            {activeSection === 'account' && (
+              <AccountSettings 
+                user={user}
+                onUserUpdate={onUserUpdate}
+                themeName={themeName}
+                onUpdateTheme={onUpdateTheme}
+                bgImage={bgImage}
+                onUpdateBgImage={onUpdateBgImage}
+                onBack={() => handleSectionChange('inbox')}
+              />
+            )}
+            {activeSection === 'security' && (
+              <SecuritySettings 
+                user={user}
+                onUserUpdate={onUserUpdate}
+                onBack={() => handleSectionChange('inbox')}
+              />
+            )}
+            {activeSection === 'about' && (
+              <AboutQuMail />
+            )}
+            {activeSection === 'privacy' && (
+              <PrivacyPolicy />
+            )}
+            {activeSection === 'help' && (
+              <HelpSupport onCompose={() => setComposeOpen(true)} />
+            )}
+            {activeSection === 'inbox' && (
+              <Inbox 
+                emails={emails} 
+                folderName={activeFolder} 
+                loading={loading}
+                labels={labels}
+                page={page}
+                setPage={setPage}
+                total={total}
+                limit={limit}
+                density={density}
+                onEmailClick={handleEmailClick}
+                onAction={handleAction}
+                onRefresh={handleRefresh}
+              />
+            )}
+          </Box>
         )}
       </Suspense>
     );
@@ -413,7 +459,7 @@ const Dashboard = ({
           onMarkAsRead={(id) => markNotificationAsRead(id)}
           onMarkAllAsRead={() => { markAllNotificationsAsRead(); setNotifAnchor(null); }}
           onDelete={(id) => deleteNotification(id)}
-          onDeleteAll={() => { /* In a real app add batch delete API */ setNotifAnchor(null); }}
+          onDeleteAll={() => { deleteAllNotifications(); setNotifAnchor(null); }}
           onShowAll={() => { setNotifAnchor(null); handleSectionChange('notifications'); }}
         />
 
@@ -432,11 +478,11 @@ const Dashboard = ({
         }}
         PaperProps={{
           sx: {
-            width: SETTING_DRAWER_WIDTH,
-            top: 65,
-            height: 'calc(100% - 65px)',
+            width: { xs: '100%', sm: SETTING_DRAWER_WIDTH },
+            top: { xs: 0, sm: 65 },
+            height: { xs: '100%', sm: 'calc(100% - 65px)' },
             boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 8px 10px -5px rgba(0,0,0,0.2), 0 16px 24px 2px rgba(0,0,0,0.14), 0 6px 30px 5px rgba(0,0,0,0.12)',
-            borderLeft: `1px solid ${theme.palette.divider}`,
+            borderLeft: { xs: 'none', sm: `1px solid ${theme.palette.divider}` },
             backgroundImage: 'none',
           }
         }}
@@ -461,11 +507,6 @@ const Dashboard = ({
         anchorEl={profileAnchor}
         onClose={() => setProfileAnchor(null)}
         onLogout={onLogout}
-        onAppSettings={() => handleSectionChange('settings')}
-        onAccountSettings={() => handleSectionChange('account')}
-        onThemes={() => handleSectionChange('account')}
-        onPrivacy={() => handleSectionChange('privacy')}
-        onHelp={() => handleSectionChange('help')}
         user={user}
       />
 

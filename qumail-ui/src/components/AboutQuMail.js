@@ -97,7 +97,7 @@ export default function AboutQumail() {
       {/* Stats */}
       <Grid container spacing={3} sx={{ mb: 6 }}>
         {stats.map((stat, index) => (
-          <Grid item xs={6} sm={3} key={index}>
+          <Grid size={{ xs: 6, sm: 3 }} key={index}>
             <Card sx={{ textAlign: "center", height: "100%" }}>
               <CardContent>
                 <Typography variant="h2" fontWeight="800" color="primary" gutterBottom>
@@ -118,7 +118,7 @@ export default function AboutQumail() {
       </Typography>
       <Grid container spacing={3} sx={{ mb: 6 }}>
         {features.map((feature, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
             <Card sx={{ height: "100%", textAlign: "center" }}>
               <CardContent>
                 <Box sx={{ 
@@ -154,7 +154,7 @@ export default function AboutQumail() {
       </Typography>
       <Grid container spacing={3} sx={{ mb: 6 }}>
         {teamMembers.map((member, index) => (
-          <Grid item xs={6} sm={3} key={index}>
+          <Grid size={{ xs: 6, sm: 3 }} key={index}>
             <Card sx={{ textAlign: "center" }}>
               <CardContent>
                 <Avatar
@@ -210,7 +210,7 @@ export default function AboutQumail() {
 
       {/* Version & Updates */}
       <Grid container spacing={3} sx={{ mb: 6 }}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
@@ -236,7 +236,7 @@ export default function AboutQumail() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>

@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import {
   Key, Refresh, Visibility, VisibilityOff, ContentCopy, History, Security, VerifiedUser, Lock, QrCode,
-  Laptop, Smartphone, Tablet, Public, Language, Info, Warning, Error as ErrorIcon, CheckCircle
+  Laptop, Smartphone, Tablet, Public, Language, Info, Warning, Error as ErrorIcon, CheckCircle, ArrowBack as ArrowBackIcon, Close
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import QuMailService from '../services/QuMailService';
@@ -65,7 +65,7 @@ const StatusBadge = ({ type }) => {
   }
 };
 
-export default function SecuritySettings({ user: propUser }) {
+export default function SecuritySettings({ user: propUser, onBack, onUserUpdate }) {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -194,13 +194,34 @@ export default function SecuritySettings({ user: propUser }) {
   };
 
   return (
-    <Box key="security-center" sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" fontWeight="800" color="primary" sx={{ mb: 4, letterSpacing: '-0.5px', fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
-        Security Center
-      </Typography>
+    <Box sx={{ maxWidth: 1000, mx: 'auto', p: { xs: 2, md: 4 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {onBack && (
+            <IconButton onClick={onBack} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }} color="primary">
+              <ArrowBackIcon />
+            </IconButton>
+          )}
+          <Box>
+            <Typography variant="h4" fontWeight="800" color="primary" sx={{ letterSpacing: '-0.5px', fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
+              Security Center
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Manage your encryption and session safety
+            </Typography>
+          </Box>
+        </Box>
+        {onBack && (
+          <Tooltip title="Close Security Center">
+            <IconButton onClick={onBack} sx={{ '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) } }}>
+              <Close />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
       <Grid container spacing={4} alignItems="stretch">
         {/* Left Column: Settings */}
-        <Grid item xs={12} md={5}>
+        <Grid size={{ xs: 12, md: 5 }}>
           {/* 2FA Section */}
           <StyledCard sx={{ 
             border: user?.settings?.twoFactorEnabled ? '1px solid #4caf50' : '1px solid #ff9800', 
@@ -268,7 +289,7 @@ export default function SecuritySettings({ user: propUser }) {
         </Grid>
 
         {/* Right Column: Security Dashboard & Activity */}
-        <Grid item xs={12} md={7}>
+        <Grid size={{ xs: 12, md: 7 }}>
           {/* Security Summary Dashboard */}
           <Box sx={{ mb: 3, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
             <StyledCard sx={{ flex: 1, mb: 0, backgroundColor: alpha(theme.palette.primary.main, 0.04) }}>

@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { AppBar, Toolbar, IconButton, Typography, Badge, Box, Avatar, Tooltip, InputBase, useTheme } from '@mui/material';
+import React, { memo, useState, useEffect, useCallback } from 'react';
+import { AppBar, Toolbar, IconButton, Typography, Badge, Box, Avatar, Tooltip, InputBase, useTheme, useMediaQuery } from '@mui/material';
 import { Menu as MenuIcon, Search, Brightness4, Brightness7, Notifications, FlashOn as Zap, Close, Settings } from '@mui/icons-material';
 import { styled, alpha, keyframes } from '@mui/material/styles';
 
@@ -68,10 +68,37 @@ const TopBar = memo(({
   darkMode, 
   onToggleTheme,
   isProfileMenuOpen,
-  searchQuery,
+  searchQuery: parentSearchQuery,
   onSearchChange
 }) => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  // Local state for search to improve INP performance
+  const [localSearch, setLocalSearch] = useState(parentSearchQuery || '');
+
+  // Sync with parent when clearing or external updates
+  useEffect(() => {
+    if (parentSearchQuery !== localSearch) {
+      setLocalSearch(parentSearchQuery || '');
+    }
+  }, [parentSearchQuery]);
+
+  // Debounced parent update
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (localSearch !== parentSearchQuery) {
+        onSearchChange(localSearch);
+      }
+    }, 300); // Short debounce for typing responsiveness
+
+    return () => clearTimeout(handler);
+  }, [localSearch, parentSearchQuery, onSearchChange]);
+
+  const handleClearSearch = useCallback(() => {
+    setLocalSearch('');
+    onSearchChange('');
+  }, [onSearchChange]);
 
   return (
     <AppBar 
@@ -84,22 +111,22 @@ const TopBar = memo(({
         borderBottom: `1px solid ${theme.palette.divider}`
       }}
     >
-      <Toolbar sx={{ minHeight: 64 }}>
-        <IconButton color="inherit" edge="start" onClick={onDrawerToggle} sx={{ mr: 2, display: { md: 'none' } }}>
+      <Toolbar sx={{ minHeight: 64, px: { xs: 1, sm: 2, md: 3 } }}>
+        <IconButton color="inherit" edge="start" onClick={onDrawerToggle} sx={{ mr: 1, display: { md: 'none' } }}>
           <MenuIcon />
         </IconButton>
         
-        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: { md: 240 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: { md: 240 }, mr: { xs: 1, sm: 2 } }}>
            <Typography variant="h4" color="primary" noWrap component="div" sx={{ 
              fontWeight: 900, 
              letterSpacing: '-1.5px', 
              display: 'flex', 
              alignItems: 'center', 
              gap: 1.5,
-             fontSize: '1.85rem'
+             fontSize: { xs: '1.5rem', sm: '1.85rem' }
            }}>
-            <Box component="img" src="/qumail_logo.png" sx={{ height: 34 }} />
-            <Box component="span" sx={{ display: { xs: 'none', sm: 'block' } }}>Qumail</Box>
+            <Box component="img" src="/qumail_logo.png" sx={{ height: { xs: 28, sm: 34 } }} />
+            <Box component="span" sx={{ display: { xs: 'none', lg: 'block' } }}>Qumail</Box>
           </Typography>
         </Box>
 
@@ -109,15 +136,15 @@ const TopBar = memo(({
                <Search fontSize="small" />
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder="Search in mail"
+              placeholder={isMobile ? "Search..." : "Search in mail"}
               inputProps={{ 'aria-label': 'search' }}
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
             />
-            {searchQuery && (
+            {localSearch && (
               <IconButton 
                 size="small" 
-                onClick={() => onSearchChange('')}
+                onClick={handleClearSearch}
                 sx={{ mr: 0.5, color: 'text.secondary' }}
               >
                 <Close fontSize="small" />
@@ -126,7 +153,7 @@ const TopBar = memo(({
           </SearchBar>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.5 } }}>
           <Tooltip title={darkMode ? "Dark Mode" : "Light Mode"}>
             <IconButton onClick={onToggleTheme} color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
               {darkMode ? <Brightness7 fontSize="small" /> : <Brightness4 fontSize="small" />}
@@ -149,7 +176,7 @@ const TopBar = memo(({
 
           <Box 
             sx={{ 
-              ml: 1, 
+              ml: { xs: 0.5, sm: 1 }, 
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -165,14 +192,14 @@ const TopBar = memo(({
             <Avatar 
               src={user?.avatar} 
               sx={{ 
-                width: 32, 
-                height: 32, 
+                width: { xs: 28, sm: 32 }, 
+                height: { xs: 28, sm: 32 }, 
                 bgcolor: 'primary.main', 
                 fontSize: '14px',
                 border: theme => `1px solid ${theme.palette.divider}`,
               }}
             >
-              {user?.name?.charAt(0) || user?.email?.charAt(0)}
+              {(user?.name?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase()}
             </Avatar>
           </Box>
         </Box>
@@ -182,3 +209,4 @@ const TopBar = memo(({
 });
 
 export default TopBar;
+

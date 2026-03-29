@@ -13,18 +13,6 @@ const StyledCard = styled(Card)(({ theme }) => ({
   overflow: 'visible',
 }));
 
-const HeroSection = styled(Box)(({ theme }) => ({
-  backgroundColor: alpha(theme.palette.primary.main, 0.05),
-  borderRadius: 24,
-  padding: theme.spacing(6, 4),
-  [theme.breakpoints.down('sm')]: {
-    padding: theme.spacing(4, 2),
-  },
-  textAlign: 'center',
-  marginBottom: theme.spacing(4),
-  position: 'relative',
-  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-}));
 
 const PolicySection = ({ icon: Icon, title, content, delay = 0 }) => {
   const theme = useTheme();
@@ -56,18 +44,9 @@ const PrivacyPolicy = () => {
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1000, mx: 'auto' }}>
-      <HeroSection>
-        <Shield sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-        <Typography variant="h3" fontWeight="800" gutterBottom sx={{
-          color: 'primary.main',
-          fontSize: { xs: '2.4rem', sm: '3rem', md: '3.75rem' }
-        }}>
-          Privacy Manifest
-        </Typography>
-        <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.8, maxWidth: 600, mx: 'auto' }}>
-          Your privacy is not a setting; it's our fundamental architecture. Quantum-secure and completely zero-knowledge.
-        </Typography>
-      </HeroSection>
+      <Typography variant="h4" fontWeight="800" color="primary" sx={{ mb: 4, letterSpacing: '-0.5px' }}>
+        Privacy Policy
+      </Typography>
 
       <StyledCard>
         <CardContent sx={{ p: { xs: 3, md: 6 } }}>
@@ -114,6 +93,15 @@ const PrivacyPolicy = () => {
             delay={0.5}
           />
 
+          <Divider sx={{ my: 4, opacity: 0.5 }} />
+
+          <PolicySection
+            icon={Shield}
+            title="Zero-Tracking Guarantee"
+            content="We do not use third-party analytics (like Google Analytics), tracking pixels, or advertising frameworks. Our system is designed to be completely invisible to the commercial tracking ecosystem. We use only essential, locally-resident session identifiers which expire immediately after use."
+            delay={0.6}
+          />
+
           <Box sx={{
             mt: 6,
             p: 3,
@@ -124,18 +112,18 @@ const PrivacyPolicy = () => {
             gap: 2
           }}>
             <Info color="info" />
-            <Typography variant="caption" color="text.secondary">
-              Last updated: March 2026.
-            </Typography>
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Last updated: March 2026.
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Questions about your privacy? Contact our security team at <Typography component="span" variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>security@qumail.com</Typography>
+              </Typography>
+            </Box>
           </Box>
         </CardContent>
       </StyledCard>
 
-      <Box sx={{ textAlign: 'center', mt: 4, mb: 10 }}>
-        <Typography variant="body2" color="text.secondary">
-          Questions about your privacy? Contact our security team at <Typography component="span" variant="body2" color="primary" sx={{ fontWeight: 'bold' }}>security@qumail.com</Typography>
-        </Typography>
-      </Box>
     </Box>
   );
 };

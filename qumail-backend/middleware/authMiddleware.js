@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { isQumailAddress } = require('../config/mailDomain');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'qumail-quantum-secure-key-2024';
 
@@ -40,10 +41,7 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-const validateQumailEmail = (email) => {
-  if (!email) return false;
-  return email.toLowerCase().endsWith('@qumail.com');
-};
+const validateQumailEmail = (email) => isQumailAddress(email);
 
 module.exports = {
   verifyToken,

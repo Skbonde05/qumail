@@ -4,8 +4,8 @@ import {
   Box, Button, List, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Avatar, Menu, MenuItem, LinearProgress, useTheme, ListSubheader, IconButton, Tooltip
 } from "@mui/material";
 import { 
-  Create, Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, Settings as SettingsIcon, HelpOutline, AccessTime, Report, Circle, Add,
-  ManageAccounts, Palette, Policy, SettingsSuggest, CreateOutlined, ExitToApp
+  Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, HelpOutline, AccessTime, Report, Circle, Add,
+  Palette, ExitToApp, Policy
 } from "@mui/icons-material";
 import { styled, alpha } from "@mui/material/styles";
 
@@ -97,7 +97,6 @@ const ProfileMenu = ({
   anchorEl, 
   onClose, 
   onLogout, 
-  onAppSettings, 
   user 
 }) => {
   const { t } = useTranslation();
@@ -129,12 +128,6 @@ const ProfileMenu = ({
       </Box>
       <Divider />
       
-      <MenuItem onClick={() => { onAppSettings(); onClose(); }} sx={{ py: 1.5 }}>
-        <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-        <ListItemText primary={<Typography variant="body2" fontWeight="600">Settings</Typography>} />
-      </MenuItem>
-
-      <Divider />
       <MenuItem onClick={onLogout} sx={{ py: 1.5, color: 'error.main' }}>
         <ListItemIcon><ExitToApp fontSize="small" color="error" /></ListItemIcon>
         <ListItemText primary={<Typography variant="body2" fontWeight="600">Log out</Typography>} />
@@ -158,16 +151,23 @@ const Sidebar = ({
   const { t } = useTranslation();
   const theme = useTheme();
 
-  const sections = [
-    { id: "inbox", icon: Inbox, text: "Inbox", count: folderCounts.inbox },
-    { id: "starred", icon: Star, text: "Starred", count: folderCounts.starred },
-    { id: "important", icon: LabelImportant, text: "Important", count: folderCounts.important },
-    { id: "snoozed", icon: AccessTime, text: "Snoozed", count: folderCounts.snoozed },
-    { id: "sent", icon: Send, text: "Sent", count: folderCounts.sent },
-    { id: "drafts", icon: Drafts, text: "Drafts", count: folderCounts.drafts },
-    { id: "archive", icon: Archive, text: "Archive", count: folderCounts.archive },
-    { id: "spam", icon: Report, text: "Spam", count: folderCounts.spam },
-    { id: "trash", icon: Delete, text: "Trash", count: folderCounts.trash },
+
+
+  const folderSections = [
+    { id: "inbox", icon: Inbox, text: "Inbox", count: folderCounts.inbox || 0 },
+    { id: "starred", icon: Star, text: "Starred", count: folderCounts.starred || 0 },
+    { id: "important", icon: LabelImportant, text: "Important", count: folderCounts.important || 0 },
+    { id: "snoozed", icon: AccessTime, text: "Snoozed", count: folderCounts.snoozed || 0 },
+    { id: "sent", icon: Send, text: "Sent", count: folderCounts.sent || 0 },
+    { id: "drafts", icon: Drafts, text: "Drafts", count: folderCounts.drafts || 0 },
+    { id: "archive", icon: Archive, text: "Archive", count: folderCounts.archive || 0 },
+    { id: "spam", icon: Report, text: "Spam", count: folderCounts.spam || 0 },
+    { id: "trash", icon: Delete, text: "Trash", count: folderCounts.trash || 0 },
+  ];
+
+  const pageSections = [
+    { id: 'help', icon: HelpOutline, text: 'Help & Support', isSection: true },
+    { id: 'privacy', icon: Policy, text: 'Privacy Policy', isSection: true },
   ];
 
   return (
@@ -202,14 +202,17 @@ const Sidebar = ({
       </Box>
 
       <Box sx={{ flex: 1, overflowY: "auto", pt: 1 }}>
-        <List disablePadding>
-          {sections.map((section) => (
+
+
+        {/* Folders */}
+        <List disablePadding sx={{ mb: 2 }}>
+          {folderSections.map((section) => (
             <SidebarItem
               key={section.id}
               icon={section.icon}
               text={t(`sidebar.${section.id}`)}
               count={section.count}
-              selected={activeSection === 'inbox' && activeFolder === section.id}
+              selected={activeFolder === section.id}
               onClick={() => onFolderChange(section.id)}
             />
           ))}
@@ -231,7 +234,7 @@ const Sidebar = ({
               icon={() => <Circle sx={{ color: label.color, fontSize: 10 }} />}
               text={label.name}
               count={folderCounts.custom?.[label.id]}
-              selected={activeSection === 'inbox' && activeFolder === label.id}
+              selected={activeFolder === label.id}
               onClick={() => onFolderChange(label.id)}
               actions={[
                 {
@@ -253,13 +256,17 @@ const Sidebar = ({
            <Divider sx={{ opacity: 0.5 }} />
         </Box>
         
-        <List disablePadding sx={{ mb: 1 }}>
-          <SidebarItem 
-            icon={HelpOutline} 
-            text="Help & Support" 
-            selected={activeSection === 'help'} 
-            onClick={() => onSectionChange('help')} 
-          />
+        {/* Pages */}
+        <List disablePadding sx={{ mt: 2 }}>
+          {pageSections.map((section) => (
+            <SidebarItem
+              key={section.id}
+              icon={section.icon}
+              text={t(`sidebar.${section.id}`)}
+              selected={activeSection === section.id}
+              onClick={() => onSectionChange(section.id)}
+            />
+          ))}
         </List>
       </Box>
     </Box>

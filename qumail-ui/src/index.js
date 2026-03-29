@@ -4,7 +4,6 @@ import './index.css';
 import App from './App';
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import './i18n';
 
 // Create a client for React Query
@@ -28,6 +27,5 @@ root.render(
     >
       <App />
     </SnackbarProvider>
-    <ReactQueryDevtools initialIsOpen={false} />
   </QueryClientProvider>
 );

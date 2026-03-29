@@ -4,8 +4,33 @@ require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
+
+/* -------------------- PERSISTENCE -------------------- */
+const STORE_PATH = path.join(__dirname, 'keystore.json');
+
+// Load initial store
+let keyStore = {};
+if (fs.existsSync(STORE_PATH)) {
+  try {
+    keyStore = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
+    console.log(' KeyStore loaded from disk');
+  } catch (e) {
+    console.error(' Critical error: Failed to parse keystore.json. Starting fresh.', e);
+    keyStore = {};
+  }
+}
+
+const saveStore = () => {
+  try {
+    fs.writeFileSync(STORE_PATH, JSON.stringify(keyStore, null, 2));
+  } catch (e) {
+    console.error(' Failed to save keystore to disk:', e);
+  }
+};
 
 /* -------------------- CONFIGURATION -------------------- */
 const PORT = process.env.PORT || 6000;
@@ -54,7 +79,7 @@ const apiKeyMiddleware = (req, res, next) => {
 app.use(apiKeyMiddleware);
 
 /* -------------------- KEY STORE -------------------- */
-const keyStore = {};
+// keyStore is now initialized in the PERSISTENCE section
 
 // Cleanup expired keys periodically
 setInterval(() => {
@@ -72,6 +97,8 @@ setInterval(() => {
       delete keyStore[email];
     }
   });
+  
+  saveStore(); // Save after cleanup
   
   if (process.env.LOG_LEVEL === 'debug') {
     console.log(` Cleaned expired keys. Total users: ${Object.keys(keyStore).length}`);
@@ -266,6 +293,8 @@ app.post("/new-key", (req, res) => {
       console.log(` New key generated for ${email}`);
     }
 
+    saveStore(); // Persist changes
+
     return res.status(201).json({
       success: true,
       message: "New quantum key generated",
@@ -338,10 +367,12 @@ app.post("/get-key", (req, res) => {
       if (process.env.LOG_LEVEL === 'debug') {
         console.log(` Auto-generated key for ${email}`);
       }
+      saveStore(); // Persist auto-generated key
     } else {
       // Mark existing key as used
       keyStore[email][keyIndex].used = true;
       keyStore[email][keyIndex].lastUsed = now;
+      saveStore(); // Persist 'used' status
     }
 
     const keyData = keyStore[email][keyIndex];
@@ -479,6 +510,8 @@ app.post("/cleanup", (req, res) => {
         delete keyStore[email];
       }
     });
+
+    saveStore();
 
     res.json({
       success: true,

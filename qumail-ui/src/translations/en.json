@@ -10,7 +10,9 @@
     "important": "Important",
     "spam": "Spam",
     "compose": "Compose",
-    "storage": "Storage Usage"
+    "storage": "Storage Usage",
+    "help": "Help and Support",
+    "privacy": "Privacy Policy"
   },
   "settings": {
     "app": "App Setting",
@@ -57,7 +59,7 @@
     "confirm": "Confirm",
     "labels": "LABELS",
     "createLabel": "Create new label",
-    "help": "Help",
+    "help": "Help and Support",
     "of": "of",
     "upgrade": "Upgrade",
     "loadingMailbox": "Loading your secure mailbox...",

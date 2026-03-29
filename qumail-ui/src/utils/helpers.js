@@ -1,5 +1,5 @@
 // helpers.js - Common UI helper functions
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 
 export const determineSecurityLevel = (body) => {
   if (!body || typeof body !== 'string') return "none";
@@ -45,3 +45,6 @@ export const validateQumailEmail = (email) => {
   if (!email) return false;
   return email.toLowerCase().endsWith('@qumail.com');
 };
+
+export const isValidEmailAddress = (email) =>
+  typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());

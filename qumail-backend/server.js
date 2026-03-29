@@ -6,6 +6,7 @@ const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const { startInboundSmtp } = require('./utils/inboundSmtp');
 const authRoutes = require("./routes/authRoutes");
 const mailRoutes = require("./routes/mailRoutes");
 const otpRoutes = require("./routes/otpRoutes"); // Changed path as per instruction
@@ -37,6 +38,12 @@ apiGateway(app);
 
 // Routes
 app.use("/api/auth", authRoutes);
+
+// Legacy GET links (old templates) → canonical auth route
+app.get('/api/verify-reset-token/:token', (req, res) => {
+  res.redirect(307, `/api/auth/verify-reset-token/${encodeURIComponent(req.params.token)}`);
+});
+
 app.use("/api/mail", mailRoutes);
 app.use("/api/otp", otpRoutes);
 
@@ -80,4 +87,5 @@ mongoose.connect(MONGODB_URI)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(` Server running on port ${PORT}`);
+  startInboundSmtp();
 });

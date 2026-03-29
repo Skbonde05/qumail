@@ -18,9 +18,11 @@ export const useEmailsQuery = (folder, page = 1, limit = 50, enabled = true) => 
       // Ensure we return an object with emails and total if possible
       // QuMailService.fetchEmails currently returns response.data.emails || []
       // We might need to check if it's an array or object
-      return Array.isArray(data) ? { emails: data, total: data.length } : data;
+      return data || { emails: [], total: 0 };
     },
     enabled: !!folder && enabled,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     staleTime: 1000 * 60, // 1 minute
   });
 };
@@ -101,6 +103,8 @@ export const useNotificationMutation = () => {
     mutationFn: ({ id, action }) => {
       if (action === 'read') return QuMailService.updateNotificationStatus(id, 'read');
       if (action === 'delete') return QuMailService.deleteNotification(id);
+      if (action === 'markAllRead') return QuMailService.markAllNotificationsAsRead();
+      if (action === 'deleteAll') return QuMailService.deleteAllNotifications();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications });

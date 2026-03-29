@@ -13,6 +13,7 @@ import {
   Chip,
   Avatar,
   FormControl,
+  FormHelperText,
   InputLabel,
   Select,
   MenuItem,
@@ -36,24 +37,14 @@ import {
   InsertPhoto,
   Delete,
   Save,
-  Warning,
   FlashOn as Zap,
   Security as Shield,
   Lock as LockKeyhole,
   Mail
 } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
 
 import QuMailService from "../services/QuMailService";
-import { keyframes } from "@mui/material/styles";
-
-const pulse = keyframes`
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.15); opacity: 1; }
-`;
-
-// API Base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+import { isValidEmailAddress, validateQumailEmail } from "../utils/helpers";
 
 export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [to, setTo] = useState("");
@@ -200,12 +191,36 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     // Validate required fields
     const validationErrors = {};
     
+    const ccArray = cc ? cc.split(",").map((e) => e.trim()).filter(Boolean) : [];
+    const bccArray = bcc ? bcc.split(",").map((e) => e.trim()).filter(Boolean) : [];
+
     if (!to.trim()) {
       validationErrors.to = "Please enter a recipient email";
-    } else if (!to.toLowerCase().endsWith("@qumail.com")) {
-      validationErrors.to = "Recipient must be a @qumail.com address";
+    } else if (!isValidEmailAddress(to)) {
+      validationErrors.to = "Please enter a valid email address";
     }
-    
+
+    for (const addr of ccArray) {
+      if (!isValidEmailAddress(addr)) {
+        validationErrors.cc = `Invalid Cc address: ${addr}`;
+        break;
+      }
+    }
+    for (const addr of bccArray) {
+      if (!isValidEmailAddress(addr)) {
+        validationErrors.bcc = `Invalid Bcc address: ${addr}`;
+        break;
+      }
+    }
+
+    const hasExternal = [to.trim(), ...ccArray, ...bccArray].some(
+      (e) => e && !validateQumailEmail(e)
+    );
+    if (hasExternal && level !== "none") {
+      validationErrors.encryptionLevel =
+        "Set encryption to “None” when sending to Gmail or other external addresses.";
+    }
+
     if (!body.trim()) {
       validationErrors.body = "Please enter a message body";
     }
@@ -224,10 +239,6 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
     
     try {
-      // Split CC/BCC into arrays
-      const ccArray = cc ? cc.split(',').map(e => e.trim()).filter(e => e) : [];
-      const bccArray = bcc ? bcc.split(',').map(e => e.trim()).filter(e => e) : [];
-
       // Use unified QuMailService
       const result = await QuMailService.sendEmail(
         to.trim(),
@@ -559,7 +570,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   fullWidth
                   variant="outlined"
                   size="small"
-                  placeholder="recipient@qumail.com"
+                  placeholder="name@example.com"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                   error={!!errors.to}
@@ -578,11 +589,13 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   fullWidth
                   variant="outlined"
                   size="small"
-                  placeholder="cc@qumail.com"
+                  placeholder="cc@example.com"
                   value={cc}
                   onChange={(e) => setCc(e.target.value)}
                   sx={{ ml: 1 }}
                   disabled={sending}
+                  error={!!errors.cc}
+                  helperText={errors.cc}
                 />
               </Box>
             )}
@@ -596,11 +609,13 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   fullWidth
                   variant="outlined"
                   size="small"
-                  placeholder="bcc@qumail.com"
+                  placeholder="bcc@example.com"
                   value={bcc}
                   onChange={(e) => setBcc(e.target.value)}
                   sx={{ ml: 1 }}
                   disabled={sending}
+                  error={!!errors.bcc}
+                  helperText={errors.bcc}
                 />
               </Box>
             )}
@@ -643,7 +658,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
 
             {/* Security Level */}
             <Box sx={{ mb: 2 }}>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" error={!!errors.encryptionLevel}>
                 <InputLabel>Security Level</InputLabel>
                 <Select
                   value={level}
@@ -672,6 +687,9 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                     </MenuItem>
                   ))}
                 </Select>
+                {errors.encryptionLevel ? (
+                  <FormHelperText>{errors.encryptionLevel}</FormHelperText>
+                ) : null}
               </FormControl>
               <Box sx={{ mt: 0.5, display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Box sx={{ display: "flex", color: "text.secondary" }}>
@@ -708,14 +726,18 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                 </Tooltip>
                 <Divider orientation="vertical" flexItem />
                 <Tooltip title="Bulleted List">
-                  <IconButton size="small" disabled={sending}>
-                    <FormatListBulleted fontSize="small" />
-                  </IconButton>
+                  <span>
+                    <IconButton size="small" disabled={sending}>
+                      <FormatListBulleted fontSize="small" />
+                    </IconButton>
+                  </span>
                 </Tooltip>
                 <Tooltip title="Numbered List">
-                  <IconButton size="small" disabled={sending}>
-                    <FormatListNumbered fontSize="small" />
-                  </IconButton>
+                  <span>
+                    <IconButton size="small" disabled={sending}>
+                      <FormatListNumbered fontSize="small" />
+                    </IconButton>
+                  </span>
                 </Tooltip>
                 <Divider orientation="vertical" flexItem />
                 <Tooltip title="Insert Link (Ctrl+K)">
@@ -724,9 +746,11 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   </IconButton>
                 </Tooltip>
                 <Tooltip title="Insert Image">
-                  <IconButton size="small" disabled={sending}>
-                    <InsertPhoto fontSize="small" />
-                  </IconButton>
+                  <span>
+                    <IconButton size="small" disabled={sending}>
+                      <InsertPhoto fontSize="small" />
+                    </IconButton>
+                  </span>
                 </Tooltip>
                 <Box sx={{ flexGrow: 1 }} />
               </Box>
@@ -818,12 +842,12 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
         </DialogContent>
 
         <DialogActions sx={{ 
-          p: 2, 
+          p: { xs: 1.5, sm: 2 }, 
           bgcolor: "#f8f9fa",
           borderTop: "1px solid #e0e0e0"
         }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", flexWrap: 'wrap', gap: 1.5 }}>
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: "flex", justifyContent: { xs: "center", sm: "space-between" }, width: "100%", flexWrap: 'wrap', gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: 'wrap', gap: 1, justifyContent: { xs: 'center', sm: 'flex-start' } }}>
               <input
                 accept="*"
                 style={{ display: 'none' }}
@@ -907,4 +931,4 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     </>
   );
 }
-
+

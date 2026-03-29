@@ -30,7 +30,10 @@ const apiGateway = (app) => {
 
   app.use((req, res, next) => {
     // Skip protection for public paths
-    if (publicPaths.some(path => req.path === path)) {
+    const isPublic = publicPaths.some(path => req.path === path) || 
+                     req.path.startsWith('/api/auth/verify-reset-token/');
+
+    if (isPublic) {
       return next();
     }
     

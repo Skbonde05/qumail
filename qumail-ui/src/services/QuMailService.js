@@ -196,7 +196,7 @@ const QuMailService = {
 
     try {
       const response = await axiosInstance.post(endpoint, { limit, page });
-      const result = response.data.emails || [];
+      const result = response.data;
       cache.set(cacheKey, result, 10000); // 10s cache
       return result;
     } catch (error) {
@@ -222,17 +222,27 @@ const QuMailService = {
 
   sendEmail: async (to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = []) => {
     cache.invalidate(); // Clear all caches on mutation
-    const payload = { 
-      to, 
-      subject: subject || '(No Subject)', 
-      body, 
+    const payload = {
+      to,
+      subject: subject || '(No Subject)',
+      body,
       encryptionLevel: encryptionLevel === 'aes' ? 'aes256' : encryptionLevel,
       cc: Array.isArray(cc) ? cc : [],
       bcc: Array.isArray(bcc) ? bcc : [],
       attachments: Array.isArray(attachments) ? attachments : []
     };
-    const response = await axiosInstance.post('/api/mail/send', payload);
-    return response.data;
+    try {
+      const response = await axiosInstance.post('/api/mail/send', payload);
+      return response.data;
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to send email';
+      const err = new Error(msg);
+      err.response = error.response;
+      throw err;
+    }
   },
 
   updateEmailStatus: async (mailId, action, extraData = {}) => {
@@ -309,6 +319,10 @@ const QuMailService = {
     const response = await axiosInstance.post('/api/auth/upload-avatar', { avatar: avatarData });
     return response.data;
   },
+  deleteAvatar: async () => {
+    const response = await axiosInstance.delete('/api/auth/avatar');
+    return response.data;
+  },
 
   // --- Notifications ---
   // These methods are essential for real-time engagement.
@@ -324,11 +338,19 @@ const QuMailService = {
     const response = await axiosInstance.delete(`/api/auth/notifications/${id}`);
     return response.data;
   },
+  markAllNotificationsAsRead: async () => {
+    const response = await axiosInstance.put('/api/auth/notifications/mark-all-read');
+    return response.data;
+  },
+  deleteAllNotifications: async () => {
+    const response = await axiosInstance.delete('/api/auth/notifications/delete/all');
+    return response.data;
+  },
 
   // Drafts
   getDrafts: async () => {
     const response = await axiosInstance.get('/api/mail/drafts');
-    return response.data.drafts || [];
+    return response.data.emails || response.data.drafts || [];
   },
 
   createDraft: async (to, subject, body, options = {}) => {
@@ -385,8 +407,13 @@ const QuMailService = {
     return response.data;
   },
   updateLabel: async (id, name, color) => {
-    const response = await axiosInstance.put(`/api/mail/labels/${id}`, { name, color });
-    return response.data;
+    try {
+      const response = await axiosInstance.put(`/api/mail/labels/${id}`, { name, color });
+      return response.data;
+    } catch (error) {
+      const msg = error.response?.data?.message || error.message || 'Failed to update label';
+      throw new Error(msg);
+    }
   },
 
 

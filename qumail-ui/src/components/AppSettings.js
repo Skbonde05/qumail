@@ -123,6 +123,9 @@ const PremiumChip = styled(Chip)(({ theme }) => ({
 
 const SettingItem = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2.5),
+  [theme.breakpoints.down('sm')]: {
+    padding: theme.spacing(1.5),
+  },
   borderRadius: theme.shape.borderRadius,
   border: `1px solid ${theme.palette.divider}`,
   marginBottom: theme.spacing(2),
@@ -167,7 +170,7 @@ const StyledSlider = styled(Slider)(({ theme }) => ({
   },
 }));
 
-const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
+const AppSettings = ({ user, darkMode, onToggleTheme, onBack }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -603,7 +606,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
       sendConfirmation: true,
       spellCheck: true,
       grammarCheck: false,
-      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}`,
+      signature: `Best regards,\n${user?.email?.split('@')[0] || 'User'}`,
       autoEncrypt: false,
       defaultEncryptionLevel: 'high',
       sessionTimeout: 30,
@@ -620,7 +623,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
 
     const hasChanges = JSON.stringify(settings) !== JSON.stringify(defaultSettings);
     setHasUnsavedChanges(hasChanges);
-  }, [settings, darkMode, userEmail]);
+  }, [settings, darkMode, user]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
@@ -720,7 +723,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
       sendConfirmation: true,
       spellCheck: true,
       grammarCheck: false,
-      signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}`,
+      signature: `Best regards,\n${user?.email?.split('@')[0] || 'User'}`,
       autoEncrypt: false,
       defaultEncryptionLevel: 'high',
       sessionTimeout: 30,
@@ -927,7 +930,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
         sendConfirmation: true,
         spellCheck: true,
         grammarCheck: false,
-        signature: `Best regards,\n${userEmail?.split('@')[0] || 'User'}`,
+        signature: `Best regards,\n${user?.email?.split('@')[0] || 'User'}`,
         autoEncrypt: false,
         defaultEncryptionLevel: 'high',
         sessionTimeout: 30,
@@ -951,7 +954,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
     const changedPercentage = Math.round((changedCount / totalCount) * 100);
     
     return { changedCount, totalCount, changedPercentage };
-  }, [settings, darkMode, userEmail]);
+  }, [settings, darkMode, user]);
 
   return (
     <Box sx={{ 
@@ -969,8 +972,22 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
         flexWrap: 'wrap',
         gap: 2
       }}>
-        
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {onBack && (
+            <IconButton onClick={onBack} sx={{ mr: 1, backgroundColor: alpha(theme.palette.primary.main, 0.05) }} color="primary">
+              <ArrowBackIcon />
+            </IconButton>
+          )}
+          <Box>
+            <Typography variant="h4" fontWeight="800" sx={{ letterSpacing: '-0.5px' }}>
+              App Settings
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Personalize your QuMail experience
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {hasUnsavedChanges && (
             <Chip
               label={`${settingsStats.changedCount} changes`}
@@ -980,6 +997,13 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
               icon={<WarningIcon />}
               sx={{ fontWeight: 600 }}
             />
+          )}
+          {onBack && (
+            <Tooltip title="Close Settings">
+              <IconButton onClick={onBack} sx={{ ml: 1, '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) } }}>
+                <CloseIcon />
+              </IconButton>
+            </Tooltip>
           )}
         </Box>
       </Box>
@@ -1046,7 +1070,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
             textOverflow: 'ellipsis',
             maxWidth: 200
           }}>
-            {userEmail || 'Not signed in'}
+            {user?.email || 'Not signed in'}
           </Typography>
         </Box>
       </Box>
@@ -1199,7 +1223,7 @@ const AppSettings = ({ darkMode, onToggleTheme, userEmail, onBack }) => {
 
               <Grid container spacing={2}>
                 {currentSection.fields.map((field) => (
-                  <Grid item xs={12} key={field.key}>
+                  <Grid size={12} key={field.key}>
                     {renderField(field)}
                   </Grid>
                 ))}

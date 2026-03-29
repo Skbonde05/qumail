@@ -17,7 +17,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const [activeFolder, setActiveFolder] = useState(initialFolder);
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [limit] = useState(50);
+const [limit] = useState(50);
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
   
@@ -157,10 +157,17 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     return () => clearTimeout(timer);
   }, [searchQuery, activeFolder, isAiSearchEnabled, enqueueSnackbar, generateMockEmbedding, calculateCosineSimilarity]);
 
-  // Public methods
+// Public methods
   const fetchEmails = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['emails'] });
   }, [queryClient]);
+
+  // Ensure initial load on user login/mount (moved after fetchEmails definition)
+  useEffect(() => {
+    if (user && activeFolder === 'inbox') {
+      fetchEmails();
+    }
+  }, [user, activeFolder, fetchEmails]);
 
   const addNotification = useCallback((title, message, type = 'info', icon = 'Info') => {
     // This adds a local notification. In a real app, you'd push to server then invalidate.
@@ -219,14 +226,18 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
 
   const updateLabel = useCallback(async (id, name, color) => {
     try {
-      await labelMutation.mutateAsync({ id, name, color, action: 'update' });
+      const result = await labelMutation.mutateAsync({ id, name, color, action: 'update' });
+      const newId = result?.label?.id;
+      if (newId && activeFolder === id && newId !== id) {
+        setActiveFolder(newId);
+      }
       enqueueSnackbar('Label updated', { variant: 'success' });
       return true;
     } catch (err) {
-      enqueueSnackbar('Failed to update label', { variant: 'error' });
+      enqueueSnackbar(err?.message || 'Failed to update label', { variant: 'error' });
       return false;
-    }
-  }, [labelMutation, enqueueSnackbar]);
+       }
+  }, [labelMutation, enqueueSnackbar, activeFolder, setActiveFolder]);
 
   const handleDecryptEmail = useCallback(async (emailId, encryptionKey) => {
     try {
@@ -244,14 +255,19 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
 
   const markAllNotificationsAsRead = useCallback(async () => {
     try {
-      const unreadIds = notifications.filter(n => n.status !== 'read').map(n => n.id);
-      if (unreadIds.length > 0) {
-        await Promise.all(unreadIds.map(id => notificationMutation.mutateAsync({ id, action: 'read' })));
-      }
+      await notificationMutation.mutateAsync({ action: 'markAllRead' });
     } catch (err) {
       console.error("Failed to mark all as read", err);
     }
-  }, [notifications, notificationMutation]);
+  }, [notificationMutation]);
+
+  const deleteAllNotifications = useCallback(async () => {
+    try {
+      await notificationMutation.mutateAsync({ action: 'deleteAll' });
+    } catch (err) {
+      console.error("Failed to delete all notifications", err);
+    }
+  }, [notificationMutation]);
 
 
   return {
@@ -267,6 +283,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     markNotificationAsRead,
     deleteNotification,
     markAllNotificationsAsRead,
+    deleteAllNotifications,
     fetchEmails,
     searchQuery,
     setSearchQuery,

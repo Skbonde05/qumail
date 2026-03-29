@@ -6,12 +6,18 @@ const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
 const Mail = require('../models/Mail');
 const Notification = require('../models/Notification');
-const { verifyToken, validateQumailEmail } = require('../middleware/authMiddleware');
-const { 
+const { verifyToken } = require('../middleware/authMiddleware');
+const { isValidEmailAddress, isQumailAddress, QUMAIL_DOMAIN } = require('../config/mailDomain');
+const { isPotentialSpam } = require('../utils/spamDetection');
+const { sendRelayMail } = require('../utils/emailService');
+const {
   generateOTPKey, otpEncrypt, otpDecrypt,
   generateAESKey, generateAESIV, aesEncrypt, aesDecrypt,
   isValidHexKey
 } = require('../utils/encryption');
+
+const ccBccEmailsValid = (arr) =>
+  !arr || (Array.isArray(arr) && arr.every((e) => typeof e === 'string' && isValidEmailAddress(e)));
 
 // ------------------ HELPERS ------------------
 const calculateMailSize = (mail) => {
@@ -28,21 +34,21 @@ const calculateMailSize = (mail) => {
 };
 
 // ------------------ SEND EMAIL ------------------
-router.post('/send', 
+router.post('/send',
   [
     verifyToken,
-    body('to').isEmail().withMessage('Valid recipient email required').custom(validateQumailEmail).withMessage('Can only send to @qumail.com addresses'),
+    body('to').trim().notEmpty().custom(isValidEmailAddress).withMessage('Valid recipient email required'),
     body('subject').optional().trim().isLength({ max: 200 }),
     body('body').trim().notEmpty().withMessage('Message body is required'),
     body('encryptionLevel').optional().isIn(['none', 'otp', 'aes256', 'aes']),
-    body('cc').optional().isArray(),
-    body('bcc').optional().isArray(),
+    body('cc').optional().isArray().custom(ccBccEmailsValid).withMessage('Invalid cc address'),
+    body('bcc').optional().isArray().custom(ccBccEmailsValid).withMessage('Invalid bcc address'),
     body('attachments').optional().isArray()
   ],
   async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
-    
+
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -50,28 +56,42 @@ router.post('/send',
         session.endSession();
         return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
       }
-      
+
       const { to, subject, body, encryptionLevel = 'none', cc = [], bcc = [], attachments = [] } = req.body;
       const from = req.user.email;
       const normalizedEncryptionLevel = encryptionLevel === 'aes' ? 'aes256' : encryptionLevel;
-      
+
       const lowerTo = to.toLowerCase().trim();
-      const lowerCc = Array.isArray(cc) ? cc.map(c => c.toLowerCase().trim()) : [];
-      const lowerBcc = Array.isArray(bcc) ? bcc.map(b => b.toLowerCase().trim()) : [];
-      
-      // Get all recipients (To + Cc + Bcc)
+      const lowerCc = Array.isArray(cc) ? cc.map((c) => c.toLowerCase().trim()) : [];
+      const lowerBcc = Array.isArray(bcc) ? bcc.map((b) => b.toLowerCase().trim()) : [];
+
       const allRecipientEmails = [...new Set([lowerTo, ...lowerCc, ...lowerBcc])];
-      const recipients = await User.find({ email: { $in: allRecipientEmails } }).session(session);
-      
-      if (recipients.length < allRecipientEmails.length) {
-        const foundEmails = recipients.map(r => r.email);
-        const missingEmails = allRecipientEmails.filter(e => !foundEmails.includes(e));
+      const internalRecipients = allRecipientEmails.filter(isQumailAddress);
+      const externalRecipients = allRecipientEmails.filter((e) => !isQumailAddress(e));
+
+      if (normalizedEncryptionLevel !== 'none' && externalRecipients.length > 0) {
         await session.abortTransaction();
         session.endSession();
-        return res.status(404).json({ 
-          success: false, 
-          message: `Some recipients not found: ${missingEmails.join(', ')}` 
+        return res.status(400).json({
+          success: false,
+          message:
+            'Encryption only applies to messages sent entirely to your QuMail domain. Remove external addresses or turn encryption off.'
         });
+      }
+
+      let recipients = [];
+      if (internalRecipients.length > 0) {
+        recipients = await User.find({ email: { $in: internalRecipients } }).session(session);
+        if (recipients.length < internalRecipients.length) {
+          const foundEmails = recipients.map((r) => r.email);
+          const missingEmails = internalRecipients.filter((e) => !foundEmails.includes(e));
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(404).json({
+            success: false,
+            message: `Some @${QUMAIL_DOMAIN} recipients not found: ${missingEmails.join(', ')}`
+          });
+        }
       }
 
       // Check Storage Limit for Sender
@@ -205,17 +225,60 @@ router.post('/send',
       
       await session.commitTransaction();
       session.endSession();
-      
+
+      let relayResult = null;
+      if (externalRecipients.length > 0) {
+        const envelopeFrom =
+          process.env.OUTBOUND_ENVELOPE_FROM || process.env.SMTP_USER || from;
+        const forceFrom = process.env.OUTBOUND_FORCE_FROM;
+        const headerFrom = forceFrom
+          ? `${from.split('@')[0]} <${forceFrom}>`
+          : `"${from.split('@')[0]}" <${from}>`;
+        const replyTo = forceFrom ? from : undefined;
+        const envelopeTo = [...new Set(externalRecipients)];
+
+        try {
+          relayResult = await sendRelayMail({
+            envelopeFrom,
+            headerFrom,
+            replyTo,
+            to: lowerTo,
+            cc: lowerCc,
+            bcc: lowerBcc,
+            subject: subject || '(No Subject)',
+            text: body,
+            html: undefined,
+            attachments,
+            envelopeTo
+          });
+        } catch (relayErr) {
+          console.error('External relay failed:', relayErr);
+          return res.status(502).json({
+            success: false,
+            message:
+              'Saved in QuMail, but delivery to external addresses failed. Check SMTP / OUTBOUND_SMTP_* in .env. ' +
+              relayErr.message,
+            messageId: mailId,
+            internalDelivered: internalRecipients.length > 0
+          });
+        }
+      }
+
       res.json({
         success: true,
         message: `Email sent successfully via QuMail (${normalizedEncryptionLevel})`,
         messageId: mailId,
         sentAt: timestamp,
-        encryption: { level: normalizedEncryptionLevel, encrypted: normalizedEncryptionLevel !== 'none', type: encryptionType }
+        encryption: {
+          level: normalizedEncryptionLevel,
+          encrypted: normalizedEncryptionLevel !== 'none',
+          type: encryptionType
+        },
+        externalRelay:
+          externalRecipients.length > 0 ? (relayResult && relayResult.mock ? 'mock' : 'sent') : null
       });
-      
     } catch (error) {
-      if (session.inAtomTransaction()) await session.abortTransaction();
+      if (session.inTransaction()) await session.abortTransaction();
       session.endSession();
       console.error('Send email error:', error);
       res.status(500).json({ success: false, message: 'Failed to send email: ' + error.message });
@@ -224,49 +287,6 @@ router.post('/send',
 );
 
 // Helper for formatting emails
-// --- Advanced Intent-Based AI Spam Intelligence (Semantic Simulation) ---
-const isPotentialSpam = (subject, body, sender, userSpamList = []) => {
-  const lowerSubject = (subject || '').toLowerCase();
-  const lowerBody = (body || '').toLowerCase();
-  const lowerSender = (sender || '').toLowerCase();
-
-  // 1. Explicit Personal Blocklist (Instant Flag)
-  if (userSpamList.includes(lowerSender)) return true;
-
-  // 2. Technical Impersonation Check (Critical)
-  // If the email uses "QuMail Admin", "System Recovery", or "Password Reset" 
-  // but doesn't originate from our internal system sender (support@qumail.com)
-  const systemKeywords = ['admin', 'system', 'security', 'password reset', 'recovery', 'mfa', 'support'];
-  const isInternal = lowerSender.includes('support@qumail.com') || lowerSender.includes('admin@qumail.com');
-  if (!isInternal) {
-    for (const sysWord of systemKeywords) {
-      if (lowerSubject.includes(sysWord) || lowerBody.includes(sysWord)) {
-        // High-confidence impersonation attempt
-        return true; 
-      }
-    }
-  }
-
-  // 3. Semantic Intent Weighting
-  let spamScore = 0;
-  
-  // Topic: Urgency & Scarcity (Weight: 3)
-  const urgencyWords = ['urgent', 'emergency', 'immediate', 'asap', 'within 24 hours', 'action required', 'last chance'];
-  urgencyWords.forEach(word => { if (lowerSubject.includes(word) || lowerBody.includes(word)) spamScore += 3; });
-
-  // Topic: Financial Incentives (Weight: 4)
-  const financialWords = ['winner', 'lottery', 'inheritance', 'bonus', 'claim your', 'credit card', 'bank account', 'bitcoin', 'crypto', 'investment'];
-  financialWords.forEach(word => { if (lowerSubject.includes(word) || lowerBody.includes(word)) spamScore += 4; });
-
-  // Topic: Low-Value Marketing (Weight: 2)
-  const marketingWords = ['sale', 'offer', 'exclusive', 'discount', 'free gift', 'limited time'];
-  marketingWords.forEach(word => { if (lowerSubject.includes(word) || lowerBody.includes(word)) spamScore += 2; });
-
-  // Threshold: If combined intent weight > 5, it's flagged as spam
-  // This means (Urgency + Marketing) = 5 (Spam), or just one Financial (4) + Marketing (2) = 6 (Spam)
-  return spamScore >= 5;
-};
-
 const formatEmail = (mail) => ({
   id: mail.mailId,
   uid: mail.mailId,
@@ -284,11 +304,11 @@ const formatEmail = (mail) => ({
   draft: mail.folder === 'DRAFTS',
   sent: mail.folder === 'SENT',
   trash: mail.trash,
-  spam: false,
+  spam: mail.folder === 'SPAM',
   archived: mail.folder === 'ARCHIVE',
   folder: mail.folder.toLowerCase(),
-  encrypted: mail.encryption !== 'NONE',
-  encryptionLevel: mail.encryption === 'AES' ? 'aes256' : mail.encryption === 'OTP' ? 'otp' : 'none',
+  encrypted: mail.encryption !== 'NONE' || (mail.encryptionLevel && mail.encryptionLevel !== 'none'),
+  encryptionLevel: mail.encryptionLevel || (mail.encryption === 'AES' ? 'aes256' : mail.encryption === 'OTP' ? 'otp' : 'none'),
   requiresDecryption: mail.encryption !== 'NONE',
   cc: mail.cc || [],
   bcc: mail.bcc || [],
@@ -451,6 +471,50 @@ router.post('/labels', verifyToken, async (req, res) => {
   }
 });
 
+router.put('/labels/:id', verifyToken, async (req, res) => {
+  try {
+    const paramId = req.params.id.toUpperCase();
+    const { name, color } = req.body;
+
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const idx = user.customLabels.findIndex((l) => l.id === paramId);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Label not found' });
+
+    const current = user.customLabels[idx];
+    const newName = name !== undefined ? String(name).trim() : current.name;
+    if (!newName) return res.status(400).json({ success: false, message: 'Label name is required' });
+
+    const newId = newName.toUpperCase().replace(/\s/g, '_');
+    const newColor = color !== undefined ? color : current.color;
+    const oldId = current.id;
+
+    if (newId !== oldId) {
+      if (user.customLabels.some((l, i) => i !== idx && l.id === newId)) {
+        return res.status(409).json({ success: false, message: 'A label with this name already exists' });
+      }
+      await Mail.updateMany(
+        { owner: req.user.email, folder: oldId },
+        { $set: { folder: newId } }
+      );
+      const mailsWithLabel = await Mail.find({ owner: req.user.email, labels: oldId });
+      for (const m of mailsWithLabel) {
+        m.labels = (m.labels || []).map((lb) => (lb === oldId ? newId : lb));
+        await m.save();
+      }
+    }
+
+    user.customLabels[idx] = { id: newId, name: newName, color: newColor || '#607d8b' };
+    await user.save();
+
+    res.json({ success: true, label: user.customLabels[idx] });
+  } catch (error) {
+    console.error('Update label error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update label' });
+  }
+});
+
 router.delete('/labels/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -562,6 +626,126 @@ router.get('/folder-counts', verifyToken, async (req, res) => {
     res.json({ success: true, counts: { 
       inbox, sent, archive, trash, starred, important, unread, drafts, snoozed, spam, custom 
     } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ------------------ DRAFTS (before /:mailId so "drafts" is not captured as mailId) ------------------
+router.all('/drafts', verifyToken, async (req, res) => {
+  const isListing =
+    req.method === 'GET' ||
+    (req.method === 'POST' &&
+      (req.body?.limit || req.body?.page || Object.keys(req.body || {}).length === 0));
+
+  if (isListing) {
+    try {
+      const limit = parseInt(req.query?.limit ?? req.body?.limit ?? 50, 10);
+      const page = parseInt(req.query?.page ?? req.body?.page ?? 1, 10);
+      const userEmail = req.user.email;
+
+      const query = { owner: userEmail, folder: 'DRAFTS', trash: false };
+      const [emails, total] = await Promise.all([
+        Mail.find(query).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit),
+        Mail.countDocuments(query)
+      ]);
+
+      return res.json({
+        success: true,
+        emails: emails.map(formatEmail),
+        total
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { to, subject, body, cc = [], bcc = [], encryptionLevel = 'none', attachments = [] } = req.body;
+      const draft = new Mail({
+        mailId: uuidv4(),
+        from: req.user.email,
+        to: to || '',
+        cc,
+        bcc,
+        subject: subject || '',
+        body: body || '',
+        encryptionLevel,
+        attachments,
+        folder: 'DRAFTS',
+        owner: req.user.email,
+        read: true
+      });
+
+      const draftSize = calculateMailSize(draft);
+
+      const user = await User.findOne({ email: req.user.email });
+      if (user.storageUsed + draftSize > user.storageLimit) {
+        return res.status(413).json({ success: false, message: 'Storage limit exceeded' });
+      }
+
+      await draft.save();
+      await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: draftSize } });
+
+      return res.json({ success: true, email: formatEmail(draft), draftId: draft._id });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  res.status(405).json({ message: 'Method not allowed' });
+});
+
+router.put('/drafts/:id', verifyToken, async (req, res) => {
+  try {
+    const { to, subject, body, cc, bcc, encryptionLevel, attachments } = req.body;
+
+    const oldDraft = await Mail.findOne({ _id: req.params.id, owner: req.user.email, folder: 'DRAFTS' });
+    if (!oldDraft) return res.status(404).json({ success: false, message: 'Draft not found' });
+
+    const oldSize = calculateMailSize(oldDraft);
+
+    const update = {};
+    if (to !== undefined) update.to = to;
+    if (subject !== undefined) update.subject = subject;
+    if (body !== undefined) update.body = body;
+    if (cc !== undefined) update.cc = cc;
+    if (bcc !== undefined) update.bcc = bcc;
+    if (encryptionLevel !== undefined) update.encryptionLevel = encryptionLevel;
+    if (attachments !== undefined) update.attachments = attachments;
+
+    update.updatedAt = new Date();
+
+    const draft = await Mail.findOneAndUpdate(
+      { _id: req.params.id, owner: req.user.email, folder: 'DRAFTS' },
+      { $set: update },
+      { new: true }
+    );
+
+    const newSize = calculateMailSize(draft);
+    const sizeDiff = newSize - oldSize;
+
+    if (sizeDiff !== 0) {
+      await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: sizeDiff } });
+    }
+
+    res.json({ success: true, draft: formatEmail(draft), draftId: draft._id });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete('/drafts/:id', verifyToken, async (req, res) => {
+  try {
+    const draft = await Mail.findOne({ _id: req.params.id, owner: req.user.email });
+    if (!draft) return res.status(404).json({ success: false, message: 'Draft not found' });
+
+    const draftSize = calculateMailSize(draft);
+    await Mail.deleteOne({ _id: req.params.id, owner: req.user.email });
+    await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: -draftSize } });
+
+    res.json({ success: true, message: 'Draft deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -955,126 +1139,6 @@ router.post('/spam', verifyToken, async (req, res) => {
       .lean();
       
     res.json({ success: true, emails: emails.map(formatEmail), total: count });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ------------------ DRAFTS ------------------
-// List drafts (accommodating both GET and POST for listing)
-router.all('/drafts', verifyToken, async (req, res) => {
-  const isListing = req.method === 'GET' || (req.method === 'POST' && (req.body.limit || req.body.page || Object.keys(req.body).length === 0));
-  
-  if (isListing) {
-    try {
-      const { limit = 50, page = 1 } = req.body;
-      const userEmail = req.user.email;
-      
-      const query = { owner: userEmail, folder: 'DRAFTS', trash: false };
-      const [emails, total] = await Promise.all([
-        Mail.find(query).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit)),
-        Mail.countDocuments(query)
-      ]);
-      
-      return res.json({ 
-        success: true, 
-        emails: emails.map(formatEmail),
-        total
-      });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: error.message });
-    }
-  } 
-  
-  if (req.method === 'POST') {
-    // Create draft
-    try {
-      const { to, subject, body, cc = [], bcc = [], encryptionLevel = 'none', attachments = [] } = req.body;
-      const draft = new Mail({ 
-        mailId: uuidv4(), 
-        from: req.user.email, 
-        to: to || '', 
-        cc, bcc,
-        subject: subject || '', 
-        body: body || '', 
-        encryptionLevel,
-        attachments,
-        folder: 'DRAFTS', 
-        owner: req.user.email, 
-        read: true 
-      });
-
-      const draftSize = calculateMailSize(draft);
-      
-      // Check limit
-      const user = await User.findOne({ email: req.user.email });
-      if (user.storageUsed + draftSize > user.storageLimit) {
-        return res.status(413).json({ success: false, message: 'Storage limit exceeded' });
-      }
-
-      await draft.save();
-      await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: draftSize } });
-      
-      return res.json({ success: true, email: formatEmail(draft), draftId: draft._id });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: error.message });
-    }
-  }
-  
-  res.status(405).json({ message: 'Method not allowed' });
-});
-
-// Update draft
-router.put('/drafts/:id', verifyToken, async (req, res) => {
-  try {
-    const { to, subject, body, cc, bcc, encryptionLevel, attachments } = req.body;
-    
-    const oldDraft = await Mail.findOne({ _id: req.params.id, owner: req.user.email, folder: 'DRAFTS' });
-    if (!oldDraft) return res.status(404).json({ success: false, message: 'Draft not found' });
-    
-    const oldSize = calculateMailSize(oldDraft);
-
-    const update = {};
-    if (to !== undefined) update.to = to;
-    if (subject !== undefined) update.subject = subject;
-    if (body !== undefined) update.body = body;
-    if (cc !== undefined) update.cc = cc;
-    if (bcc !== undefined) update.bcc = bcc;
-    if (encryptionLevel !== undefined) update.encryptionLevel = encryptionLevel;
-    if (attachments !== undefined) update.attachments = attachments;
-    
-    update.updatedAt = new Date();
-
-    const draft = await Mail.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user.email, folder: 'DRAFTS' },
-      { $set: update },
-      { new: true }
-    );
-
-    const newSize = calculateMailSize(draft);
-    const sizeDiff = newSize - oldSize;
-
-    if (sizeDiff !== 0) {
-      await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: sizeDiff } });
-    }
-    
-    res.json({ success: true, draft: formatEmail(draft), draftId: draft._id });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Delete draft
-router.delete('/drafts/:id', verifyToken, async (req, res) => {
-  try {
-    const draft = await Mail.findOne({ _id: req.params.id, owner: req.user.email });
-    if (!draft) return res.status(404).json({ success: false, message: 'Draft not found' });
-    
-    const draftSize = calculateMailSize(draft);
-    await Mail.deleteOne({ _id: req.params.id, owner: req.user.email });
-    await User.updateOne({ email: req.user.email }, { $inc: { storageUsed: -draftSize } });
-    
-    res.json({ success: true, message: 'Draft deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

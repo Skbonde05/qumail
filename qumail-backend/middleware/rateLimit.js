@@ -13,13 +13,13 @@ const createLimiter = (windowMs, max, message) => rateLimit({
 });
 
 // General application limiter
-const apiLimiter = createLimiter(15 * 60 * 1000, 100, "Global API limit reached. Please wait 15 minutes.");
+const apiLimiter = createLimiter(15 * 60 * 1000, 1000, "Global API limit reached. Too many background requests or active clicks.");
 
 // Stricter auth limiter (login/register)
-const authLimiter = createLimiter(60 * 60 * 1000, 10, "Too many authentication attempts. Please try again in an hour.");
+const authLimiter = createLimiter(60 * 60 * 1000, 50, "Too many authentication attempts. Please try again in an hour.");
 
 // Email sending limiter
-const mailLimiter = createLimiter(10 * 60 * 1000, 20, "Email sending limit reached. Please try again in 10 minutes.");
+const mailLimiter = createLimiter(10 * 60 * 1000, 100, "Email sending limit reached. Please try again in 10 minutes.");
 
 module.exports = {
   apiLimiter,

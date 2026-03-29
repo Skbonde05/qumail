@@ -255,7 +255,7 @@ const QuickSettings = ({
       const updatedUser = { ...user, avatar: '' };
       setUser(updatedUser);
       if (onUserUpdate) onUserUpdate(updatedUser);
-      await QuMailService.updateProfile({ avatar: '' });
+      await QuMailService.deleteAvatar();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
@@ -747,7 +747,7 @@ const QuickSettings = ({
             </Typography>
             <Grid container spacing={1} sx={{ mb: 3, mt: 0.5 }}>
               {['compact', 'comfortable', 'spacious'].map(d => (
-                <Grid item xs={4} key={d}>
+                <Grid size={4} key={d}>
                   <Box
                     onClick={() => handleAppSettingChange('density', d)}
                     sx={{
@@ -881,6 +881,9 @@ const QuickSettings = ({
           {saveStatus === 'saving' && <CircularProgress size={14} />}
           {saveStatus === 'saved' && <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} />}
         </Box>
+        <IconButton size="small" onClick={onClose} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) } }}>
+          <Close fontSize="small" />
+        </IconButton>
       </Box>
       <Divider />
 

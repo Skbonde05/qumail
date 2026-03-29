@@ -122,6 +122,9 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
   const [forgotSuccess, setForgotSuccess] = useState("");
   const [forgotError, setForgotError] = useState("");
 
+  const [resetType, setResetType] = useState('email'); // 'email' or 'recovery'
+  const [recoveryCode, setRecoveryCode] = useState("");
+  
   // MFA flow state
   const [openMfa, setOpenMfa] = useState(false);
   const [currentMfaToken, setCurrentMfaToken] = useState("");
@@ -185,21 +188,37 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
     setForgotSuccess("");
 
     if (!forgotEmail || !forgotEmail.toLowerCase().endsWith('@qumail.com')) {
-      setForgotError("Please enter a valid @qumail.com address");
+      setForgotError("Please enter your registered @qumail.com address");
       return;
     }
+
     setForgotLoading(true);
     try {
-      // The backend now generates a token and sends a link via email
-      const res = await QuMailService.forgotPassword(forgotEmail);
-      if (res.success) {
-        setForgotSuccess(res.message);
-        setResetStep(3); // Go straight to success message
+      if (resetType === 'email') {
+        const res = await QuMailService.forgotPassword(forgotEmail);
+        if (res.success) {
+          setForgotSuccess(res.message);
+          setResetStep(3); // Success/Info message
+        } else {
+          setForgotError(res.message);
+        }
       } else {
-        setForgotError(res.message);
+        // Recovery Code Flow
+        if (!recoveryCode) {
+          setForgotError("Please enter your recovery code");
+          setForgotLoading(false);
+          return;
+        }
+        const res = await QuMailService.verifyRecoveryCode(forgotEmail, recoveryCode);
+        if (res.success && res.resetToken) {
+           navigate(`/reset-password/${res.resetToken}`);
+           closeForgotDialog();
+        } else {
+          setForgotError(res.message || "Invalid recovery code");
+        }
       }
     } catch (err) {
-      setForgotError("Connection error");
+      setForgotError("Connection error. Is the server running?");
     } finally {
       setForgotLoading(false);
     }
@@ -369,23 +388,65 @@ export default function Login({ onLogin, onSwitchToRegister, loading }) {
         </DialogTitle>
         <DialogContent sx={{ px: 4 }}>
           {resetStep === 0 && (
-            <>
-              <DialogContentText sx={{ mb: 3, textAlign: 'center' }}>
-                Enter your @qumail.com email address. We'll send you a secure link to reset your password.
-              </DialogContentText>
-              <TextField
-                fullWidth
-                label="Email Address"
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                autoFocus
-                placeholder="identity@qumail.com"
-                InputProps={{
-                  sx: { borderRadius: '12px' },
-                  startAdornment: <InputAdornment position="start"><Mail color="primary" /></InputAdornment>
-                }}
-              />
-            </>
+            <Box>
+              <Tabs 
+                value={resetType} 
+                onChange={(e, val) => setResetType(val)} 
+                sx={{ mb: 3, '& .MuiTabs-indicator': { height: 3, borderRadius: '3px' } }}
+                variant="fullWidth"
+              >
+                <Tab icon={<Mail sx={{ fontSize: 20 }} />} label="EMAIL" value="email" sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
+                <Tab icon={<VpnKey sx={{ fontSize: 20 }} />} label="RECOVERY CODE" value="recovery" sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
+              </Tabs>
+
+              {resetType === 'email' ? (
+                <>
+                  <DialogContentText sx={{ mb: 3, textAlign: 'center', fontSize: '0.9rem' }}>
+                    We'll send a secure link to your @qumail.com address.
+                  </DialogContentText>
+                  <TextField
+                    fullWidth
+                    label="Registered Email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@qumail.com"
+                    InputProps={{
+                      sx: { borderRadius: '12px' },
+                      startAdornment: <InputAdornment position="start"><Mail color="primary" sx={{ fontSize: 20 }} /></InputAdornment>
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <DialogContentText sx={{ mb: 3, textAlign: 'center', fontSize: '0.9rem' }}>
+                    Enter the master recovery code given during registration.
+                  </DialogContentText>
+                   <TextField
+                    fullWidth
+                    label="Email Address"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@qumail.com"
+                    sx={{ mb: 2 }}
+                    InputProps={{
+                      sx: { borderRadius: '12px' },
+                      startAdornment: <InputAdornment position="start"><Mail color="primary" sx={{ fontSize: 20 }} /></InputAdornment>
+                    }}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Recovery Code"
+                    value={recoveryCode}
+                    onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+                    placeholder="QU-XXXX-XXXX"
+                    InputProps={{
+                      sx: { borderRadius: '12px' },
+                      startAdornment: <InputAdornment position="start"><VpnKey color="primary" sx={{ fontSize: 20 }} /></InputAdornment>
+                    }}
+                  />
+                </>
+              )}
+            </Box>
           )}
 
           {resetStep === 3 && (

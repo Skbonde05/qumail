@@ -14,6 +14,7 @@ const { verifyToken, validateQumailEmail } = require('../middleware/authMiddlewa
 const { generateOTPKey, generateAESKey } = require('../utils/encryption');
 const { authLimiter } = require('../middleware/rateLimit');
 const { sendPasswordResetEmail } = require('../utils/emailService');
+const kmService = require('../utils/kmService');
 
 // Helper to log security actions
 const addLog = async (userId, action, details, type = 'info', req = null) => {
@@ -135,9 +136,17 @@ router.post('/register', authLimiter,
       const salt = await bcrypt.genSalt(12);
       const hashedPassword = await bcrypt.hash(password, salt);
       
-      // Generate encryption keys and recovery code
-      const otpKey = generateOTPKey(256);
-      const aesKey = generateAESKey();
+      // Fetch isolated keys from Key Manager (KM) for quantum security
+      let otpKey, aesKey;
+      try {
+        otpKey = await kmService.fetchNewKey(lowerEmail);
+        aesKey = await kmService.fetchNewKey(lowerEmail);
+      } catch (kmErr) {
+        console.warn(' KM Down. Falling back to local key generation (Reduced security mode).');
+        otpKey = generateOTPKey(256);
+        aesKey = generateAESKey();
+      }
+      
       const recoveryCode = `QU-${crypto.randomBytes(4).toString('hex').toUpperCase()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       
       // Create user
@@ -617,7 +626,7 @@ router.put('/profile',
       if (name) user.name = name.trim();
       if (username) user.username = username.trim();
       if (bio !== undefined) user.bio = bio.trim();
-      if (avatar) user.avatar = avatar;
+      if (avatar !== undefined) user.avatar = avatar;
       
       if (settings) {
         // Prevent enabling 2FA through generic profile update if no secret exists
@@ -911,6 +920,27 @@ router.delete('/notifications/:id', verifyToken, async (req, res) => {
   }
 });
 
+router.put('/notifications/mark-all-read', verifyToken, async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { userId: req.user.id, status: 'unread' },
+      { status: 'read' }
+    );
+    res.json({ success: true, message: 'All notifications marked as read' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to mark notifications as read' });
+  }
+});
+
+router.delete('/notifications/delete/all', verifyToken, async (req, res) => {
+  try {
+    await Notification.deleteMany({ userId: req.user.id });
+    res.json({ success: true, message: 'All notifications deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to delete all notifications' });
+  }
+});
+
 // ------------------ TWO-FACTOR AUTHENTICATION ------------------
 
 router.post('/setup-2fa', verifyToken, async (req, res) => {
@@ -1024,9 +1054,16 @@ router.post('/rotate-keys', verifyToken, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // Generate new high-entropy master keys
-    const newAes256 = generateAESKey();
-    const newOtp = generateOTPKey(1024); // Fresh master OTP segment for future sessions
+    // Generate new high-entropy master keys from the isolated Key Management (KM) service
+    let newAes256, newOtp;
+    try {
+      newAes256 = await kmService.fetchNewKey(user.email);
+      newOtp = await kmService.fetchNewKey(user.email);
+    } catch (kmErr) {
+      console.warn(' KM Down during rotation. Using local fallback.');
+      newAes256 = generateAESKey();
+      newOtp = generateOTPKey(1024); // Fresh master OTP segment
+    }
 
     // Atomic update of security keys
     user.encryptionKeys = {

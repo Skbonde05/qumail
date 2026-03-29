@@ -1,9 +1,9 @@
-import React, { memo, useMemo, useState } from "react";
+import React, { memo, useMemo, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { 
   Box, Typography, List, ListItem, ListItemText, ListItemIcon, ListItemAvatar, Avatar, 
   IconButton, Tooltip, Checkbox, Badge, CircularProgress, Button, Menu, MenuItem, 
-  Divider, useTheme, Paper 
+  Divider, useTheme, Paper, useMediaQuery
 } from "@mui/material";
 import { keyframes, styled, alpha } from "@mui/material/styles";
 import { 
@@ -16,11 +16,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format } from 'date-fns';
 
 const EmailListItem = styled(ListItem, {
-  shouldForwardProp: (prop) => prop !== 'unread' && prop !== 'selected' && prop !== 'density',
-})(({ theme, unread, selected, density }) => ({
+  shouldForwardProp: (prop) => prop !== 'unread' && prop !== 'selected' && prop !== 'density' && prop !== 'isMobile',
+})(({ theme, unread, selected, density, isMobile }) => ({
   borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
-  padding: '0 12px',
-  height: density === 'compact' ? 32 : (density === 'spacious' ? 56 : 42),
+  padding: isMobile ? '12px 16px' : '0 12px',
+  height: isMobile ? 'auto' : (density === 'compact' ? 32 : (density === 'spacious' ? 56 : 42)),
   backgroundColor: selected 
     ? alpha(theme.palette.primary.main, 0.12)
     : (unread ? theme.palette.background.paper : alpha(theme.palette.text.primary, 0.02)),
@@ -28,10 +28,10 @@ const EmailListItem = styled(ListItem, {
     backgroundColor: selected 
       ? alpha(theme.palette.primary.main, 0.18)
       : alpha(theme.palette.text.primary, 0.05),
-    boxShadow: 'inset 1px 0 0 #dadce0, inset -1px 0 0 #dadce0, 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
+    boxShadow: isMobile ? 'none' : 'inset 1px 0 0 #dadce0, inset -1px 0 0 #dadce0, 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
     zIndex: 1,
-    '& .actions': { display: 'flex' },
-    '& .date-box': { display: 'none' }
+    '& .actions': { display: isMobile ? 'none' : 'flex' },
+    '& .date-box': { display: isMobile ? 'block' : 'none' }
   },
   transition: 'background-color 0.1s, box-shadow 0.1s',
   cursor: 'pointer',
@@ -39,24 +39,95 @@ const EmailListItem = styled(ListItem, {
 
 const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, availableLabels = [], density, folderName }) => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const emailLabels = useMemo(() => {
     if (!email.labels) return [];
     return email.labels.map(lId => availableLabels.find(l => l.id === lId)).filter(Boolean);
   }, [email.labels, availableLabels]);
 
+  const sender = folderName === 'sent' ? `To: ${email.to}` : (email.fromName || email.from);
+
+  if (isMobile) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <EmailListItem unread={!email.read} onClick={() => onEmailClick(email)} selected={selected} isMobile={true}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                 <Checkbox 
+                  size="small" 
+                  checked={selected}
+                  onClick={(e) => { e.stopPropagation(); onSelect(email.id || email.uid); }} 
+                  sx={{ p: 0, color: alpha(theme.palette.text.secondary, 0.3) }}
+                />
+                <Typography variant="subtitle2" sx={{ 
+                    fontWeight: !email.read ? 800 : 700, 
+                    color: !email.read ? 'text.primary' : 'text.secondary',
+                    fontSize: '0.9rem'
+                }}>
+                  {sender}
+                </Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                {format(new Date(email.date), 'MMM d')}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', pl: 3.5 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" noWrap sx={{ 
+                    fontWeight: !email.read ? 700 : 500, 
+                    color: 'text.primary',
+                    fontSize: '0.85rem'
+                }}>
+                  {email.subject}
+                </Typography>
+                <Typography variant="caption" noWrap sx={{ 
+                    color: 'text.secondary',
+                    fontSize: '0.8rem',
+                    display: 'block',
+                    opacity: 0.8
+                }}>
+                  {email.preview || (typeof email.body === 'string' ? email.body.substring(0, 60).replace(/\n/g, ' ') : '')}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+                  {emailLabels.map(label => (
+                    <Box key={label.id} sx={{ bgcolor: alpha(label.color, 0.1), color: label.color, px: 0.8, borderRadius: '4px', fontSize: '0.55rem', fontWeight: 800 }}>
+                      {label.name}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+
+              <IconButton 
+                size="small" 
+                onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, email.starred ? 'unstar' : 'star'); }}
+                sx={{ p: 0.5, mt: -0.5, color: email.starred ? '#f4b400' : alpha(theme.palette.text.secondary, 0.2) }}
+              >
+                {email.starred ? <Star sx={{ fontSize: 18 }} /> : <StarBorder sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </Box>
+          </Box>
+        </EmailListItem>
+      </motion.div>
+    );
+  }
+
   return (
   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-    <EmailListItem unread={!email.read} onClick={() => onEmailClick(email)} selected={selected} density={density}>
+    <EmailListItem unread={!email.read} onClick={() => onEmailClick(email)} selected={selected} density={density} isMobile={false}>
       <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 80, gap: 0.5 }}>
         <Checkbox 
           size="small" 
           checked={selected}
-          onClick={(e) => { e.stopPropagation(); onSelect(email.id); }} 
+          onClick={(e) => { e.stopPropagation(); onSelect(email.id || email.uid); }} 
           sx={{ color: alpha(theme.palette.text.secondary, 0.3), '&.Mui-checked': { color: 'primary.main' } }}
         />
         <IconButton 
           size="small" 
-          onClick={(e) => { e.stopPropagation(); onAction(email.id, email.starred ? 'unstar' : 'star'); }}
+          onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, email.starred ? 'unstar' : 'star'); }}
           sx={{ color: email.starred ? '#f4b400' : alpha(theme.palette.text.secondary, 0.3) }}
         >
           {email.starred ? <Star sx={{ fontSize: 20 }} /> : <StarBorder sx={{ fontSize: 20 }} />}
@@ -69,7 +140,7 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
             color: !email.read ? 'text.primary' : 'text.secondary',
             fontSize: '0.875rem'
         }}>
-          {folderName === 'sent' ? `To: ${email.to}` : email.from}
+          {sender}
 
         </Typography>
       </Box>
@@ -114,22 +185,22 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
 
       <Box className="actions" sx={{ display: 'none', alignItems: 'center', gap: 0.5, bg: 'background.paper' }}>
         <Tooltip title="Archive">
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'archive'); }}><ArchiveOutlined fontSize="small" /></IconButton>
+          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, 'archive'); }}><ArchiveOutlined fontSize="small" /></IconButton>
         </Tooltip>
         <Tooltip title={folderName === 'trash' ? "Delete forever" : "Delete"}>
           <IconButton size="small" onClick={(e) => { 
             e.stopPropagation(); 
             if (folderName === 'trash' && !window.confirm("PERMANENT ACTION: Delete this email forever?")) return;
-            onAction(email.id, 'trash'); 
+            onAction(email.id || email.uid, 'trash'); 
           }}>
             <DeleteOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title={email.read ? "Mark as unread" : "Mark as read"}>
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, email.read ? 'unread' : 'read'); }}><MarkEmailReadOutlined fontSize="small" /></IconButton>
+          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, email.read ? 'unread' : 'read'); }}><MarkEmailReadOutlined fontSize="small" /></IconButton>
         </Tooltip>
         <Tooltip title="Snooze">
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'snooze'); }}><AccessTimeOutlined fontSize="small" /></IconButton>
+          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, 'snooze'); }}><AccessTimeOutlined fontSize="small" /></IconButton>
         </Tooltip>
       </Box>
     </EmailListItem>
@@ -157,26 +228,26 @@ const Inbox = ({
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const openMenu = Boolean(menuAnchorEl);
   
-  const handleMenuClick = (event) => setMenuAnchorEl(event.currentTarget);
-  const handleMenuClose = () => setMenuAnchorEl(null);
+  const handleMenuClick = useCallback((event) => setMenuAnchorEl(event.currentTarget), []);
+  const handleMenuClose = useCallback(() => setMenuAnchorEl(null), []);
 
-  const handleBulkAction = (action) => {
+  const handleBulkAction = useCallback((action) => {
     if (selectedEmailIds.length > 0) {
       onAction(selectedEmailIds, action);
       clearSelection();
     }
     handleMenuClose();
-  };
+  }, [selectedEmailIds, onAction, handleMenuClose]);
   
-  const handleSelectOne = (id) => {
+  const handleSelectOne = useCallback((id) => {
     setSelectedEmailIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
+  }, []);
 
-  const handleSelectAll = (e) => {
-    setSelectedEmailIds(e.target.checked ? emails.map(email => email.id) : []);
-  };
+  const handleSelectAll = useCallback((e) => {
+    setSelectedEmailIds(e.target.checked ? emails.map(email => email.id || email.uid) : []);
+  }, [emails]);
 
-  const clearSelection = () => setSelectedEmailIds([]);
+  const clearSelection = useCallback(() => setSelectedEmailIds([]), []);
 
   const startIdx = (page - 1) * limit + 1;
   const endIdx = Math.min(page * limit, total || emails.length);
