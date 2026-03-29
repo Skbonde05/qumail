@@ -715,17 +715,6 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   </IconButton>
                 </Tooltip>
                 <Box sx={{ flexGrow: 1 }} />
-                <Box sx={{ display: 'flex', alignItems: 'center', pr: 1 }}>
-                  <Zap sx={{ 
-                    fontSize: 16, 
-                    color: suggestion ? 'primary.main' : 'text.disabled',
-                    opacity: showAiPulse ? 1 : 0.6,
-                    animation: showAiPulse ? 'pulse 0.5s infinite alternate' : 'none'
-                  }} />
-                  <Typography variant="caption" sx={{ ml: 0.5, color: 'text.disabled', fontSize: '0.65rem', fontWeight: 700 }}>
-                    AI SMART COMPOSE
-                  </Typography>
-                </Box>
               </Box>
 
               {/* Message Text Area */}

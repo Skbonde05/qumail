@@ -24,25 +24,20 @@ export const generatePreview = (body, length = 120) => {
 };
 
 export const formatDate = (dateString) => {
-  if (!dateString) return "Just now";
+  if (!dateString) return "";
   
   try {
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Unknown";
+    if (isNaN(date.getTime())) return "";
     
     const now = new Date();
-    const diffMs = now - date;
-    const diffHours = diffMs / 3600000;
-
-    if (diffHours < 24) {
-      return formatDistanceToNow(date, { addSuffix: true });
-    } else if (now.getYear() === date.getYear()) {
+    if (now.getFullYear() === date.getFullYear()) {
       return format(date, 'MMM d');
     } else {
-      return format(date, 'MM/dd/yyyy');
+      return format(date, 'MMM d, yyyy');
     }
   } catch (error) {
-    return "Unknown";
+    return "";
   }
 };
 

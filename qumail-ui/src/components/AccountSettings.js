@@ -131,13 +131,9 @@ const commonBackgrounds = [
 ];
 
 const themes = [
-  { id: 'default', name: 'QuMail Blue', color: '#1a73e8' },
-  { id: 'dark', name: 'Midnight', color: '#121212' },
-  { id: 'sunset', name: 'Sunset', color: '#f43f5e' },
-  { id: 'emerald', name: 'Emerald', color: '#059669' },
-  { id: 'ocean', name: 'Ocean', color: '#0d9488' },
-  { id: 'purple', name: 'Royal', color: '#7c3aed' },
-  { id: 'gold', name: 'Golden Hour', color: '#d97706' },
+  { id: 'default', name: 'Qumail Blue', color: '#1a73e8' },
+  { id: 'dark', name: 'Midnight Blue', color: '#0f172a' },
+  { id: 'black', name: 'Solid Black', color: '#000000' },
 ];
 
 const ThemeOption = memo(({ theme: t, isSelected, onClick }) => (

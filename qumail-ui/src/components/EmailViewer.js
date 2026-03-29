@@ -18,6 +18,7 @@ import {
   Paper,
   Collapse,
   CircularProgress,
+  LinearProgress,
   Badge,
   Alert,
   Stack,
@@ -83,18 +84,20 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   [theme.breakpoints.down('sm')]: {
     borderRadius: 0,
   },
+  overflowX: 'hidden',
   overflowY: 'auto',
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
+  position: 'relative',
   WebkitOverflowScrolling: 'touch'
 }));
 
 const HeaderContainer = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(4),
+  padding: theme.spacing(2.5, 3),
   [theme.breakpoints.down('sm')]: {
-    padding: theme.spacing(2, 2, 2, 2),
+    padding: theme.spacing(2),
   },
   borderBottom: `1px solid ${theme.palette.divider}`,
   backgroundColor: theme.palette.background.paper,
@@ -103,9 +106,9 @@ const HeaderContainer = styled(Box)(({ theme }) => ({
 
 const ContentContainer = styled(Box)(({ theme }) => ({
   flex: '0 0 auto',
-  padding: theme.spacing(4, 4, 8, 4),
+  padding: theme.spacing(3, 4, 6, 4),
   [theme.breakpoints.down('sm')]: {
-    padding: theme.spacing(3, 2, 6, 2),
+    padding: theme.spacing(2, 2, 4, 2),
   },
   backgroundColor: theme.palette.background.default,
 }));
@@ -169,16 +172,8 @@ const formatDateSafe = (dateInput) => {
     }
     
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
+    // Always use absolute dates
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = monthNames[date.getMonth()];
     const day = date.getDate();
@@ -348,10 +343,17 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading }) => {
           </Button>
         )}
         <Button
-          variant="contained"
+          variant={email?.encryptionLevel === 'otp' ? "outlined" : "contained"}
           onClick={handleSubmit}
           disabled={loading || (email?.encryptionLevel === 'otp' && !otpKey)}
           startIcon={loading ? <CircularProgress size={20} /> : <KeyIcon />}
+          sx={{
+            fontWeight: 700,
+            ...(email?.encryptionLevel === 'otp' && {
+              borderWidth: '2px',
+              '&:hover': { borderWidth: '2px' }
+            })
+          }}
         >
           {loading ? 'Decrypting...' : 'Decrypt Email'}
         </Button>
@@ -633,7 +635,7 @@ const EmailViewer = memo(({
         <Alert 
           severity="success" 
           icon={<LockOpenIcon />}
-          sx={{ mb: 3, borderRadius: 2 }}
+          sx={{ mb: 1.5, borderRadius: 1 }}
         >
           <Typography variant="subtitle2" fontWeight="600">
             Decryption Successful
@@ -649,7 +651,7 @@ const EmailViewer = memo(({
       return (
         <Alert 
           severity="error" 
-          sx={{ mb: 3, borderRadius: 2 }}
+          sx={{ mb: 1.5, borderRadius: 1 }}
         >
           <Typography variant="subtitle2" fontWeight="600">
             Decryption Failed
@@ -675,7 +677,7 @@ const EmailViewer = memo(({
       <Alert 
         severity="warning" 
         icon={<LockIcon />}
-        sx={{ mb: 3, borderRadius: 2 }}
+        sx={{ mb: 1.5, borderRadius: 1 }}
       >
         <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
           <Box>
@@ -699,7 +701,7 @@ const EmailViewer = memo(({
           </Box>
           {shouldShowDecryptButton() && (
             <Button
-              variant="contained"
+              variant={securityLevel === 'otp' ? "outlined" : "contained"}
               color={currentSecurity.color}
               startIcon={<KeyIcon />}
               onClick={() => {
@@ -710,6 +712,13 @@ const EmailViewer = memo(({
                 }
               }}
               disabled={isDecrypting}
+              sx={{
+                fontWeight: 700,
+                ...(securityLevel === 'otp' && {
+                  borderWidth: '2px',
+                  '&:hover': { borderWidth: '2px' }
+                })
+              }}
             >
               {isDecrypting ? 'Decrypting...' : 
                securityLevel === 'otp' ? 'Decrypt with OTP Key' : 'Decrypt Email'}
@@ -722,20 +731,10 @@ const EmailViewer = memo(({
 
   // Render email content
   const renderEmailContent = () => {
-    if (isLoading || isDecrypting) {
+    if ((isLoading || isDecrypting) && !isDecrypted && !body) {
       return (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-          <Box textAlign="center">
-            <CircularProgress size={60} sx={{ mb: 2 }} />
-            <Typography variant="h6" gutterBottom>
-              {isDecrypting ? 'Decrypting Email...' : 'Loading Email...'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {isDecrypting 
-                ? 'Please wait while we securely decrypt your message...' 
-                : 'Please wait while we load your email...'}
-            </Typography>
-          </Box>
+          <CircularProgress size={40} />
         </Box>
       );
     }
@@ -760,11 +759,16 @@ const EmailViewer = memo(({
               
               {securityLevel === 'otp' ? (
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   color={currentSecurity.color}
                   startIcon={<KeyIcon />}
                   onClick={() => setShowDecryptModal(true)}
-                  sx={{ mt: 2 }}
+                  sx={{ 
+                    mt: 2,
+                    fontWeight: 700,
+                    borderWidth: '2px',
+                    '&:hover': { borderWidth: '2px' }
+                  }}
                 >
                   Decrypt with OTP Key
                 </Button>
@@ -928,7 +932,12 @@ const EmailViewer = memo(({
 
   return (
     <>
-      <StyledPaper>
+      <StyledPaper sx={{ position: 'relative' }}>
+        {(isLoading || isDecrypting) && (
+          <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5 }}>
+            <LinearProgress sx={{ height: 3, opacity: 0.8 }} />
+          </Box>
+        )}
         {/* Header with navigation */}
         <HeaderContainer>
           {/* Top toolbar */}
@@ -990,12 +999,18 @@ const EmailViewer = memo(({
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title="Move to Label">
-                <IconButton size="small" onClick={(e) => setLabelAnchorEl(e.currentTarget)}>
-                  <FolderIcon />
+              <Tooltip title="Archive">
+                <IconButton size="small" onClick={() => onAction && email?.uid && onAction(email.uid, 'archive')} disabled={isDecrypting}>
+                  <ArchiveIcon />
                 </IconButton>
               </Tooltip>
-              
+
+              <Tooltip title="Delete">
+                <IconButton size="small" onClick={() => onAction && email?.uid && onAction(email.uid, 'trash')} disabled={isDecrypting}>
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="More options">
                 <IconButton size="small">
                   <MoreVertIcon />
@@ -1005,7 +1020,7 @@ const EmailViewer = memo(({
           </Box>
 
           {/* Subject and security badge */}
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 3, gap: 1.5 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 1.5, gap: 1.5 }}>
             <Typography variant="h5" fontWeight="600" sx={{ flex: 1, mr: 2 }}>
               {subject}
             </Typography>
@@ -1052,23 +1067,66 @@ const EmailViewer = memo(({
               </Badge>
               
               <Box>
-                <Typography variant="subtitle1" fontWeight="600">
-                  {senderName}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  to me <Box component="span" sx={{ mx: 0.8, opacity: 0.5 }}>|</Box> {formattedDate}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle1" fontWeight="600">
+                    {senderName}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.7 }}>
+                    &lt;{senderEmail}&gt;
+                  </Typography>
+                  
+                  {/* Quick Action Icons next to name */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 1, gap: 0.5 }}>
+                    <Tooltip title="Reply">
+                      <IconButton size="small" onClick={() => onReply && onReply(email)} disabled={isDecrypting || !isDecrypted}>
+                        <ReplyIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Reply All">
+                      <IconButton size="small" onClick={() => onReplyAll && onReplyAll(email)} disabled={isDecrypting || !isDecrypted}>
+                        <ReplyAllIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Forward">
+                      <IconButton size="small" onClick={() => onForward && onForward(email)} disabled={isDecrypting || !isDecrypted}>
+                        <ForwardIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                  to me
+                  <Tooltip title={expanded ? "Hide details" : "Show details"}>
+                    <IconButton 
+                      size="small" 
+                      onClick={handleToggleExpand} 
+                      sx={{ 
+                        ml: 0.5, 
+                        p: 0, 
+                        width: 18, 
+                        height: 18, 
+                        borderRadius: '4px',
+                        bgcolor: expanded ? alpha(theme.palette.primary.main, 0.1) : 'transparent'
+                      }}
+                    >
+                      {expanded ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
+                    </IconButton>
+                  </Tooltip>
+                  <Box component="span" sx={{ mx: 0.8, opacity: 0.5 }}>|</Box> {formattedDate}
                 </Typography>
               </Box>
             </Box>
 
-            {formattedTime && (
-              <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
-                <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  {formattedTime}
-                </Typography>
-              </Box>
-            )}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {formattedTime && (
+                <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
+                  <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <Typography variant="caption" color="text.secondary">
+                    {formattedTime}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           </Box>
 
           {/* Recipient info (expandable) */}
@@ -1093,105 +1151,8 @@ const EmailViewer = memo(({
             </Box>
           </Collapse>
 
-          {/* Expand button */}
-          <Button
-            size="small"
-            startIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            onClick={handleToggleExpand}
-            sx={{ mt: 1 }}
-          >
-            {expanded ? 'Show less' : 'Show details'}
-          </Button>
-
           {/* Encryption notice */}
           {renderEncryptionNotice()}
-
-          {/* Action buttons */}
-          <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={isSummarizing ? <CircularProgress size={16} color="inherit" /> : <SparklesIcon />}
-              onClick={handleSummarize}
-              disabled={isSummarizing || !isDecrypted}
-              size="small"
-              sx={{ 
-                borderRadius: '20px',
-                px: 2,
-                fontWeight: 800,
-                letterSpacing: '0.5px',
-                borderWidth: '2px',
-                '&:hover': { borderWidth: '2px' }
-              }}
-            >
-              {isSummarizing ? 'Analyzing...' : 'AI Summarize'}
-            </Button>
-
-            <Button
-              variant="contained"
-              startIcon={<ReplyIcon />}
-              onClick={() => onReply && onReply(email)}
-              size="small"
-              disabled={isDecrypting || !isDecrypted}
-            >
-              Reply
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<ReplyAllIcon />}
-              onClick={() => onReplyAll && onReplyAll(email)}
-              size="small"
-              disabled={isDecrypting || !isDecrypted}
-            >
-              Reply All
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<ForwardIcon />}
-              onClick={() => onForward && onForward(email)}
-              size="small"
-              disabled={isDecrypting || !isDecrypted}
-            >
-              Forward
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<ArchiveIcon />}
-              onClick={() => onAction && email?.uid && onAction(email.uid, 'archive')}
-              size="small"
-              disabled={isDecrypting}
-            >
-              Archive
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={email?.folder === 'spam' ? <ReportOffIcon /> : <ReportIcon />}
-              onClick={() => {
-                const action = email?.folder === 'spam' ? 'not-spam' : 'spam';
-                onAction(email?.uid || email?.id, action);
-                onBack();
-              }}
-              size="small"
-              disabled={isDecrypting}
-            >
-              {email?.folder === 'spam' ? 'Not Spam' : 'Report Spam'}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<DeleteIcon />}
-              onClick={() => {
-                if (onAction && email?.uid) {
-                  const isTrash = email.trash || email.folder === 'trash';
-                  onAction(email.uid, isTrash ? 'delete' : 'trash');
-                }
-              }}
-              size="small"
-              color="error"
-              disabled={isDecrypting}
-            >
-              {email?.trash || email?.folder === 'trash' ? 'Delete Forever' : 'Delete'}
-            </Button>
-          </Stack>
         </HeaderContainer>
 
         {/* Content area */}
@@ -1203,19 +1164,23 @@ const EmailViewer = memo(({
           {renderAttachments()}
         </ContentContainer>
 
-        {/* Bottom action bar */}
+        {/* Bottom action bar - Sticky */}
         <Box sx={{ 
-          p: { xs: 2, sm: 3 }, 
+          p: { xs: 1.5, sm: 2 }, 
           borderTop: (theme) => `1px solid ${theme.palette.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           bgcolor: 'background.paper',
           flexWrap: 'wrap',
-          gap: 1
+          gap: 1,
+          position: 'sticky',
+          bottom: 0,
+          zIndex: 10,
+          boxShadow: theme => theme.palette.mode === 'dark' ? '0 -4px 12px rgba(0,0,0,0.4)' : '0 -4px 12px rgba(0,0,0,0.05)'
         }}>
-          <Typography variant="caption" color="text.secondary">
-            Message ID: {email?.uid || 'N/A'} • {currentSecurity.label.toUpperCase()}
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+             Quick Actions
           </Typography>
           
           <Stack direction="row" spacing={1}>

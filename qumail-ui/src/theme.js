@@ -2,28 +2,28 @@ import { createTheme, alpha } from "@mui/material/styles";
 
 export const THEME_CONFIGS = {
   default: {
-    primary: { light: "#2563eb", dark: "#60a5fa" },
-    secondary: { light: "#7c3aed", dark: "#a78bfa" }
-  },
-  sunset: {
-    primary: { light: "#f43f5e", dark: "#fb7185" },
-    secondary: { light: "#fb923c", dark: "#fdba74" }
-  },
-  ocean: {
-    primary: { light: "#0284c7", dark: "#7dd3fc" },
-    secondary: { light: "#0d9488", dark: "#5eead4" }
-  },
-  forest: {
-    primary: { light: "#059669", dark: "#6ee7b7" },
-    secondary: { light: "#84cc16", dark: "#d9f99d" }
-  },
-  royal: {
-    primary: { light: "#6366f1", dark: "#a5b4fc" },
-    secondary: { light: "#a855f7", dark: "#d8b4fe" }
+    primary: { light: "#1a73e8", dark: "#60a5fa" },
+    secondary: { light: "#1e293b", dark: "#cbd5e1" }
   },
   midnight: {
-    primary: { light: "#1e293b", dark: "#94a3b8" },
-    secondary: { light: "#334155", dark: "#64748b" }
+    primary: { light: "#1e293b", dark: "#60a5fa" },
+    secondary: { light: "#0f172a", dark: "#94a3b8" }
+  },
+  black: {
+    primary: { light: "#000000", dark: "#cbd5e1" },
+    secondary: { light: "#000000", dark: "#94a3b8" }
+  },
+  sunset: {
+    primary: { light: "#f59e0b", dark: "#fbbf24" },
+    secondary: { light: "#ea580c", dark: "#f97316" }
+  },
+  forest: {
+    primary: { light: "#10b981", dark: "#34d399" },
+    secondary: { light: "#065f46", dark: "#059669" }
+  },
+  lavender: {
+    primary: { light: "#8b5cf6", dark: "#a78bfa" },
+    secondary: { light: "#6d28d9", dark: "#7c3aed" }
   }
 };
 
@@ -51,19 +51,19 @@ export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
         main: isDark ? config.secondary.dark : config.secondary.light
       },
       success: {
-        main: "#10b981",
-        light: "#d1fae5",
-        dark: "#065f46"
+        main: "#2563eb",
+        light: "#dbeafe",
+        dark: "#1e40af"
       },
       error: {
-        main: "#ef4444",
-        light: "#fee2e2",
-        dark: "#991b1b"
+        main: "#000000",
+        light: "#f1f5f9",
+        dark: "#000000"
       },
       warning: {
-        main: "#f59e0b",
-        light: "#fef3c7",
-        dark: "#92400e"
+        main: "#1e293b",
+        light: "#f8fafc",
+        dark: "#0f172a"
       },
       info: {
         main: isDark ? "#38bdf8" : "#0ea5e9"

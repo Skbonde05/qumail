@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatDate } from '../utils/helpers';
 import {
   StarBorder as StarBorderIcon,
   Star as StarIcon,
@@ -259,7 +260,7 @@ const EmailRow = ({
                 textAlign: 'right'
               }}
             >
-              {email?.date || 'Just now'}
+              {formatDate(email?.date)}
             </Typography>
           </Box>
         }

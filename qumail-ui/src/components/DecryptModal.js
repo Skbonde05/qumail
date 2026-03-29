@@ -349,7 +349,7 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading = false }) => {
         </Button>
         <Button
           onClick={handleDecrypt}
-          variant="contained"
+          variant={email?.encryptionLevel === 'otp' ? "outlined" : "contained"}
           color={encryptionLabel.color}
           disabled={
             loading || 
@@ -364,7 +364,12 @@ const DecryptModal = ({ open, onClose, email, onDecrypt, loading = false }) => {
             )
           }
           sx={{
-            minWidth: '120px'
+            minWidth: '120px',
+            ...(email?.encryptionLevel === 'otp' && {
+              borderWidth: '2px',
+              fontWeight: 700,
+              '&:hover': { borderWidth: '2px' }
+            })
           }}
         >
           {loading ? 'Decrypting...' : 'Decrypt Email'}

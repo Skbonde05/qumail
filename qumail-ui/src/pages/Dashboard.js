@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import Inbox from '../components/Inbox';
 import Compose from '../components/Compose';
 import NotificationList from '../components/dashboard/NotificationList';
+import QuickSettings from '../components/dashboard/QuickSettings';
 import AppSettings from '../components/AppSettings';
 import AccountSettings from '../components/AccountSettings';
 import SecuritySettings from '../components/SecuritySettings';
@@ -16,6 +17,7 @@ import { useDashboardActions } from '../hooks/useDashboardActions';
 import QuMailService from '../services/QuMailService';
 
 const DRAWER_WIDTH = 260;
+const SETTING_DRAWER_WIDTH = 360;
 
 const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdateTheme, bgImage, onUpdateBgImage }) => {
   const theme = useTheme();
@@ -25,8 +27,24 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
   const [notifAnchor, setNotifAnchor] = useState(null);
   const [profileAnchor, setProfileAnchor] = useState(null);
   const [selectedEmailId, setSelectedEmailId] = useState(null);
+  const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
   const [draftToEdit, setDraftToEdit] = useState(null);
   
+  // Migration: Clear legacy signature if it matches the default
+  useEffect(() => {
+    const saved = localStorage.getItem('qumail_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.signature && parsed.signature.includes('Sent from QuMail')) {
+          const updated = { ...parsed, signature: '' };
+          localStorage.setItem('qumail_settings', JSON.stringify(updated));
+          window.dispatchEvent(new CustomEvent('qumail-settings-updated', { detail: updated }));
+        }
+      } catch (e) {}
+    }
+  }, []);
+
   // Custom hook for logic
   const {
     emails,
@@ -51,7 +69,11 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     fetchLabels,
     isSemanticSearch,
     isAiSearchEnabled,
-    setIsAiSearchEnabled
+    setIsAiSearchEnabled,
+    page,
+    setPage,
+    total,
+    limit,
   } = useDashboardActions(user);
 
   const [activeSection, setActiveSection] = useState('inbox');
@@ -71,10 +93,16 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
   }, [isMobile, setActiveFolder]);
 
   const handleSectionChange = useCallback((section) => {
+    if (['settings', 'account', 'security', 'themes'].includes(section)) {
+      setQuickSettingsOpen(prev => !prev);
+      return;
+    }
     setActiveSection(section);
-    if (isMobile) setMobileOpen(false);
-    setSelectedEmailId(null);
-  }, [isMobile]);
+    if (section !== 'inbox' && section !== 'folder') {
+      setSelectedEmailId(null);
+    }
+    setMobileOpen(false);
+  }, []);
 
   const handleReply = useCallback((email) => {
     setComposeOpen(true);
@@ -127,6 +155,20 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     addNotification('Email Sent', `To: ${to}`, 'success', 'CheckCircle');
   }, [fetchEmails, addNotification]);
 
+  const handleLabelButtonClick = useCallback((labelData = null) => {
+    // Check if labelData is a valid label object and not a mouse event
+    if (labelData && typeof labelData === 'object' && labelData.id && typeof labelData.id === 'string') {
+      setEditingLabelId(labelData.id);
+      setNewLabelName(labelData.name || '');
+      setNewLabelColor(labelData.color || '#1a73e8');
+    } else {
+      setEditingLabelId(null);
+      setNewLabelName('');
+      setNewLabelColor('#1a73e8');
+    }
+    setLabelDialogOpen(true);
+  }, []);
+
   useEffect(() => {
     const unreadCount = folderCounts.unread || 0;
     if (unreadCount > 0) {
@@ -155,9 +197,6 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     }
 
     switch (activeSection) {
-      case 'settings': return <AppSettings darkMode={darkMode} onToggleTheme={onToggleTheme} userEmail={user?.email} />;
-      case 'account': return <AccountSettings user={user} themeName={themeName} onUpdateTheme={onUpdateTheme} bgImage={bgImage} onUpdateBgImage={onUpdateBgImage} />;
-      case 'security': return <SecuritySettings user={user} />;
       case 'about': return <AboutQuMail />;
       case 'privacy': return <PrivacyPolicy />;
       case 'help': return <HelpSupport onCompose={() => setComposeOpen(true)} />;
@@ -168,6 +207,10 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             folderName={activeFolder} 
             loading={loading}
             labels={labels}
+            page={page}
+            setPage={setPage}
+            total={total}
+            limit={limit}
             onEmailClick={(email) => {
               if (activeFolder === 'drafts') {
                 setDraftToEdit(email);
@@ -205,6 +248,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         onProfileMenuOpen={(e) => setProfileAnchor(e.currentTarget)}
         isProfileMenuOpen={Boolean(profileAnchor)}
         onNotificationsOpen={(e) => setNotifAnchor(e.currentTarget)}
+        onSettingsOpen={() => setQuickSettingsOpen(prev => !prev)}
         unreadNotifications={notifications.filter(n => !n.read).length}
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
@@ -250,7 +294,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             drawerWidth={DRAWER_WIDTH}
             user={user}
             labels={labels}
-            onAddLabel={() => setLabelDialogOpen(true)}
+            onCreateLabel={handleLabelButtonClick}
             onDeleteLabel={deleteLabel}
           />
         </SwipeableDrawer>
@@ -281,8 +325,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             drawerWidth={DRAWER_WIDTH}
             user={user}
             labels={labels}
-            onAddLabel={() => { setEditingLabelId(null); setNewLabelName(''); setNewLabelColor('#1a73e8'); setLabelDialogOpen(true); }}
-            onEditLabel={(label) => { setEditingLabelId(label.id); setNewLabelName(label.name); setNewLabelColor(label.color); setLabelDialogOpen(true); }}
+            onCreateLabel={handleLabelButtonClick}
             onDeleteLabel={deleteLabel}
           />
         </Drawer>
@@ -294,12 +337,23 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         sx={{ 
           flexGrow: 1, 
           p: 0, 
-          width: { md: `calc(100% - ${DRAWER_WIDTH}px)` }, 
+          width: { 
+            md: quickSettingsOpen
+                ? `calc(100% - ${DRAWER_WIDTH + SETTING_DRAWER_WIDTH}px)` 
+                : `calc(100% - ${DRAWER_WIDTH}px)` 
+          }, 
           mt: '72px', 
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          height: 'calc(100vh - 72px)'
+          height: 'calc(100vh - 72px)',
+          transition: theme.transitions.create(['margin', 'width'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
+          ...(quickSettingsOpen && {
+            mr: { md: `${SETTING_DRAWER_WIDTH}px` },
+          }),
         }}
       >
         {renderContent()}
@@ -322,6 +376,39 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         onDeleteAll={() => { setNotifications([]); setNotifAnchor(null); }}
         onShowAll={() => { setNotifAnchor(null); handleSectionChange('notifications'); }}
       />
+
+      {/* Quick Settings Drawer */}
+      <Drawer
+        anchor="right"
+        open={quickSettingsOpen}
+        onClose={() => setQuickSettingsOpen(false)}
+        variant={isMobile ? "temporary" : "persistent"}
+        ModalProps={{ keepMounted: true, hideBackdrop: true }}
+        sx={{
+          zIndex: (theme) => theme.zIndex.drawer,
+        }}
+        PaperProps={{
+          sx: {
+            width: SETTING_DRAWER_WIDTH,
+            top: 65,
+            height: 'calc(100% - 65px)',
+            boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 8px 10px -5px rgba(0,0,0,0.2), 0 16px 24px 2px rgba(0,0,0,0.14), 0 6px 30px 5px rgba(0,0,0,0.12)',
+            borderLeft: `1px solid ${theme.palette.divider}`,
+            backgroundImage: 'none',
+          }
+        }}
+      >
+        <QuickSettings 
+          onClose={() => setQuickSettingsOpen(false)} 
+          darkMode={darkMode}
+          onToggleTheme={onToggleTheme}
+          themeName={themeName}
+          onUpdateTheme={onUpdateTheme}
+          bgImage={bgImage}
+          onUpdateBgImage={onUpdateBgImage}
+          user={user}
+        />
+      </Drawer>
       
       <Sidebar.ProfileMenu 
         anchorEl={profileAnchor}
@@ -356,20 +443,26 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
           <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
             Label Color
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-            {['#1a73e8', '#d93025', '#f9ab00', '#188038', '#fa7b17', '#9334e6', '#12b5cb', '#607d8b'].map((color) => (
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 1.5, mt: 1 }}>
+            {[
+              '#1a73e8', '#ea4335', '#fabb05', '#34a853', '#8b5cf6', '#ec4899',
+              '#1e293b', '#64748b', '#0d9488', '#d97706', '#be185d', '#4338ca',
+              '#e0e7ff', '#fef3c7', '#dcfce7', '#fee2e2', '#f3e8ff', '#f1f5f9'
+            ].map((color) => (
               <Box
                 key={color}
                 onClick={() => setNewLabelColor(color)}
                 sx={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
+                  width: 32,
+                  height: 32,
+                  borderRadius: '8px',
                   bgcolor: color,
                   cursor: 'pointer',
-                  border: newLabelColor === color ? '2px solid' : 'none',
-                  borderColor: theme.palette.mode === 'dark' ? 'white' : 'black',
-                  boxShadow: 1
+                  border: newLabelColor === color ? '3px solid' : '1px solid',
+                  borderColor: newLabelColor === color ? (theme.palette.mode === 'dark' ? 'white' : 'black') : 'divider',
+                  boxShadow: newLabelColor === color ? 2 : 0,
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'scale(1.1)' }
                 }}
               />
             ))}

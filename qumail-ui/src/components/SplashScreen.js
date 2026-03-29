@@ -133,22 +133,6 @@ const SplashScreen = ({ onComplete }) => {
             />
           </Box>
           
-          <motion.div variants={textVariants} transition={{ delay: 1.8 }}>
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                  letterSpacing: '8px', 
-                  textTransform: 'uppercase', 
-                  fontWeight: 800, 
-                  color: 'primary.main',
-                  opacity: 0.8,
-                  mt: 2,
-                  fontSize: '0.75rem'
-              }}
-            >
-              Secure Messaging
-            </Typography>
-          </motion.div>
         </motion.div>
 
         {/* Dynamic Background Glows */}

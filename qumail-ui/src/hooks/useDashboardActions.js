@@ -14,7 +14,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
   const lastNotifId = useRef(null);
   const emailEmbeddings = useRef({}); // Local store for email vectors
   const [isSemanticSearch, setIsSemanticSearch] = useState(false);
-  const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(false);
+  const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(true);
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('qumail_settings');
@@ -107,14 +107,19 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     }
   }, []);
 
-  const fetchEmails = useCallback(async (folder = activeFolder) => {
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [limit] = useState(50); // Gmail standard
+
+  const fetchEmails = useCallback(async (folder = activeFolder, currentPage = page) => {
     setLoading(true);
     try {
-      const [emailsData, countsData] = await Promise.all([
-        QuMailService.fetchEmails(folder),
-        QuMailService.getFolderCounts()
-      ]);
+      const resp = await QuMailService.fetchEmails(folder, limit, currentPage);
+      const emailsData = resp.emails || resp; // API might return { emails, total }
+      const countsData = await QuMailService.getFolderCounts();
+      
       setEmails(emailsData);
+      setTotal(resp.total || emailsData.length); // Fallback to length if API doesn't provide total
       setFolderCounts(countsData);
       
       // Cache logic
@@ -129,7 +134,8 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
         const cached = localStorage.getItem(`qumail_cache_${folder}`);
         if (cached) {
           try {
-            setEmails(JSON.parse(cached));
+            const parsed = JSON.parse(cached);
+            setEmails(parsed.emails || parsed);
             enqueueSnackbar('Working offline: showing cached emails', { variant: 'info' });
             return;
           } catch(e) {}
@@ -141,7 +147,7 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
       setLoading(false);
     }
 
-  }, [activeFolder, enqueueSnackbar]);
+  }, [activeFolder, enqueueSnackbar, limit, page, settings.cacheEmails]);
 
   useEffect(() => {
     if (user) {
@@ -427,7 +433,12 @@ export const useDashboardActions = (user, initialFolder = 'inbox') => {
     fetchLabels,
     isSemanticSearch,
     isAiSearchEnabled,
-    setIsAiSearchEnabled
+    setIsAiSearchEnabled,
+    updateLabel,
+    page,
+    setPage,
+    total,
+    limit,
   };
 };
 
