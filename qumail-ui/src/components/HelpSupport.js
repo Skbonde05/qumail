@@ -1,24 +1,36 @@
 import React, { useState } from "react";
 import {
-  Box, Typography, Accordion, AccordionSummary, AccordionDetails, Divider, useTheme, Button
+  Box, Typography, Accordion, AccordionSummary, AccordionDetails, Divider, useTheme, Button, Grid, IconButton
 } from "@mui/material";
 import {
-  ExpandMore, EmailOutlined
+  ExpandMore, EmailOutlined, HelpOutline, LockOutlined, CloudOutlined, SpeedOutlined
 } from "@mui/icons-material";
 import { styled, alpha } from '@mui/material/styles';
 
-const StyledAccordion = styled(Accordion)(({ theme }) => ({
+const FAQItem = styled(Accordion)(({ theme }) => ({
   backgroundColor: 'transparent',
   boxShadow: 'none',
-  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
+  borderBottom: `1px solid ${theme.palette.divider}`,
   '&:before': { display: 'none' },
   '&.Mui-expanded': { margin: 0 },
   '& .MuiAccordionSummary-root': {
-    padding: theme.spacing(1.5, 0),
+    padding: theme.spacing(2, 0),
     '&.Mui-expanded': { minHeight: 48 }
   },
   '& .MuiAccordionDetails-root': {
     padding: theme.spacing(0, 0, 3, 0),
+  }
+}));
+
+const CategoryCard = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(4),
+  borderRadius: '24px',
+  border: `1px solid ${theme.palette.divider}`,
+  height: '100%',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    borderColor: theme.palette.primary.main,
+    backgroundColor: alpha(theme.palette.primary.main, 0.02),
   }
 }));
 
@@ -59,68 +71,77 @@ export default function HelpSupport({ onCompose }) {
     }
   ];
 
-  const handleSupportEmail = () => {
-    if (onCompose) onCompose();
-  };
-
   return (
-    <Box sx={{ maxWidth: 700, mx: "auto", p: { xs: 2, md: 6 } }}>
-      <Box sx={{ mb: 6 }}>
-        <Typography variant="h4" fontWeight="700" sx={{ mb: 1, letterSpacing: '-0.5px' }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, width: '100%' }}>
+      {/* Header Section */}
+      <Box sx={{ mb: 4, maxWidth: 800 }}>
+        <Typography variant="h3" fontWeight="900" sx={{ mb: 1, letterSpacing: '-2px', color: 'text.primary' }}>
           Help & Support
         </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Frequently asked questions about QuMail.
+        <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500, lineHeight: 1.5 }}>
+          Explore our knowledge base for everything about quantum security, account management, and enterprise-grade privacy.
         </Typography>
       </Box>
 
-      {/* FAQs list */}
-      <Box sx={{ mb: 8 }}>
-        {faqs.map((faq) => (
-          <StyledAccordion
-            key={faq.id}
-            expanded={expanded === faq.id}
-            onChange={(e, isExpanded) => setExpanded(isExpanded ? faq.id : false)}
-          >
-            <AccordionSummary expandIcon={<ExpandMore fontSize="small" />}>
-              <Typography fontWeight="700" variant="body1">{faq.question}</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Typography color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                {faq.answer}
+      {/* FAQs Section */}
+      <Grid container spacing={4}>
+        <Grid item xs={12} md={7}>
+          <Typography variant="h4" fontWeight="800" sx={{ mb: 1, letterSpacing: '-1px' }}>
+            Frequently Asked Questions
+          </Typography>
+          <Box>
+            {faqs.map((faq) => (
+              <FAQItem
+                key={faq.id}
+                expanded={expanded === faq.id}
+                onChange={(e, isExpanded) => setExpanded(isExpanded ? faq.id : false)}
+              >
+                <AccordionSummary expandIcon={<ExpandMore fontSize="small" />}>
+                  <Typography fontWeight="700" variant="subtitle1">{faq.question}</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography color="text.secondary" sx={{ lineHeight: 1.8, fontSize: '0.95rem' }}>
+                    {faq.answer}
+                  </Typography>
+                </AccordionDetails>
+              </FAQItem>
+            ))}
+          </Box>
+        </Grid>
+
+        {/* Support Sidebar */}
+        <Grid item xs={12} md={5}>
+          <Box sx={{ position: 'sticky', top: 100, p: 5, borderRadius: '40px', bgcolor: theme.palette.mode === 'dark' ? alpha('#fff', 0.02) : alpha('#000', 0.01), border: 1, borderColor: 'divider' }}>
+            <Typography variant="h5" fontWeight="900" gutterBottom sx={{ letterSpacing: '-0.5px' }}>
+              Still stuck?
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 4, lineHeight: 1.6 }}>
+              Our security experts are available 24/7 for technical assistance and data recovery services.
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Button 
+                variant="contained" 
+                fullWidth
+                size="large"
+                startIcon={<EmailOutlined />}
+                onClick={() => onCompose && onCompose()}
+                sx={{ borderRadius: '14px', py: 2, fontWeight: 800, textTransform: 'none' }}
+              >
+                support@qumail.com
+              </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', opacity: 0.6 }}>
+                Average response time: &lt; 2 hours
               </Typography>
-            </AccordionDetails>
-          </StyledAccordion>
-        ))}
-      </Box>
+            </Box>
+          </Box>
+        </Grid>
+      </Grid>
 
-      <Divider sx={{ mb: 6, opacity: 0.5 }} />
-
-      {/* Support email section */}
-      <Box sx={{ textAlign: 'center' }}>
-        <Typography variant="h6" fontWeight="700" gutterBottom>
-          Still need help?
+      <Box sx={{ mt: 15, textAlign: 'left', opacity: 0.5 }}>
+        <Typography variant="caption" fontWeight="800">
+          QUMAIL SECURE NETWORK • NODE REF: SUPPORT-v5.0.2
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Get in touch with our team for any other queries.
-        </Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<EmailOutlined />}
-          onClick={handleSupportEmail}
-          sx={{ 
-            borderRadius: '10px', 
-            textTransform: 'none', 
-            fontWeight: 700,
-            backgroundColor: 'text.primary',
-            color: 'background.paper',
-            '&:hover': {
-              backgroundColor: alpha(theme.palette.text.primary, 0.8)
-            }
-          }}
-        >
-          support@qumail.com
-        </Button>
       </Box>
     </Box>
   );

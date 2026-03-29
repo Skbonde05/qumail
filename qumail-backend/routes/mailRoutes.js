@@ -224,21 +224,47 @@ router.post('/send',
 );
 
 // Helper for formatting emails
+// --- Advanced Intent-Based AI Spam Intelligence (Semantic Simulation) ---
 const isPotentialSpam = (subject, body, sender, userSpamList = []) => {
-  const spamKeywords = ['winner', 'offer', 'congratulations', 'lottery', 'inheritance', 'bank account', 'credit card', 'urgent', 'gift card', 'bitcoin', 'crypto'];
   const lowerSubject = (subject || '').toLowerCase();
   const lowerBody = (body || '').toLowerCase();
   const lowerSender = (sender || '').toLowerCase();
 
-  // Check personal spam list
+  // 1. Explicit Personal Blocklist (Instant Flag)
   if (userSpamList.includes(lowerSender)) return true;
 
-  // Check keywords
-  for (const keyword of spamKeywords) {
-    if (lowerSubject.includes(keyword) || lowerBody.includes(keyword)) return true;
+  // 2. Technical Impersonation Check (Critical)
+  // If the email uses "QuMail Admin", "System Recovery", or "Password Reset" 
+  // but doesn't originate from our internal system sender (support@qumail.com)
+  const systemKeywords = ['admin', 'system', 'security', 'password reset', 'recovery', 'mfa', 'support'];
+  const isInternal = lowerSender.includes('support@qumail.com') || lowerSender.includes('admin@qumail.com');
+  if (!isInternal) {
+    for (const sysWord of systemKeywords) {
+      if (lowerSubject.includes(sysWord) || lowerBody.includes(sysWord)) {
+        // High-confidence impersonation attempt
+        return true; 
+      }
+    }
   }
+
+  // 3. Semantic Intent Weighting
+  let spamScore = 0;
   
-  return false;
+  // Topic: Urgency & Scarcity (Weight: 3)
+  const urgencyWords = ['urgent', 'emergency', 'immediate', 'asap', 'within 24 hours', 'action required', 'last chance'];
+  urgencyWords.forEach(word => { if (lowerSubject.includes(word) || lowerBody.includes(word)) spamScore += 3; });
+
+  // Topic: Financial Incentives (Weight: 4)
+  const financialWords = ['winner', 'lottery', 'inheritance', 'bonus', 'claim your', 'credit card', 'bank account', 'bitcoin', 'crypto', 'investment'];
+  financialWords.forEach(word => { if (lowerSubject.includes(word) || lowerBody.includes(word)) spamScore += 4; });
+
+  // Topic: Low-Value Marketing (Weight: 2)
+  const marketingWords = ['sale', 'offer', 'exclusive', 'discount', 'free gift', 'limited time'];
+  marketingWords.forEach(word => { if (lowerSubject.includes(word) || lowerBody.includes(word)) spamScore += 2; });
+
+  // Threshold: If combined intent weight > 5, it's flagged as spam
+  // This means (Urgency + Marketing) = 5 (Spam), or just one Financial (4) + Marketing (2) = 6 (Spam)
+  return spamScore >= 5;
 };
 
 const formatEmail = (mail) => ({
@@ -688,7 +714,29 @@ router.post('/batch-update', verifyToken, async (req, res) => {
       case 'read': update = { $set: { read: true } }; break;
       case 'unread': update = { $set: { read: false } }; break;
       case 'archive': update = { $set: { folder: 'ARCHIVE', trash: false, snoozed: null } }; break;
-      case 'trash': update = { $set: { trash: true, snoozed: null } }; break;
+      case 'trash': 
+        // Identify which are already in trash (will be permanently deleted) vs which are just being trashed
+        const existingMails = await Mail.find({ mailId: { $in: emailIds }, owner: userEmail });
+        const alreadyInTrashIds = existingMails.filter(m => m.trash).map(m => m.mailId);
+        const newlyTrashingIds = existingMails.filter(m => !m.trash).map(m => m.mailId);
+
+        if (alreadyInTrashIds.length > 0) {
+          const mailsToDeleteForever = existingMails.filter(m => m.trash);
+          let reclaimed = 0;
+          mailsToDeleteForever.forEach(m => reclaimed += calculateMailSize(m));
+          
+          await Mail.deleteMany({ mailId: { $in: alreadyInTrashIds }, owner: userEmail });
+          await User.updateOne({ email: userEmail }, { $inc: { storageUsed: -reclaimed } });
+        }
+
+        if (newlyTrashingIds.length > 0) {
+          await Mail.updateMany(
+            { mailId: { $in: newlyTrashingIds }, owner: userEmail },
+            { $set: { trash: true, snoozed: null } }
+          );
+        }
+        return res.json({ success: true, deleted: alreadyInTrashIds.length, trashed: newlyTrashingIds.length });
+
       case 'restore': update = { $set: { trash: false } }; break;
       case 'important': update = { $set: { important: true } }; break;
       case 'unimportant': update = { $set: { important: false } }; break;

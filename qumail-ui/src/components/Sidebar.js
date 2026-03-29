@@ -180,13 +180,14 @@ const Sidebar = ({
           sx={{ 
             borderRadius: "18px", 
             minWidth: 160,
-            py: 1.8, 
+            py: 1.8,
             px: 3.5,
-            textTransform: "none", 
-            fontWeight: "800", 
             fontSize: '1rem',
+            fontWeight: 800,
+            textTransform: 'none',
+            letterSpacing: '0.5px',
             backgroundColor: theme.palette.primary.main,
-            color: 'white',
+            color: '#fff',
             boxShadow: `0 10px 20px ${alpha(theme.palette.primary.main, 0.25)}`,
             '&:hover': { 
                 boxShadow: `0 15px 30px ${alpha(theme.palette.primary.main, 0.35)}`,
@@ -196,7 +197,7 @@ const Sidebar = ({
             transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
           }}
         >
-          Compose
+          {t('sidebar.compose')}
         </Button>
       </Box>
 
@@ -206,7 +207,7 @@ const Sidebar = ({
             <SidebarItem
               key={section.id}
               icon={section.icon}
-              text={section.text}
+              text={t(`sidebar.${section.id}`)}
               count={section.count}
               selected={activeSection === 'inbox' && activeFolder === section.id}
               onClick={() => onFolderChange(section.id)}
@@ -216,7 +217,7 @@ const Sidebar = ({
 
         <Box sx={{ px: 3, py: 2, mt: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
            <Typography variant="overline" sx={{ fontWeight: 800, color: 'text.secondary', letterSpacing: '2px', fontSize: '0.65rem', opacity: 0.6 }}>
-              Labels
+              {t('common.labels')}
            </Typography>
            <Tooltip title="Create new label">
               <IconButton size="small" onClick={onCreateLabel} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}><Add fontSize="small" /></IconButton>

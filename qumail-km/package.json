@@ -1,7 +1,9 @@
 {
-  "name": "qumail-backend",
-  "version": "4.0.0",
-  "description": "QuMail Quantum-Secure Email Platform Backend",
+  "name": "qumail-km",
+  "version": "1.0.0",
+  "description": "QuMail Quantum-Secure Key Management Service",
+
+
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -122,10 +122,44 @@ const QuMailService = {
     } finally {
       localStorage.removeItem('qumail_token');
       localStorage.removeItem('qumail_refresh_token');
-      localStorage.removeItem('qumail_email');
-      localStorage.removeItem('qumail_name');
     }
     return { success: true };
+  },
+  
+  logoutAllDevices: async () => {
+    try {
+      await axiosInstance.post('/api/auth/logout-all');
+    } finally {
+      localStorage.removeItem('qumail_token');
+      localStorage.removeItem('qumail_refresh_token');
+    }
+    return { success: true };
+  },
+
+  deleteAccount: async () => {
+    try {
+      const response = await axiosInstance.delete('/api/auth/profile');
+      if (response.data.success) {
+        localStorage.clear();
+      }
+      return response.data;
+    } catch (e) {
+      return { success: false, message: 'Could not delete account' };
+    }
+  },
+
+  getSecurityLogs: async () => {
+    const response = await axiosInstance.get('/api/auth/security-logs');
+    return response.data;
+  },
+
+  rotateKeys: async () => {
+    try {
+      const response = await axiosInstance.post('/api/auth/rotate-keys');
+      return response.data;
+    } catch (e) {
+      return { success: false, message: 'Cryptographic rotation failed' };
+    }
   },
 
   getProfile: async () => {

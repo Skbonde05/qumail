@@ -1,25 +1,34 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Box, CssBaseline, useTheme, useMediaQuery, Drawer, SwipeableDrawer, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button } from '@mui/material';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
+import { Box, CssBaseline, useTheme, useMediaQuery, Drawer, SwipeableDrawer, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button, CircularProgress } from '@mui/material';
 import TopBar from '../components/dashboard/TopBar';
 import Sidebar from '../components/Sidebar';
-import Inbox from '../components/Inbox';
-import Compose from '../components/Compose';
-import NotificationList from '../components/dashboard/NotificationList';
-import QuickSettings from '../components/dashboard/QuickSettings';
-import AppSettings from '../components/AppSettings';
-import AccountSettings from '../components/AccountSettings';
-import SecuritySettings from '../components/SecuritySettings';
-import EmailViewer from '../components/EmailViewer';
-import PrivacyPolicy from '../components/PrivacyPolicy';
-import AboutQuMail from '../components/AboutQuMail';
-import HelpSupport from '../components/HelpSupport';
 import { useDashboardActions } from '../hooks/useDashboardActions';
 import QuMailService from '../services/QuMailService';
+
+const Inbox = lazy(() => import('../components/Inbox'));
+const Compose = lazy(() => import('../components/Compose'));
+const NotificationList = lazy(() => import('../components/dashboard/NotificationList'));
+const QuickSettings = lazy(() => import('../components/dashboard/QuickSettings'));
+const EmailViewer = lazy(() => import('../components/EmailViewer'));
+const PrivacyPolicy = lazy(() => import('../components/PrivacyPolicy'));
+const AboutQuMail = lazy(() => import('../components/AboutQuMail'));
+const HelpSupport = lazy(() => import('../components/HelpSupport'));
+
 
 const DRAWER_WIDTH = 260;
 const SETTING_DRAWER_WIDTH = 360;
 
-const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdateTheme, bgImage, onUpdateBgImage }) => {
+const Dashboard = ({ 
+  user, 
+  onUserUpdate, 
+  onLogout, 
+  darkMode, 
+  onToggleTheme, 
+  themeName, 
+  onUpdateTheme, 
+  bgImage, 
+  onUpdateBgImage 
+}) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -29,6 +38,25 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
   const [selectedEmailId, setSelectedEmailId] = useState(null);
   const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
   const [draftToEdit, setDraftToEdit] = useState(null);
+  const [density, setDensity] = useState(() => {
+    const saved = localStorage.getItem('qumail_settings');
+    if (saved) {
+      try {
+        return JSON.parse(saved).density || 'comfortable';
+      } catch (e) {}
+    }
+    return 'comfortable';
+  });
+
+  useEffect(() => {
+    const handleSettingsUpdate = (e) => {
+      if (e.detail && e.detail.density) {
+        setDensity(e.detail.density);
+      }
+    };
+    window.addEventListener('qumail-settings-updated', handleSettingsUpdate);
+    return () => window.removeEventListener('qumail-settings-updated', handleSettingsUpdate);
+  }, []);
   
   // Migration: Clear legacy signature if it matches the default
   useEffect(() => {
@@ -58,7 +86,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     handleDecryptEmail,
     markNotificationAsRead,
     deleteNotification,
-    setNotifications,
+    markAllNotificationsAsRead,
     fetchEmails,
     searchQuery,
     setSearchQuery,
@@ -69,12 +97,23 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
     fetchLabels,
     isSemanticSearch,
     isAiSearchEnabled,
-    setIsAiSearchEnabled,
     page,
     setPage,
     total,
     limit,
   } = useDashboardActions(user);
+
+
+  // Listen for test notifications in real-time
+  useEffect(() => {
+    const handleTestNotif = (event) => {
+      if (event.detail) {
+        addNotification(event.detail.title, event.detail.message, 'success', 'Notifications');
+      }
+    };
+    window.addEventListener('qumail-test-notif', handleTestNotif);
+    return () => window.removeEventListener('qumail-test-notif', handleTestNotif);
+  }, [addNotification]);
 
   const [activeSection, setActiveSection] = useState('inbox');
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
@@ -180,28 +219,28 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
 
 
   const renderContent = () => {
+    return (
+      <Suspense fallback={
+        <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <CircularProgress />
+        </Box>
+      }>
+        {selectedEmailId ? (
+          <EmailViewer 
+            email={emails.find(e => (e.uid || e.id) === selectedEmailId)} 
+            folderName={activeFolder}
+            onBack={() => setSelectedEmailId(null)} 
+            onAction={handleAction}
+            onDecryptEmail={handleDecryptEmail}
+            onReply={handleReply}
+            onReplyAll={handleReplyAll}
+            onForward={handleForward}
+          />
 
-    if (selectedEmailId) {
-      const selectedEmail = emails.find(e => (e.uid || e.id) === selectedEmailId);
-      return (
-        <EmailViewer 
-          email={selectedEmail} 
-          onBack={() => setSelectedEmailId(null)} 
-          onAction={handleAction}
-          onDecryptEmail={handleDecryptEmail}
-          onReply={handleReply}
-          onReplyAll={handleReplyAll}
-          onForward={handleForward}
-        />
-      );
-    }
-
-    switch (activeSection) {
-      case 'about': return <AboutQuMail />;
-      case 'privacy': return <PrivacyPolicy />;
-      case 'help': return <HelpSupport onCompose={() => setComposeOpen(true)} />;
-      default:
-        return (
+        ) : (
+          activeSection === 'about' ? <AboutQuMail /> :
+          activeSection === 'privacy' ? <PrivacyPolicy /> :
+          activeSection === 'help' ? <HelpSupport onCompose={() => setComposeOpen(true)} /> :
           <Inbox 
             emails={emails} 
             folderName={activeFolder} 
@@ -211,6 +250,7 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             setPage={setPage}
             total={total}
             limit={limit}
+            density={density}
             onEmailClick={(email) => {
               if (activeFolder === 'drafts') {
                 setDraftToEdit(email);
@@ -222,9 +262,11 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
             onAction={handleAction}
             onRefresh={() => fetchEmails()}
           />
-        );
-    }
+        )}
+      </Suspense>
+    );
   };
+
 
   return (
     <Box 
@@ -252,9 +294,6 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         unreadNotifications={notifications.filter(n => !n.read).length}
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
-        isSemanticSearch={isSemanticSearch}
-        isAiSearchEnabled={isAiSearchEnabled}
-        onToggleAiSearch={() => setIsAiSearchEnabled(!isAiSearchEnabled)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -359,23 +398,27 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
         {renderContent()}
       </Box>
 
-      <Compose 
-        open={composeOpen} 
-        onClose={() => { setComposeOpen(false); setDraftToEdit(null); }} 
-        onSend={handleSendEmail} 
-        draftToEdit={draftToEdit}
-      />
+      <Suspense fallback={null}>
+        <Compose 
+          open={composeOpen} 
+          onClose={() => { setComposeOpen(false); setDraftToEdit(null); }} 
+          onSend={handleSendEmail} 
+          draftToEdit={draftToEdit}
+        />
 
-      <NotificationList 
-        anchorEl={notifAnchor}
-        onClose={() => setNotifAnchor(null)}
-        notifications={notifications}
-        onMarkAsRead={(id) => markNotificationAsRead(id)}
-        onMarkAllAsRead={() => { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); setNotifAnchor(null); }}
-        onDelete={(id) => deleteNotification(id)}
-        onDeleteAll={() => { setNotifications([]); setNotifAnchor(null); }}
-        onShowAll={() => { setNotifAnchor(null); handleSectionChange('notifications'); }}
-      />
+        <NotificationList 
+          anchorEl={notifAnchor}
+          onClose={() => setNotifAnchor(null)}
+          notifications={notifications}
+          onMarkAsRead={(id) => markNotificationAsRead(id)}
+          onMarkAllAsRead={() => { markAllNotificationsAsRead(); setNotifAnchor(null); }}
+          onDelete={(id) => deleteNotification(id)}
+          onDeleteAll={() => { /* In a real app add batch delete API */ setNotifAnchor(null); }}
+          onShowAll={() => { setNotifAnchor(null); handleSectionChange('notifications'); }}
+        />
+
+      </Suspense>
+
 
       {/* Quick Settings Drawer */}
       <Drawer
@@ -398,16 +441,20 @@ const Dashboard = ({ user, onLogout, darkMode, onToggleTheme, themeName, onUpdat
           }
         }}
       >
-        <QuickSettings 
-          onClose={() => setQuickSettingsOpen(false)} 
-          darkMode={darkMode}
-          onToggleTheme={onToggleTheme}
-          themeName={themeName}
-          onUpdateTheme={onUpdateTheme}
-          bgImage={bgImage}
-          onUpdateBgImage={onUpdateBgImage}
-          user={user}
-        />
+        <Suspense fallback={<CircularProgress sx={{ m: 2 }} />}>
+          <QuickSettings 
+            onClose={() => setQuickSettingsOpen(false)} 
+            darkMode={darkMode}
+            onToggleTheme={onToggleTheme}
+            themeName={themeName}
+            onUpdateTheme={onUpdateTheme}
+            bgImage={bgImage}
+            onUpdateBgImage={onUpdateBgImage}
+            user={user}
+            onUserUpdate={onUserUpdate}
+          />
+        </Suspense>
+
       </Drawer>
       
       <Sidebar.ProfileMenu 

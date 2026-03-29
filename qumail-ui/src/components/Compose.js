@@ -73,7 +73,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const [errors, setErrors] = useState({});
   const [suggestion, setSuggestion] = useState("");
   const [showAiPulse, setShowAiPulse] = useState(false);
-  const [settings] = useState(() => {
+  const [appContextSettings, setAppContextSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('qumail_settings');
       return saved ? JSON.parse(saved) : {};
@@ -83,38 +83,59 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // ... (keeping other useEffects and handlers same)
+  // Listen for real-time settings updates
+  useEffect(() => {
+    const handleSettingsUpdate = (event) => {
+      if (event.detail) {
+        setAppContextSettings(event.detail);
+      }
+    };
+    window.addEventListener('qumail-settings-updated', handleSettingsUpdate);
+    return () => window.removeEventListener('qumail-settings-updated', handleSettingsUpdate);
+  }, []);
   
-  // Load draft if editing
+  // Load draft or reset for new email
   useEffect(() => {
-    if (draftToEdit) {
-      setTo(draftToEdit.to || "");
-      setSubject(draftToEdit.subject || "");
-      setBody(draftToEdit.body || "");
-      setLevel(draftToEdit.encryptionLevel || "aes256");
-      setCc(Array.isArray(draftToEdit.cc) ? draftToEdit.cc.join(", ") : draftToEdit.cc || "");
-      setBcc(Array.isArray(draftToEdit.bcc) ? draftToEdit.bcc.join(", ") : draftToEdit.bcc || "");
-      setAttachments(draftToEdit.attachments || []);
-      setProcessedAttachments(draftToEdit.attachments || []);
-      setDraftId(draftToEdit._id || null);
-      
-      if (draftToEdit.cc && draftToEdit.cc.length > 0) setShowCC(true);
-      if (draftToEdit.bcc && draftToEdit.bcc.length > 0) setShowBCC(true);
+    if (open) {
+      if (draftToEdit) {
+        setTo(draftToEdit.to || "");
+        setSubject(draftToEdit.subject || "");
+        setBody(draftToEdit.body || "");
+        setLevel(draftToEdit.encryptionLevel || "aes256");
+        setCc(Array.isArray(draftToEdit.cc) ? draftToEdit.cc.join(", ") : draftToEdit.cc || "");
+        setBcc(Array.isArray(draftToEdit.bcc) ? draftToEdit.bcc.join(", ") : draftToEdit.bcc || "");
+        setAttachments(draftToEdit.attachments || []);
+        setProcessedAttachments(draftToEdit.attachments || []);
+        setDraftId(draftToEdit._id || null);
+        
+        if (draftToEdit.cc && draftToEdit.cc.length > 0) setShowCC(true);
+        else setShowCC(false);
+        if (draftToEdit.bcc && draftToEdit.bcc.length > 0) setShowBCC(true);
+        else setShowBCC(false);
+      } else {
+        // Reset state for new email
+        setTo("");
+        setSubject("");
+        // Load signature for new emails
+        const sig = appContextSettings.signature || "";
+        setBody(sig ? `\n\n\n${sig}` : "");
+        setLevel(appContextSettings.defaultEncryption || "aes256");
+        setCc("");
+        setBcc("");
+        setAttachments([]);
+        setProcessedAttachments([]);
+        setDraftId(null);
+        setShowCC(false);
+        setShowBCC(false);
+      }
     }
-  }, [draftToEdit]);
-
-  // Load signature for new emails
-  useEffect(() => {
-    if (open && !draftToEdit && settings.signature && !body) {
-      setBody("\n\n" + settings.signature);
-    }
-  }, [open, draftToEdit, settings.signature]);
+  }, [open, draftToEdit, appContextSettings.defaultEncryption, appContextSettings.signature]);
 
   // Auto-save draft based on settings
   useEffect(() => {
-    if (!settings.autoSaveDrafts) return;
+    if (!appContextSettings.autoSaveDrafts) return;
 
-    const interval = (settings.autoSaveInterval || 5) * 1000;
+    const interval = (appContextSettings.autoSaveInterval || 5) * 1000;
     const timer = setTimeout(() => {
       if ((subject || body) && !sending) {
         handleSaveDraft();
@@ -122,7 +143,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
     }, interval);
 
     return () => clearTimeout(timer);
-  }, [subject, body, to, cc, bcc, level, settings.autoSaveDrafts, settings.autoSaveInterval]);
+  }, [subject, body, to, cc, bcc, level, appContextSettings.autoSaveDrafts, appContextSettings.autoSaveInterval, sending]);
 
   // AI Smart Compose Mock Logic
   const mockAiCompletions = {
@@ -199,15 +220,8 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
       return;
     }
 
-    // Confirmation check from settings
-    if (settings.sendConfirmation) {
-      if (!window.confirm("Are you sure you want to send this email?")) {
-        return;
-      }
-    }
-
-
     setSending(true);
+
     
     try {
       // Split CC/BCC into arrays
@@ -727,7 +741,7 @@ export default function Compose({ open, onClose, onSend, draftToEdit = null }) {
                   InputProps={{ 
                     disableUnderline: true,
                     readOnly: sending,
-                    spellCheck: settings.spellCheck
+                    spellCheck: appContextSettings.spellCheck
                   }}
                   placeholder="Type your message here..."
                   value={body}

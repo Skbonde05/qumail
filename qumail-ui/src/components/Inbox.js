@@ -16,11 +16,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format } from 'date-fns';
 
 const EmailListItem = styled(ListItem, {
-  shouldForwardProp: (prop) => prop !== 'unread' && prop !== 'selected',
-})(({ theme, unread, selected }) => ({
+  shouldForwardProp: (prop) => prop !== 'unread' && prop !== 'selected' && prop !== 'density',
+})(({ theme, unread, selected, density }) => ({
   borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
   padding: '0 12px',
-  height: 42,
+  height: density === 'compact' ? 32 : (density === 'spacious' ? 56 : 42),
   backgroundColor: selected 
     ? alpha(theme.palette.primary.main, 0.12)
     : (unread ? theme.palette.background.paper : alpha(theme.palette.text.primary, 0.02)),
@@ -37,7 +37,7 @@ const EmailListItem = styled(ListItem, {
   cursor: 'pointer',
 }));
 
-const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, availableLabels = [] }) => {
+const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, availableLabels = [], density, folderName }) => {
   const theme = useTheme();
   const emailLabels = useMemo(() => {
     if (!email.labels) return [];
@@ -46,7 +46,7 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
 
   return (
   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-    <EmailListItem unread={!email.read} onClick={() => onEmailClick(email)} selected={selected}>
+    <EmailListItem unread={!email.read} onClick={() => onEmailClick(email)} selected={selected} density={density}>
       <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 80, gap: 0.5 }}>
         <Checkbox 
           size="small" 
@@ -69,7 +69,8 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
             color: !email.read ? 'text.primary' : 'text.secondary',
             fontSize: '0.875rem'
         }}>
-          {email.from}
+          {folderName === 'sent' ? `To: ${email.to}` : email.from}
+
         </Typography>
       </Box>
 
@@ -115,8 +116,14 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
         <Tooltip title="Archive">
           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'archive'); }}><ArchiveOutlined fontSize="small" /></IconButton>
         </Tooltip>
-        <Tooltip title="Delete">
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, 'trash'); }}><DeleteOutlined fontSize="small" /></IconButton>
+        <Tooltip title={folderName === 'trash' ? "Delete forever" : "Delete"}>
+          <IconButton size="small" onClick={(e) => { 
+            e.stopPropagation(); 
+            if (folderName === 'trash' && !window.confirm("PERMANENT ACTION: Delete this email forever?")) return;
+            onAction(email.id, 'trash'); 
+          }}>
+            <DeleteOutlined fontSize="small" />
+          </IconButton>
         </Tooltip>
         <Tooltip title={email.read ? "Mark as unread" : "Mark as read"}>
           <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id, email.read ? 'unread' : 'read'); }}><MarkEmailReadOutlined fontSize="small" /></IconButton>
@@ -130,10 +137,10 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
   );
 });
 
-const Inbox = memo(({ 
+const Inbox = ({ 
   emails = [], 
   folderName = "inbox", 
-  loading,
+  loading = false,
   onEmailClick,
   onAction,
   onRefresh,
@@ -141,7 +148,8 @@ const Inbox = memo(({
   page = 1,
   setPage,
   total = 0,
-  limit = 50
+  limit = 50,
+  density = 'comfortable'
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -183,9 +191,11 @@ const Inbox = memo(({
         selected={selectedEmailIds.includes(email.id)}
         onSelect={handleSelectOne}
         availableLabels={labels}
+        density={density}
+        folderName={folderName}
       />
     ));
-  }, [emails, onEmailClick, onAction, selectedEmailIds, labels]);
+  }, [emails, onEmailClick, onAction, selectedEmailIds, labels, density]);
 
   if (loading && emails.length === 0) {
     return (
@@ -228,22 +238,18 @@ const Inbox = memo(({
                 sx: { width: 200, mt: 1.5, '& .MuiMenuItem-root': { fontSize: '0.875rem' } }
               }}
             >
-              {selectedEmailIds.length > 0 ? (
-                <>
-                  <MenuItem onClick={() => handleBulkAction('read')}>Mark as read</MenuItem>
-                  <MenuItem onClick={() => handleBulkAction('unread')}>Mark as unread</MenuItem>
-                  <MenuItem onClick={() => handleBulkAction('important')}>Mark as important</MenuItem>
-                  <MenuItem onClick={() => handleBulkAction('unimportant')}>Mark as not important</MenuItem>
-                  <Divider />
-                  <MenuItem onClick={() => handleBulkAction('star')}>Add star</MenuItem>
-                  <MenuItem onClick={() => handleBulkAction('unstar')}>Remove star</MenuItem>
-                </>
-              ) : (
-                <>
-                  <MenuItem onClick={() => { onAction('all', 'read'); handleMenuClose(); }}>Mark all as read</MenuItem>
-                  <MenuItem onClick={() => { handleSelectAll({ target: { checked: true } }); handleMenuClose(); }}>Select all</MenuItem>
-                </>
-              )}
+              {selectedEmailIds.length > 0 ? [
+                <MenuItem key="read" onClick={() => handleBulkAction('read')}>Mark as read</MenuItem>,
+                <MenuItem key="unread" onClick={() => handleBulkAction('unread')}>Mark as unread</MenuItem>,
+                <MenuItem key="important" onClick={() => handleBulkAction('important')}>Mark as important</MenuItem>,
+                <MenuItem key="unimportant" onClick={() => handleBulkAction('unimportant')}>Mark as not important</MenuItem>,
+                <Divider key="div1" />,
+                <MenuItem key="star" onClick={() => handleBulkAction('star')}>Add star</MenuItem>,
+                <MenuItem key="unstar" onClick={() => handleBulkAction('unstar')}>Remove star</MenuItem>
+              ] : [
+                <MenuItem key="read-all" onClick={() => { onAction('all', 'read'); handleMenuClose(); }}>Mark all as read</MenuItem>,
+                <MenuItem key="select-all" onClick={() => { handleSelectAll({ target: { checked: true } }); handleMenuClose(); }}>Select all</MenuItem>
+              ]}
             </Menu>
             
             {selectedEmailIds.length > 0 && (
@@ -258,8 +264,12 @@ const Inbox = memo(({
                     <Report fontSize="small" sx={{ fontSize: 18 }} />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton size="small" onClick={() => { onAction(selectedEmailIds, 'trash'); clearSelection(); }}>
+                <Tooltip title={folderName === 'trash' ? "Delete forever" : "Delete"}>
+                  <IconButton size="small" onClick={() => { 
+                    if (folderName === 'trash' && !window.confirm(`PERMANENT ACTION: Delete ${selectedEmailIds.length} emails forever?`)) return;
+                    onAction(selectedEmailIds, 'trash'); 
+                    clearSelection(); 
+                  }}>
                     <DeleteOutlined fontSize="small" />
                   </IconButton>
                 </Tooltip>
@@ -318,6 +328,6 @@ const Inbox = memo(({
       </Paper>
     </Box>
   );
-});
+};
 
 export default Inbox;

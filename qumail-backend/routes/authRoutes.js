@@ -459,6 +459,8 @@ router.post('/login', authLimiter,
           id: user._id,
           name: user.name,
           email: user.email,
+          username: user.username,
+          bio: user.bio,
           avatar: user.avatar,
           settings: user.settings,
           storageUsed: user.storageUsed,
@@ -512,6 +514,8 @@ router.post('/verify-token', verifyToken, async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        username: user.username,
+        bio: user.bio,
         avatar: user.avatar,
         settings: user.settings,
         storageUsed: user.storageUsed,
@@ -559,6 +563,8 @@ router.get('/profile', verifyToken, async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        username: user.username,
+        bio: user.bio,
         avatar: user.avatar,
         settings: user.settings,
         storageUsed: user.storageUsed,
@@ -604,11 +610,15 @@ router.put('/profile',
       const errors = validationResult(req);
       if (!errors.isEmpty()) return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
       
-      const { name, settings } = req.body;
+      const { name, username, bio, avatar, settings } = req.body;
       const user = await User.findOne({ email: req.user.email });
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
       
       if (name) user.name = name.trim();
+      if (username) user.username = username.trim();
+      if (bio !== undefined) user.bio = bio.trim();
+      if (avatar) user.avatar = avatar;
+      
       if (settings) {
         // Prevent enabling 2FA through generic profile update if no secret exists
         if (settings.twoFactorEnabled === true && !user.twoFactorSecret) {
@@ -728,6 +738,45 @@ router.post('/logout', verifyToken, async (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ------------------ LOGOUT ALL DEVICES ------------------
+router.post('/logout-all', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.user.email });
+    if (user) {
+      user.refreshToken = null;
+      await user.save();
+    }
+    res.json({ success: true, message: 'Logged out from all devices successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ------------------ DELETE ACCOUNT ------------------
+router.delete('/profile', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    // Delete all mail related to this user (from or to)
+    await Mail.deleteMany({ $or: [{ from: user.email }, { to: user.email }] });
+    
+    // Delete notification
+    await Notification.deleteMany({ userId: user._id });
+    
+    // Delete security logs
+    await SecurityLog.deleteMany({ userId: user._id });
+    
+    // Delete the user
+    await User.findByIdAndDelete(user._id);
+    
+    res.json({ success: true, message: 'Account and all related data deleted permanentely' });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete account' });
   }
 });
 
@@ -966,6 +1015,44 @@ router.post('/verify-2fa', async (req, res) => {
   } catch (error) {
     console.error('MFA verification error:', error);
     res.status(500).json({ success: false, message: 'MFA verification failed' });
+  }
+});
+
+// ------------------ KEY ROTATION (ENTERPRISE UPGRADE) ------------------
+router.post('/rotate-keys', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Generate new high-entropy master keys
+    const newAes256 = generateAESKey();
+    const newOtp = generateOTPKey(1024); // Fresh master OTP segment for future sessions
+
+    // Atomic update of security keys
+    user.encryptionKeys = {
+      ...user.encryptionKeys,
+      aes256: newAes256,
+      otp: newOtp,
+      lastRotated: new Date()
+    };
+
+    await user.save();
+
+    // Log the security action with warning level (critical security event)
+    await addLog(user._id, 'KEY_ROTATION', 'User-initiated enterprise-grade key rotation sequence completed.', 'warning', req);
+
+    res.json({
+      success: true,
+      message: 'Master encryption keys rotated successfully. Your secure identity has been refreshed.',
+      keys: {
+        otp: newOtp,
+        aes256: newAes256
+      }
+    });
+
+  } catch (error) {
+    console.error('Rotate keys error:', error);
+    res.status(500).json({ success: false, message: 'Cryptographic rotation failed: ' + error.message });
   }
 });
 

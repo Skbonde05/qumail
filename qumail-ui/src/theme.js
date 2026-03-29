@@ -28,7 +28,16 @@ export const THEME_CONFIGS = {
 };
 
 export const getTheme = (mode, themeName = 'default', hasBgImage = false) => {
-  const config = THEME_CONFIGS[themeName] || THEME_CONFIGS.default;
+  let config = THEME_CONFIGS[themeName];
+  
+  if (!config && themeName && themeName.startsWith('#')) {
+    config = {
+      primary: { light: themeName, dark: themeName },
+      secondary: { light: themeName, dark: themeName }
+    };
+  }
+  
+  if (!config) config = THEME_CONFIGS.default;
   const isDark = mode === "dark";
   
   const glassStyle = {

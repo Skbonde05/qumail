@@ -2,15 +2,17 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ThemeProvider, CssBaseline, Box, CircularProgress } from "@mui/material";
 import { SnackbarProvider, useSnackbar } from "notistack";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import SplashScreen from "./components/SplashScreen";
 import QuMailService from "./services/QuMailService";
 import { getTheme } from "./theme";
 
 import { MotionConfig } from "framer-motion";
-import Dashboard from "./pages/Dashboard";
+
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+
 
 const AppContent = () => {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -147,6 +149,11 @@ const AppContent = () => {
     }
   };
 
+  const handleUserUpdate = (updatedUser) => {
+    setUser(updatedUser);
+    window.dispatchEvent(new CustomEvent('qumail-user-updated', { detail: updatedUser }));
+  };
+
   useEffect(() => {
     const handleSettingsUpdate = (e) => {
       const newSettings = e.detail || {};
@@ -155,8 +162,19 @@ const AppContent = () => {
         setAnimationLevel(newSettings.animationLevel);
       }
     };
+    
+    const onUserInternalUpdate = (e) => {
+      if (e.detail) {
+        setUser(e.detail);
+      }
+    };
+
     window.addEventListener('qumail-settings-updated', handleSettingsUpdate);
-    return () => window.removeEventListener('qumail-settings-updated', handleSettingsUpdate);
+    window.addEventListener('qumail-user-updated', onUserInternalUpdate);
+    return () => {
+      window.removeEventListener('qumail-settings-updated', handleSettingsUpdate);
+      window.removeEventListener('qumail-user-updated', onUserInternalUpdate);
+    };
   }, []);
 
 
@@ -226,18 +244,26 @@ const AppContent = () => {
                   <Navigate to="/login" />
                 )
               ) : (
-                <Dashboard 
-                  user={user} 
-                  onLogout={handleLogout} 
-                  darkMode={darkMode} 
-                  onToggleTheme={toggleTheme} 
-                  themeName={themeName}
-                  onUpdateTheme={(name) => updateThemeName(name)}
-                  bgImage={bgImage}
-                  onUpdateBgImage={updateBgImage}
-                />
+                <Suspense fallback={
+                  <Box sx={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+                    <CircularProgress />
+                  </Box>
+                }>
+                  <Dashboard 
+                    user={user} 
+                    onUserUpdate={handleUserUpdate}
+                    onLogout={handleLogout} 
+                    darkMode={darkMode} 
+                    onToggleTheme={toggleTheme} 
+                    themeName={themeName}
+                    onUpdateTheme={(name) => updateThemeName(name)}
+                    bgImage={bgImage}
+                    onUpdateBgImage={updateBgImage}
+                  />
+                </Suspense>
               )
             } />
+
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </MotionConfig>

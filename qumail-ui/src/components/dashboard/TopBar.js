@@ -118,7 +118,7 @@ const TopBar = memo(({
               <IconButton 
                 size="small" 
                 onClick={() => onSearchChange('')}
-                sx={{ mr: 1, color: 'text.secondary' }}
+                sx={{ mr: 0.5, color: 'text.secondary' }}
               >
                 <Close fontSize="small" />
               </IconButton>
