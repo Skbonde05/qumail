@@ -16,21 +16,39 @@ const generateAESIV = () => {
   return crypto.randomBytes(16).toString('hex');
 };
 
-// Validate hex key
+// Validate hex key (more lenient to allow spaces/colons for cleaning)
 const isValidHexKey = (key) => {
   if (!key || typeof key !== 'string') return false;
-  return /^[0-9a-fA-F]+$/.test(key);
+  const clean = key.replace(/[\s:]/g, '');
+  return clean.length > 0 && /^[0-9a-fA-F]+$/.test(clean);
+};
+
+// Clean hex strings
+const cleanHex = (hex) => {
+  if (!hex || typeof hex !== 'string') return '';
+  return hex.replace(/[\s:]/g, '');
+};
+
+// Check if string is likely Base64
+const isBase64 = (str) => {
+  if (!str || typeof str !== 'string') return false;
+  // If it contains characters not in hex, but used in base64
+  if (/[g-zG-Z+=\/]/.test(str)) return true;
+  // If length is not even, it's not hex
+  if (str.length % 2 !== 0 && str.length % 4 === 0) return true;
+  return false;
 };
 
 // OTP Encryption
 const otpEncrypt = (text, key) => {
   try {
-    if (!isValidHexKey(key)) {
+    const cleanedKey = cleanHex(key);
+    if (!cleanedKey || !/^[0-9a-fA-F]+$/.test(cleanedKey)) {
       throw new Error('Invalid hex key format for OTP encryption');
     }
     
     const textBuffer = Buffer.from(text, 'utf8');
-    const keyBuffer = Buffer.from(key, 'hex');
+    const keyBuffer = Buffer.from(cleanedKey, 'hex');
     
     if (keyBuffer.length < textBuffer.length) {
       throw new Error(`OTP key too short! Key: ${keyBuffer.length} bytes, Text: ${textBuffer.length} bytes`);
@@ -51,14 +69,25 @@ const otpEncrypt = (text, key) => {
 };
 
 // OTP Decryption
-const otpDecrypt = (encryptedHex, key) => {
+const otpDecrypt = (ciphertext, key) => {
   try {
-    if (!isValidHexKey(key)) {
+    const cleanedKey = cleanHex(key);
+    if (!cleanedKey || !/^[0-9a-fA-F]+$/.test(cleanedKey)) {
       throw new Error('Invalid hex key format for OTP decryption');
     }
     
-    const encryptedBuffer = Buffer.from(encryptedHex, 'hex');
-    const keyBuffer = Buffer.from(key, 'hex');
+    const keyBuffer = Buffer.from(cleanedKey, 'hex');
+    let encryptedBuffer;
+
+    // Detect if ciphertext is hex or base64
+    const trimmedCipher = ciphertext.trim();
+    if (isBase64(trimmedCipher)) {
+      encryptedBuffer = Buffer.from(trimmedCipher, 'base64');
+    } else {
+      // Treat as hex, but clean it first
+      const cleanedCipher = cleanHex(trimmedCipher);
+      encryptedBuffer = Buffer.from(cleanedCipher, 'hex');
+    }
     
     if (keyBuffer.length < encryptedBuffer.length) {
       throw new Error(`OTP key too short! Key: ${keyBuffer.length} bytes, Cipher: ${encryptedBuffer.length} bytes`);

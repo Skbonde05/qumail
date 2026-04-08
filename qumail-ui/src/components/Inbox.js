@@ -184,9 +184,19 @@ const EmailRow = memo(({ email, onEmailClick, onAction, selected, onSelect, avai
       </Box>
 
       <Box className="actions" sx={{ display: 'none', alignItems: 'center', gap: 0.5, bg: 'background.paper' }}>
-        <Tooltip title="Archive">
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, 'archive'); }}><ArchiveOutlined fontSize="small" /></IconButton>
-        </Tooltip>
+        {folderName === 'trash' ? (
+          <Tooltip title="Restore to Inbox">
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, 'restore'); }}>
+              <RestoreFromTrash fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : (
+          <Tooltip title="Archive">
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAction(email.id || email.uid, 'archive'); }}>
+              <ArchiveOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title={folderName === 'trash' ? "Delete forever" : "Delete"}>
           <IconButton size="small" onClick={(e) => { 
             e.stopPropagation(); 

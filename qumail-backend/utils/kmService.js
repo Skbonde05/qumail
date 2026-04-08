@@ -1,7 +1,9 @@
 // qumail-backend/utils/kmService.js
 const axios = require('axios');
 
-const KM_URL = process.env.KEY_MANAGER_URL || 'http://localhost:6001';
+const config = require('../config/config');
+
+const KM_URL = config.urls.keyManager || 'http://localhost:6001';
 const KM_API_KEY = process.env.KM_API_KEY;
 
 const kmClient = axios.create({

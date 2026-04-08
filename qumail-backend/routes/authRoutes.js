@@ -69,10 +69,10 @@ const addLog = async (userId, action, details, type = 'info', req = null) => {
   }
 };
 
-const JWT_SECRET = process.env.JWT_SECRET || 'qumail-quantum-secure-key-2024';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'qumail-refresh-secret-2024';
-const ACCESS_EXPIRE = process.env.ACCESS_EXPIRE || '1d';
-const REFRESH_EXPIRE = process.env.REFRESH_EXPIRE || '7d';
+const config = require('../config/config');
+
+// Constants from config
+const { secret: JWT_SECRET, refreshSecret: REFRESH_SECRET, accessExpire: ACCESS_EXPIRE, refreshExpire: REFRESH_EXPIRE } = config.jwt;
 
 // Generate JWT access token
 const generateToken = (user) => {

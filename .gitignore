@@ -1,17 +1,28 @@
-# Ignore all node_modules in all subfolders
+# Node
 node_modules/
-
-# Environment files
-.env
-.env.*
-**/.env
-
-# Logs
 npm-debug.log*
 yarn-debug.log*
-pnpm-debug.log*
 
-# Build outputs
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env.*
+
+# Build
 dist/
 build/
 coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App specifics
+keystore.json
+uploads/*
+!**/uploads/.gitkeep
+!**/uploads/avatars/.gitkeep

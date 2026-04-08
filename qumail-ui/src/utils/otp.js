@@ -87,11 +87,24 @@ export function generateOTPKeyAscii(length = 32) {
 }
 
 /**
- * Check if key is valid (hex string)
+ * Check if key is valid (hex string, allowing spaces/colons)
  */
 export function isValidKey(key) {
   if (typeof key !== 'string') return false;
-  return /^[0-9a-fA-F]+$/.test(key);
+  const clean = key.replace(/[\s:]/g, '');
+  return clean.length > 0 && /^[0-9a-fA-F]+$/.test(clean);
+}
+
+/**
+ * Check if string is likely Base64
+ */
+function isBase64Strict(str) {
+  if (typeof str !== 'string') return false;
+  // If it contains characters not in hex, but used in base64
+  if (/[g-zG-Z+=\/]/.test(str)) return true;
+  // If length is not even, it's not hex
+  if (str.length % 2 !== 0 && str.length % 4 === 0) return true;
+  return false;
 }
 
 /**
@@ -106,13 +119,14 @@ export function otpEncrypt(text, keyHex) {
     throw new Error('Key must be a non-empty string');
   }
   
-  if (!isValidKey(keyHex)) {
+  const cleanedKey = keyHex.replace(/[\s:]/g, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleanedKey)) {
     throw new Error('Key must be a valid hex string');
   }
   
   try {
     const textBytes = stringToBytes(text);
-    const keyBytes = hexToBytes(keyHex);
+    const keyBytes = hexToBytes(cleanedKey);
     
     if (keyBytes.length === 0) {
       throw new Error('Invalid key format');
@@ -134,10 +148,10 @@ export function otpEncrypt(text, keyHex) {
 }
 
 /**
- * Decrypt base64 ciphertext using OTP with hex key
+ * Decrypt ciphertext (Hex or Base64) using OTP with hex key
  */
-export function otpDecrypt(base64Cipher, keyHex) {
-  if (!base64Cipher || typeof base64Cipher !== 'string') {
+export function otpDecrypt(ciphertext, keyHex) {
+  if (!ciphertext || typeof ciphertext !== 'string') {
     throw new Error('Ciphertext must be a non-empty string');
   }
   
@@ -145,13 +159,23 @@ export function otpDecrypt(base64Cipher, keyHex) {
     throw new Error('Key must be a non-empty string');
   }
   
-  if (!isValidKey(keyHex)) {
+  const cleanedKey = keyHex.replace(/[\s:]/g, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleanedKey)) {
     throw new Error('Key must be a valid hex string');
   }
   
   try {
-    const encryptedBytes = base64ToBytes(base64Cipher);
-    const keyBytes = hexToBytes(keyHex);
+    const trimmedCipher = ciphertext.trim();
+    let encryptedBytes;
+
+    if (isBase64Strict(trimmedCipher)) {
+      encryptedBytes = base64ToBytes(trimmedCipher);
+    } else {
+      const cleanedCipher = trimmedCipher.replace(/[\s:]/g, '');
+      encryptedBytes = hexToBytes(cleanedCipher);
+    }
+
+    const keyBytes = hexToBytes(cleanedKey);
     
     if (keyBytes.length === 0) {
       throw new Error('Invalid key format');

@@ -67,7 +67,8 @@ import {
   Folder as FolderIcon,
   Circle,
   Close,
-  AutoFixHigh as SparklesIcon
+  AutoFixHigh as SparklesIcon,
+  RestoreFromTrash as RestoreFromTrashIcon
 } from '@mui/icons-material';
 import { styled, alpha, keyframes } from '@mui/material/styles';
 
@@ -105,7 +106,7 @@ const HeaderContainer = styled(Box)(({ theme }) => ({
 }));
 
 const ContentContainer = styled(Box)(({ theme }) => ({
-  flex: '0 1 auto',
+  flex: '1 1 auto',
   padding: theme.spacing(3, 4, 3, 4),
   [theme.breakpoints.down('sm')]: {
     padding: theme.spacing(2, 2, 2, 2),
@@ -1012,23 +1013,57 @@ const EmailViewer = memo(({
               </Tooltip>
               
               <Tooltip title={email?.folder === 'spam' ? "Not Spam" : "Report Spam"}>
-                <IconButton size="small" onClick={() => {
+                <IconButton size="small" onClick={async () => {
                   const action = email?.folder === 'spam' ? 'not-spam' : 'spam';
-                  onAction(email?.uid || email?.id, action);
-                  onBack();
+                  const success = await onAction(email?.uid || email?.id, action);
+                  if (success) onBack();
                 }}>
                   {email?.folder === 'spam' ? <ReportOffIcon /> : <ReportIcon />}
                 </IconButton>
               </Tooltip>
 
+              {(email?.folder === 'trash' || email?.trash) && (
+                <Tooltip title="Restore to Inbox">
+                  <IconButton 
+                    size="small" 
+                    onClick={async () => {
+                      if (onAction && email?.uid) {
+                        const success = await onAction(email.uid, 'restore');
+                        if (success) onBack();
+                      }
+                    }}
+                  >
+                    <RestoreFromTrashIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
               <Tooltip title="Archive">
-                <IconButton size="small" onClick={() => onAction && email?.uid && onAction(email.uid, 'archive')} disabled={isDecrypting}>
+                <IconButton 
+                  size="small" 
+                  onClick={async () => {
+                    if (onAction && email?.uid) {
+                      const success = await onAction(email.uid, 'archive');
+                      if (success) onBack();
+                    }
+                  }} 
+                  disabled={isDecrypting}
+                >
                   <ArchiveIcon />
                 </IconButton>
               </Tooltip>
 
               <Tooltip title="Delete">
-                <IconButton size="small" onClick={() => onAction && email?.uid && onAction(email.uid, 'trash')} disabled={isDecrypting}>
+                <IconButton 
+                  size="small" 
+                  onClick={async () => {
+                    if (onAction && email?.uid) {
+                      const success = await onAction(email.uid, 'trash');
+                      if (success) onBack();
+                    }
+                  }} 
+                  disabled={isDecrypting}
+                >
                   <DeleteIcon />
                 </IconButton>
               </Tooltip>
@@ -1204,10 +1239,7 @@ const EmailViewer = memo(({
           bgcolor: 'background.paper',
           flexWrap: 'wrap',
           gap: 1,
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 10,
-          boxShadow: theme => theme.palette.mode === 'dark' ? '0 -4px 12px rgba(0,0,0,0.4)' : '0 -4px 12px rgba(0,0,0,0.05)',
+          mt: 'auto',
           minHeight: '48px'
         }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.6rem', opacity: 0.8 }}>

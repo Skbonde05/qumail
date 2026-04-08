@@ -1,5 +1,6 @@
 // ResetPassword.js - Component for resetting password with token
 import React, { useState, useEffect } from "react";
+import config from "../config";
 import {
   Box,
   Button,
@@ -106,7 +107,7 @@ export default function ResetPassword() {
   
   const { token } = useParams();
   const navigate = useNavigate();
-  const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const apiBase = config.apiUrl;
 
   // Verify token on component mount
   useEffect(() => {

@@ -1,0 +1,17 @@
+{
+  "name": "qumail-workspace",
+  "version": "1.0.0",
+  "description": "QuMail Quantum-Secure workspace management",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix qumail-backend && npm install --prefix qumail-km && npm install --prefix qumail-ui",
+    "dev": "concurrently \"npm run dev --prefix qumail-backend\" \"npm run dev --prefix qumail-km\" \"npm run dev --prefix qumail-ui\"",
+    "build": "npm run build --prefix qumail-ui",
+    "start": "concurrently \"npm start --prefix qumail-backend\" \"npm start --prefix qumail-km\"",
+    "clean": "rimraf qumail-backend/node_modules qumail-km/node_modules qumail-ui/node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.5"
+  }
+}

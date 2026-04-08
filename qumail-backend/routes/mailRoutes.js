@@ -15,6 +15,8 @@ const {
   generateAESKey, generateAESIV, aesEncrypt, aesDecrypt,
   isValidHexKey
 } = require('../utils/encryption');
+const { cacheMiddleware, clearUserCache } = require('../middleware/cache');
+const { mailLimiter, decryptionLimiter } = require('../middleware/rateLimit');
 
 const ccBccEmailsValid = (arr) =>
   !arr || (Array.isArray(arr) && arr.every((e) => typeof e === 'string' && isValidEmailAddress(e)));
@@ -45,6 +47,7 @@ router.post('/send',
     body('bcc').optional().isArray().custom(ccBccEmailsValid).withMessage('Invalid bcc address'),
     body('attachments').optional().isArray()
   ],
+  mailLimiter,
   async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -122,7 +125,7 @@ router.post('/send',
             encryptedBody = otpEncrypt(body, newOtpKey);
             encryptedBody = `[otp|${newOtpKey}]:${encryptedBody}`;
           } else {
-            const match = body.match(/^\[otp\|([^\]]+)\]:(.*)$/);
+            const match = body.match(/^\[otp\|([^\]]+)\]:([\s\S]*)$/);
             if (match) otpKey = match[1];
             encryptedBody = body;
           }
@@ -182,8 +185,12 @@ router.post('/send',
       for (const recipientUser of recipients) {
         const isSpam = isPotentialSpam(subject, body, from, recipientUser.spamList || []);
         
+        // If sender is also a recipient, we MUST use a different mailId for the INBOX copy
+        // to avoid duplicate key error on { mailId, owner }
+        const recipientMailId = (recipientUser.email === from) ? uuidv4() : mailId;
+        
         const inboxMail = new Mail({
-          mailId, from, to: lowerTo, 
+          mailId: recipientMailId, from, to: lowerTo, 
           cc: lowerCc, 
           bcc: lowerBcc.includes(recipientUser.email) ? [recipientUser.email] : [],
           subject: encryptionType !== 'NONE' ? ` ${subject || 'Encrypted Message'}` : (subject || '(No Subject)'),
@@ -225,6 +232,9 @@ router.post('/send',
       
       await session.commitTransaction();
       session.endSession();
+
+      // Clear cache for sender and all recipients
+      clearUserCache(req.user.id);
 
       let relayResult = null;
       if (externalRecipients.length > 0) {
@@ -371,7 +381,7 @@ const getFolderRoute = (folderName) => async (req, res) => {
   }
 };
 
-router.post('/inbox', verifyToken, async (req, res) => {
+router.post('/inbox', verifyToken, cacheMiddleware(60), async (req, res) => {
   try {
     const userEmail = req.user.email;
     const { page = 1, limit = 50, filter = 'all' } = req.body;
@@ -398,9 +408,9 @@ router.post('/inbox', verifyToken, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch inbox emails' });
   }
 });
-router.post('/sent', verifyToken, getFolderRoute('SENT'));
-router.post('/archive', verifyToken, getFolderRoute('ARCHIVE'));
-router.post('/trash', verifyToken, getFolderRoute('TRASH'));
+router.post('/sent', verifyToken, cacheMiddleware(60), getFolderRoute('SENT'));
+router.post('/archive', verifyToken, cacheMiddleware(60), getFolderRoute('ARCHIVE'));
+router.post('/trash', verifyToken, cacheMiddleware(60), getFolderRoute('TRASH'));
 
 // ------------------ SPECIAL FOLDERS ------------------
 const getSpecialFolderRoute = (queryField) => async (req, res) => {
@@ -429,8 +439,8 @@ const getSpecialFolderRoute = (queryField) => async (req, res) => {
   }
 };
 
-router.post('/starred', verifyToken, getSpecialFolderRoute('starred'));
-router.post('/important', verifyToken, getSpecialFolderRoute('important'));
+router.post('/starred', verifyToken, cacheMiddleware(60), getSpecialFolderRoute('starred'));
+router.post('/important', verifyToken, cacheMiddleware(60), getSpecialFolderRoute('important'));
 
 // ------------------ LABELS (CUSTOM FOLDERS) ------------------
 router.get('/labels', verifyToken, async (req, res) => {
@@ -543,7 +553,7 @@ router.delete('/labels/:id', verifyToken, async (req, res) => {
 });
 
 // Generic Folder Listing for Custom Folders
-router.post('/folder/:folderId', verifyToken, async (req, res) => {
+router.post('/folder/:folderId', verifyToken, cacheMiddleware(60), async (req, res) => {
   try {
     const { folderId } = req.params;
     const { page = 1, limit = 50 } = req.body;
@@ -878,6 +888,10 @@ router.put('/:mailId/status', verifyToken, async (req, res) => {
     
     await Mail.updateOne({ mailId, owner: userEmail }, { $set: update });
     const updated = await Mail.findOne({ mailId, owner: userEmail });
+    
+    // Clear user cache after status change
+    clearUserCache(userEmail);
+    
     res.json({ success: true, email: formatEmail(updated) });
   } catch (error) {
     console.error('Update email status error:', error);
@@ -1013,7 +1027,7 @@ router.post('/search', verifyToken, async (req, res) => {
 });
 
 // ------------------ DECRYPT ------------------
-router.post('/decrypt', verifyToken, async (req, res) => {
+router.post('/decrypt', verifyToken, decryptionLimiter, async (req, res) => {
   try {
     const { emailId, encryptionKey } = req.body;
     const userEmail = req.user.email;
@@ -1049,7 +1063,7 @@ router.post('/decrypt', verifyToken, async (req, res) => {
       let extractKey = encryptionKey;
 
       if (mail.body.startsWith('[otp|') && mail.body.includes(']:')) {
-        const match = mail.body.match(/^\[otp\|([^\]]+)\]:(.*)$/);
+        const match = mail.body.match(/^\[otp\|([^\]]+)\]:([\s\S]*)$/);
         if (match) {
           extractKey = encryptionKey || match[1] || mail.otpKey;
           ciphertext = match[2];
@@ -1069,7 +1083,7 @@ router.post('/decrypt', verifyToken, async (req, res) => {
         decryptedAttachments = decryptedAttachments.map(att => {
           if (att.isEncrypted && att.data.startsWith('[otp|')) {
             try {
-              const match = att.data.match(/^\[otp\|([^\]]+)\]:(.*)$/);
+              const match = att.data.match(/^\[otp\|([^\]]+)\]:([\s\S]*)$/);
               if (match) {
                 return { ...att, data: otpDecrypt(match[2], match[1]), isEncrypted: false };
               }

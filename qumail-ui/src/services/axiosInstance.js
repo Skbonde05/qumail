@@ -1,15 +1,16 @@
 import axios from "axios";
+import config from "../config";
 
 const instance = axios.create({
-  baseURL: (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api",
+  baseURL: config.apiUrl + "/api",
 });
 
-instance.interceptors.request.use((config) => {
+instance.interceptors.request.use((configReq) => {
   const token = localStorage.getItem("token");
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    configReq.headers.Authorization = `Bearer ${token}`;
   }
-  return config;
+  return configReq;
 });
 
 instance.interceptors.response.use(
@@ -19,9 +20,8 @@ instance.interceptors.response.use(
       const refreshToken = localStorage.getItem("refreshToken");
 
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
         const res = await axios.post(
-          `${apiUrl}/api/auth/refresh`,
+          `${config.apiUrl}/api/auth/refresh`,
           { refreshToken }
         );
 
@@ -33,7 +33,9 @@ instance.interceptors.response.use(
         return axios(error.config);
       } catch (err) {
         localStorage.clear();
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+            window.location.href = "/login";
+        }
       }
     }
 

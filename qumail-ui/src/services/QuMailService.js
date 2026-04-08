@@ -1,7 +1,8 @@
 // QuMailService.js - Refactored API Service
 import axios from 'axios';
+import config from '../config';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = config.apiUrl;
 
 // Simple in-memory cache
 const cache = {
@@ -252,6 +253,7 @@ const QuMailService = {
   },
 
   batchUpdate: async (emailIds, action, extraData = {}) => {
+    cache.invalidate(); // Clear caches on batch action
     const response = await axiosInstance.post('/api/mail/batch-update', { emailIds, action, ...extraData });
     return response.data;
   },

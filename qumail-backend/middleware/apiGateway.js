@@ -5,14 +5,16 @@ const rateLimit = require('express-rate-limit');
 const { verifyToken } = require('./authMiddleware');
 
 const apiGateway = (app) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   // 1. Security Headers (Helmet protects against common web vulnerabilities)
   app.use(helmet({
-    contentSecurityPolicy: false, // Disable CSP to allow typical dev environments
-    crossOriginEmbedderPolicy: false
+    contentSecurityPolicy: isProduction, // Enable CSP only in production or if needed
+    crossOriginEmbedderPolicy: isProduction
   }));
-
+ 
   // 2. Request Logging (Morgan provides concise logs for each request)
-  app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
+  app.use(morgan(isProduction ? 'combined' : ':method :url :status :res[content-length] - :response-time ms'));
 
   // 3. Centralized Route Guarding (Protected vs Public)
   // Public Routes (Bypassed by Token Verification)

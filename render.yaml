@@ -1,0 +1,47 @@
+services:
+  # Backend API Service
+  - type: web
+    name: qumail-backend
+    env: node
+    plan: free
+    rootDirectory: qumail-backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false # User must set this in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false # User must set this to the Vercel URL
+      - key: KEY_MANAGER_URL
+        fromService:
+          name: qumail-km
+          type: web
+          property: host
+
+  # Key Manager Service
+  - type: web
+    name: qumail-km
+    env: node
+    plan: free
+    rootDirectory: qumail-km
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 6001
+      - key: ALLOWED_ORIGINS
+        sync: false # Set to your Vercel URL in Render dashboard
+      - key: KEY_SIZE
+        value: 32
+      - key: KEY_FORMAT
+        value: hex
+      - key: KEY_EXPIRY_HOURS
+        value: 24
