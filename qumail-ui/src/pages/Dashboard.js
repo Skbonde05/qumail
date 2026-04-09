@@ -381,6 +381,7 @@ const Dashboard = ({
             labels={labels}
             onCreateLabel={handleLabelButtonClick}
             onDeleteLabel={deleteLabel}
+            onClose={handleDrawerToggle}
           />
         </SwipeableDrawer>
 

@@ -31,7 +31,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Close,
@@ -79,17 +83,17 @@ import i18n from '../../i18n';
 
 const commonBackgrounds = [
   { id: 'none', name: 'Default', url: null, preview: '#f1f5f9' },
-  { id: 'nature', name: 'Mountain Lake', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80' },
-  { id: 'space', name: 'Deep Space', url: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=80' },
-  { id: 'abstract', name: 'Modern Abstract', url: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80' },
-  { id: 'city', name: 'Neon City', url: 'https://images.unsplash.com/photo-1510672981848-a1c4f1cb5ccf?auto=format&fit=crop&q=80' },
-  { id: 'forest', name: 'Ancient Forest', url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80' },
-  { id: 'winter', name: 'Winter Silence', url: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?auto=format&fit=crop&q=80' },
-  { id: 'arch', name: 'Minimalist Arch', url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80' },
-  { id: 'ocean', name: 'Turquoise Ocean', url: 'https://images.unsplash.com/photo-1505118380757-91f5f45d8de4?auto=format&fit=crop&q=80' },
-  { id: 'textured', name: 'Dark Texture', url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80' },
-  { id: 'art', name: 'Canvas Oil', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80' },
-  { id: 'dawn', name: 'Golden Dawn', url: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&q=80' }
+  { id: 'nature', name: 'Mountain Lake', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=60&w=200' },
+  { id: 'space', name: 'Deep Space', url: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=60&w=200' },
+  { id: 'abstract', name: 'Modern Abstract', url: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=60&w=200' },
+  { id: 'city', name: 'Neon City', url: 'https://images.unsplash.com/photo-1510672981848-a1c4f1cb5ccf?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1510672981848-a1c4f1cb5ccf?auto=format&fit=crop&q=60&w=200' },
+  { id: 'forest', name: 'Ancient Forest', url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=60&w=200' },
+  { id: 'winter', name: 'Winter Silence', url: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?auto=format&fit=crop&q=60&w=200' },
+  { id: 'arch', name: 'Minimalist Arch', url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=60&w=200' },
+  { id: 'ocean', name: 'Turquoise Ocean', url: 'https://images.unsplash.com/photo-1505118380757-91f5f45d8de4?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1505118380757-91f5f45d8de4?auto=format&fit=crop&q=60&w=200' },
+  { id: 'textured', name: 'Dark Texture', url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=60&w=200' },
+  { id: 'art', name: 'Canvas Oil', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=60&w=200' },
+  { id: 'dawn', name: 'Golden Dawn', url: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&q=80', thumb: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&q=60&w=200' }
 ];
 
 const themes = [
@@ -127,6 +131,14 @@ const QuickSettings = ({
   const [fullKeys, setFullKeys] = useState({ otp: '', aes256: '' });
   const [securityLogs, setSecurityLogs] = useState([]);
   const [customColor, setCustomColor] = useState(() => (themeName?.startsWith('#') ? themeName : null));
+
+  // 2FA Setup State
+  const [openMfaSetup, setOpenMfaSetup] = useState(false);
+  const [mfaQrCode, setMfaQrCode] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaSetupLoading, setMfaSetupLoading] = useState(false);
+  const [mfaError, setMfaError] = useState('');
 
   // Comprehensive App settings state
   const [appSettings, setAppSettings] = useState(() => {
@@ -308,10 +320,38 @@ const QuickSettings = ({
           fetchUserData();
         }
       } else {
-        alert("Please use the full Security Center for 2FA setup to ensure your TOTP device is correctly linked.");
+        // Start Setup Flow
+        setMfaSetupLoading(true);
+        const res = await QuMailService.setup2FA();
+        if (res.success) {
+          setMfaQrCode(res.qrCode);
+          setMfaSecret(res.secret);
+          setOpenMfaSetup(true);
+        }
+        setMfaSetupLoading(false);
       }
     } catch (err) {
       console.error(err);
+      setMfaSetupLoading(false);
+    }
+  };
+
+  const handleConfirm2FA = async () => {
+    setMfaSetupLoading(true);
+    setMfaError("");
+    try {
+      const res = await QuMailService.confirm2FA(mfaCode);
+      if (res.success) {
+        setOpenMfaSetup(false);
+        setMfaCode('');
+        fetchUserData();
+      } else {
+        setMfaError(res.message || "Invalid code");
+      }
+    } catch (err) {
+      setMfaError("Verification failed.");
+    } finally {
+      setMfaSetupLoading(false);
     }
   };
 
@@ -603,7 +643,25 @@ const QuickSettings = ({
       case 2: // SECURITY
         return (
           <Box sx={{ p: 2, pb: 6 }}>
-            {/* Encryption Keys Section */}
+            <Box sx={{ 
+              mt: 1.5, mb: 4, p: 2, borderRadius: 3, 
+              border: 1, borderColor: alpha(theme.palette.success.main, 0.3),
+              bgcolor: alpha(theme.palette.success.main, 0.02)
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Security color="success" sx={{ fontSize: 20 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight="800">ACCOUNT STATUS</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Identity Protected via Standard Login
+                    </Typography>
+                  </Box>
+                </Box>
+                <Chip label="Secure" size="small" variant="outlined" color="success" sx={{ fontWeight: 800, fontSize: '0.6rem' }} />
+              </Box>
+            </Box>
+
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '1px' }}>
               Quantum Encryption Keys
             </Typography>
@@ -745,23 +803,22 @@ const QuickSettings = ({
             <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ fontWeight: 700 }}>
               LAYOUT DENSITY
             </Typography>
-            <Grid container spacing={1} sx={{ mb: 3, mt: 0.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, mb: 3, mt: 0.5 }}>
               {['compact', 'comfortable', 'spacious'].map(d => (
-                <Grid size={4} key={d}>
-                  <Box
-                    onClick={() => handleAppSettingChange('density', d)}
-                    sx={{
-                      p: 1, textAlign: 'center', borderRadius: 1.5, border: 1,
-                      borderColor: appSettings.density === d ? 'primary.main' : 'divider',
-                      bgcolor: appSettings.density === d ? alpha(theme.palette.primary.main, 0.05) : 'transparent',
-                      cursor: 'pointer', '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.02) }
-                    }}
-                  >
-                    <Typography variant="caption" sx={{ textTransform: 'capitalize', fontWeight: 700 }}>{d}</Typography>
-                  </Box>
-                </Grid>
+                <Box
+                  key={d}
+                  onClick={() => handleAppSettingChange('density', d)}
+                  sx={{
+                    p: 1, textAlign: 'center', borderRadius: 1.5, border: 1,
+                    borderColor: appSettings.density === d ? 'primary.main' : 'divider',
+                    bgcolor: appSettings.density === d ? alpha(theme.palette.primary.main, 0.05) : 'transparent',
+                    cursor: 'pointer', '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.02) }
+                  }}
+                >
+                  <Typography variant="caption" sx={{ textTransform: 'capitalize', fontWeight: 700 }}>{d}</Typography>
+                </Box>
               ))}
-            </Grid>
+            </Box>
 
             <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ fontWeight: 700 }}>
               THEME COLOR
@@ -824,10 +881,10 @@ const QuickSettings = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
               {commonBackgrounds.map((bg) => (
                 <Tooltip key={bg.id} title={bg.name}>
-                  <Box
-                    onClick={() => onUpdateBgImage(bg.url)}
-                    sx={{
-                      height: 54, borderRadius: 2, background: bg.url ? `url(${bg.url}) center/cover` : bg.preview, cursor: 'pointer',
+                    <Box
+                      onClick={() => onUpdateBgImage(bg.url)}
+                      sx={{
+                        height: 54, borderRadius: 2, background: bg.thumb ? `url(${bg.thumb}) center/cover` : (bg.url ? `url(${bg.url}) center/cover` : bg.preview), cursor: 'pointer',
                       border: (bgImage === bg.url || (!bg.url && !bgImage)) ? '2.5px solid' : '1px solid',
                       borderColor: (bgImage === bg.url || (!bg.url && !bgImage)) ? 'primary.main' : (theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.15) : 'divider'),
                       display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',

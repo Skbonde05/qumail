@@ -40,6 +40,13 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
+import QuMailService from '../services/QuMailService';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from '@mui/material';
 
 import {
   Settings as SettingsIcon,
@@ -75,7 +82,10 @@ import {
   AutoAwesome as AutoAwesomeIcon,
   Science as ScienceIcon,
   RocketLaunch as RocketLaunchIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  VisibilityOff,
+  Visibility as VisibilityIcon,
+  ContentCopy
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 
@@ -170,6 +180,21 @@ const StyledSlider = styled(Slider)(({ theme }) => ({
   },
 }));
 
+// Added for 2FA Support
+const KeyDisplay = styled(Box)(({ theme }) => ({
+  fontFamily: 'Roboto Mono, monospace',
+  fontSize: '0.85rem',
+  padding: theme.spacing(1.5),
+  borderRadius: '12px',
+  backgroundColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.05) : alpha(theme.palette.text.disabled, 0.05),
+  border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+  wordBreak: 'break-all',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginTop: theme.spacing(1)
+}));
+
 const AppSettings = ({ user, darkMode, onToggleTheme, onBack }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -224,6 +249,34 @@ const AppSettings = ({ user, darkMode, onToggleTheme, onBack }) => {
     
     telemetry: false
   });
+
+  // 2FA Setup State
+  const [openMfaSetup, setOpenMfaSetup] = useState(false);
+  const [mfaQrCode, setMfaQrCode] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaSetupLoading, setMfaSetupLoading] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+  
+  // Encryption Keys State
+  const [keysInfo, setKeysInfo] = useState({ otp: null, aes256: null });
+  const [showKey, setShowKey] = useState({ otp: false, aes256: false });
+  const [fullKeys, setFullKeys] = useState({ otp: '', aes256: '' });
+
+  useEffect(() => {
+    if (activeCategory === 'security') {
+       fetchSecurityData();
+    }
+  }, [activeCategory]);
+
+  const fetchSecurityData = async () => {
+    try {
+      const keysData = await QuMailService.getEncryptionKeys();
+      setKeysInfo(keysData.keys || {});
+    } catch (err) {
+      console.error("Failed to fetch keys info");
+    }
+  };
 
 
   const [isSaving, setIsSaving] = useState(false);
@@ -500,13 +553,6 @@ const AppSettings = ({ user, darkMode, onToggleTheme, onBack }) => {
           description: 'Automatic logout after inactivity'
         },
         {
-          key: 'twoFactorAuth',
-          label: 'Two-Factor Authentication',
-          type: 'switch',
-          icon: <SecurityIcon />,
-          description: 'Require 2FA for login (recommended)'
-        },
-        {
           key: 'autoLogout',
           label: 'Auto-logout on Close',
           type: 'switch',
@@ -664,6 +710,72 @@ const AppSettings = ({ user, darkMode, onToggleTheme, onBack }) => {
           }
         });
       }
+    }
+
+    // 2FA Trigger Logic
+    if (key === 'twoFactorAuth') {
+      if (value === true) {
+        // User wants to enable 2FA -> Show Setup
+        handleStart2FASetup();
+      } else {
+        // User wants to disable 2FA
+        if (window.confirm("Disabling 2FA reduces account security. Proceed?")) {
+           QuMailService.updateProfile({ settings: { twoFactorEnabled: false } });
+        } else {
+           // Revert state
+           setSettings(prev => ({ ...prev, twoFactorAuth: true }));
+        }
+      }
+    }
+  };
+
+  const handleStart2FASetup = async () => {
+    setMfaSetupLoading(true);
+    try {
+      const res = await QuMailService.setup2FA();
+      if (res.success) {
+        setMfaQrCode(res.qrCode);
+        setMfaSecret(res.secret);
+        setOpenMfaSetup(true);
+      }
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: 'Failed to initialize 2FA setup' });
+    } finally {
+      setMfaSetupLoading(false);
+    }
+  };
+
+  const handleConfirm2FA = async () => {
+    setMfaSetupLoading(true);
+    setMfaError("");
+    try {
+      const res = await QuMailService.confirm2FA(mfaCode);
+      if (res.success) {
+        setOpenMfaSetup(false);
+        setSettings(prev => ({ ...prev, twoFactorAuth: true }));
+        setMfaCode('');
+        setSaveMessage({ type: 'success', text: '2FA enabled successfully!' });
+      } else {
+        setMfaError(res.message || "Invalid code");
+      }
+    } catch (err) {
+      setMfaError("Verification failed.");
+    } finally {
+      setMfaSetupLoading(false);
+    }
+  };
+
+  const handleShowKey = async (algo) => {
+    if (showKey[algo]) {
+      setShowKey(prev => ({ ...prev, [algo]: false }));
+      return;
+    }
+    try {
+      const fullKeyData = await QuMailService.getFullEncryptionKey(algo);
+      setFullKeys(prev => ({ ...prev, [algo]: fullKeyData.key }));
+      setShowKey(prev => ({ ...prev, [algo]: true }));
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: 'Failed to retrieve key' });
     }
   };
 
@@ -1225,6 +1337,60 @@ const AppSettings = ({ user, darkMode, onToggleTheme, onBack }) => {
                 {currentSection.fields.map((field) => (
                   <Grid size={12} key={field.key}>
                     {renderField(field)}
+                    
+                    {/* Security Specific Dashboard Inserts */}
+                    {/* Standard Security Status */}
+                    {activeCategory === 'security' && field.key === 'twoFactorAuth' && (
+                      <Alert 
+                        severity="success" 
+                        sx={{ mt: 1, mb: 3, borderRadius: '12px' }}
+                        icon={<VerifiedIcon />}
+                      >
+                        <Typography variant="subtitle2" fontWeight="700">
+                           Cloud Identity Protection Active
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: 'block' }}>
+                           Your access is secured via Enterprise Account Management and encrypted sessions.
+                        </Typography>
+                      </Alert>
+                    )}
+
+                    {activeCategory === 'security' && field.key === 'defaultEncryptionLevel' && (
+                      <Box sx={{ mt: 1, mb: 3 }}>
+                         <Typography variant="subtitle2" fontWeight="700" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                           <VpnKeyIcon sx={{ fontSize: 20 }} /> Active Encryption Secrets
+                         </Typography>
+                         {['otp', 'aes256'].map(algo => (
+                            <Box key={algo} sx={{ mb: 2 }}>
+                               <Typography variant="caption" sx={{ textTransform: 'uppercase', fontWeight: 800, color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                                 {algo === 'otp' ? 'Quantum One-Time Pad' : 'AES-256 Secret Key'}
+                               </Typography>
+                               <KeyDisplay>
+                                  <Typography variant="caption" sx={{ opacity: showKey[algo] ? 1 : 0.5, letterSpacing: showKey[algo] ? '0.5px' : '2px', fontWeight: 'bold' }}>
+                                    {showKey[algo] ? fullKeys[algo] : (keysInfo[algo]?.preview || '••••••••••••••••••••••••')}
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <IconButton size="small" onClick={() => handleShowKey(algo)}>
+                                       {showKey[algo] ? <VisibilityOff sx={{ fontSize: 16 }} /> : <VisibilityIcon sx={{ fontSize: 16 }} />}
+                                    </IconButton>
+                                    <IconButton size="small" onClick={() => { navigator.clipboard.writeText(fullKeys[algo]); setSaveMessage({ type: 'success', text: 'Key copied to clipboard' }); }}>
+                                       <ContentCopy sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Box>
+                               </KeyDisplay>
+                            </Box>
+                         ))}
+                         <Button 
+                           fullWidth 
+                           variant="outlined" 
+                           startIcon={<ResetIcon />}
+                           sx={{ borderRadius: '12px', py: 1, mt: 1, fontWeight: 700 }}
+                           onClick={() => window.dispatchEvent(new Event('rotate-keys'))}
+                         >
+                           Regenerate All Physical Keys
+                         </Button>
+                      </Box>
+                    )}
                   </Grid>
                 ))}
               </Grid>

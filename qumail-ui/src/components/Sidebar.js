@@ -1,13 +1,14 @@
 import React, { memo } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Box, Button, List, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Avatar, Menu, MenuItem, LinearProgress, useTheme, ListSubheader, IconButton, Tooltip
+  Box, Button, List, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Avatar, Menu, MenuItem, LinearProgress, useTheme, ListSubheader, IconButton, Tooltip, useMediaQuery
 } from "@mui/material";
 import { 
   Inbox, Send, Drafts, Delete, Star, LabelImportant, Archive, HelpOutline, AccessTime, Report, Circle, Add,
   Palette, ExitToApp, Policy
 } from "@mui/icons-material";
 import { styled, alpha } from "@mui/material/styles";
+import { Close as CloseIcon } from "@mui/icons-material";
 
 const StyledListItem = styled(ListItemButton)(({ theme, selected }) => ({
   borderRadius: "0 24px 24px 0",
@@ -146,10 +147,12 @@ const Sidebar = ({
   labels,
   onCreateLabel,
   onDeleteLabel,
-  user
+  user,
+  onClose
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
 
 
@@ -172,7 +175,25 @@ const Sidebar = ({
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ p: 2, pt: 3, pb: 1.5 }}>
+      {isMobile && (
+        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box 
+              component="img" 
+              src="/qumail_logo.png" 
+              sx={{ height: 28, width: 'auto' }} 
+              alt="Qumail Logo"
+            />
+            <Typography variant="h6" color="primary" sx={{ fontWeight: 900, letterSpacing: '-1px' }}>
+              Qumail
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+      )}
+      <Box sx={{ p: 2, pt: isMobile ? 1 : 3, pb: 1.5 }}>
         <Button
           variant="contained"
           onClick={onCompose}

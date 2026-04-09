@@ -941,39 +941,70 @@ router.delete('/notifications/delete/all', verifyToken, async (req, res) => {
   }
 });
 
-// ------------------ TWO-FACTOR AUTHENTICATION ------------------
+// --- Interview-Grade 2FA Implementation ---
 
+// Step 2 & 3: Generate Secret and QR Code
 router.post('/setup-2fa', verifyToken, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    const secret = speakeasy.generateSecret({ length: 20, name: `QuMail (${user.email})` });
+    
+    // Generate secret key (Step 2)
+    const secret = speakeasy.generateSecret({
+      length: 20,
+      name: `QuMail (${user.email})`
+    });
+
     user.twoFactorSecret = secret.base32;
     await user.save();
-    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
-    res.json({ success: true, qrCode: qrCodeUrl, secret: secret.base32 });
+
+    // Generate QR Code (Step 3)
+    qrcode.toDataURL(secret.otpauth_url, function(err, data_url) {
+      if (err) return res.status(500).json({ success: false, message: 'QR Code generation failed' });
+      
+      res.json({ 
+        success: true, 
+        qrCode: data_url, 
+        secret: secret.base32 
+      });
+    });
+
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to setup 2FA' });
   }
 });
 
+// Step 4: Verify OTP
 router.post('/confirm-2fa', verifyToken, async (req, res) => {
   try {
-    const { otp } = req.body;
-    const user = await User.findOne({ email: req.user.email });
-    if (!user || !user.twoFactorSecret) return res.status(400).json({ success: false, message: '2FA not initialized' });
-    const verified = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: otp });
+    const { otp } = req.body; // userInputOtp
+    const user = await User.findOne({ email: req.user.email }).select('+twoFactorSecret');
+    
+    if (!user || !user.twoFactorSecret) {
+      return res.status(400).json({ success: false, message: '2FA not initialized' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: otp.toString().padStart(6, '0'),
+      window: 1 // +/- 30 seconds
+    });
+
     if (verified) {
+      // Setup Success
       if (!user.settings) user.settings = {};
       user.settings.twoFactorEnabled = true;
       await user.save();
+      
       await addLog(user._id, 'MFA_ENABLED', 'Two-Factor Authentication enabled', 'success', req);
       res.json({ success: true, message: '2FA enabled successfully!' });
     } else {
       res.status(400).json({ success: false, message: 'Invalid verification code' });
     }
+
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to confirm 2FA' });
+    res.status(500).json({ success: false, message: 'MFA verification failed' });
   }
 });
 
@@ -990,10 +1021,15 @@ router.post('/verify-2fa', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Verification session expired' });
     }
     
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select('+twoFactorSecret');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     
-    const verified = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: otp });
+    const verified = speakeasy.totp.verify({ 
+      secret: user.twoFactorSecret.trim().toUpperCase(), 
+      encoding: 'base32', 
+      token: otp.toString().trim().padStart(6, '0'),
+      window: 10
+    });
     if (verified) {
       const token = generateToken(user);
       const refreshToken = generateRefreshToken(user);

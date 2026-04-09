@@ -85,8 +85,7 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   [theme.breakpoints.down('sm')]: {
     borderRadius: 0,
   },
-  overflowX: 'hidden',
-  overflowY: 'auto',
+  overflow: 'hidden',
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
   height: '100%',
   display: 'flex',
@@ -409,6 +408,7 @@ const EmailViewer = memo(({
   const [labelAnchorEl, setLabelAnchorEl] = useState(null);
   const [summary, setSummary] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [moreAnchorEl, setMoreAnchorEl] = useState(null);
 
   // Extract email data with safe defaults
   const emailData = email || {};
@@ -647,6 +647,75 @@ const EmailViewer = memo(({
       setSummary(aiSummary);
       setIsSummarizing(false);
     }, 1800);
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    
+    if (!printWindow) {
+      alert('Pop-up blocked! Please allow pop-ups to print this email.');
+      return;
+    }
+
+    const content = decryptedContent || body || 'No content';
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Print Email - ${subject}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+            body { 
+              font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+              color: #1a1a1a; 
+              line-height: 1.6; 
+              padding: 40px; 
+              max-width: 800px; 
+              margin: 0 auto; 
+            }
+            .header { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo { color: #2563eb; font-size: 24px; font-weight: 800; margin-bottom: 20px; }
+            .subject { font-size: 28px; font-weight: 700; margin: 0 0 15px 0; color: #000; }
+            .meta { color: #666; font-size: 14px; margin-bottom: 5px; }
+            .meta strong { color: #333; }
+            .content { white-space: pre-wrap; font-size: 16px; margin-top: 30px; }
+            @media print {
+              body { padding: 0; }
+              .header { margin-bottom: 40px; }
+              @page { margin: 2cm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">Qumail</div>
+            <h1 class="subject">${subject}</h1>
+            <div class="meta"><strong>From:</strong> ${from}</div>
+            <div class="meta"><strong>To:</strong> ${to}</div>
+            <div class="meta"><strong>Date:</strong> ${formattedDate} ${formattedTime}</div>
+            <div class="meta"><strong>Security:</strong> ${currentSecurity.label} (${currentSecurity.description})</div>
+          </div>
+          <div class="content">${content}</div>
+          <script>
+            window.onload = () => {
+              window.focus();
+              window.print();
+              window.onafterprint = () => window.close();
+              // Fallback close for browsers that don't support onafterprint well
+              setTimeout(() => {
+                if (!window.closed) window.close();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   // Render encryption notice
@@ -961,286 +1030,280 @@ const EmailViewer = memo(({
             <LinearProgress sx={{ height: 3, opacity: 0.8 }} />
           </Box>
         )}
-        {/* Header with navigation */}
-        <HeaderContainer>
-          {/* Top toolbar */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {onBack && (
-                <Tooltip title="Back to inbox">
-                  <IconButton onClick={onBack} size="small">
-                    <ArrowBackIcon />
+        {/* Scrollable Content Area */}
+        <Box sx={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column' }}>
+          {/* Header with navigation */}
+          <HeaderContainer>
+            {/* Top toolbar */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {onBack && (
+                  <Tooltip title="Back to inbox">
+                    <IconButton onClick={onBack} size="small">
+                      <ArrowBackIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                
+                <Typography variant="body2" color="text.secondary">
+                  {isMobile ? '' : 'Reading email'}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.5 }, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {!isMobile && (
+                  <>
+                    <Tooltip title={isStarred ? "Unstar" : "Star"}>
+                      <IconButton onClick={handleStarToggle} size="small">
+                        {isStarred ? <StarIcon sx={{ color: 'warning.main' }} /> : <StarBorderIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    
+                    <Tooltip title={isImportant ? "Mark as not important" : "Mark as important"}>
+                      <IconButton onClick={handleImportantToggle} size="small">
+                        {isImportant ? <LabelImportantIcon sx={{ color: 'warning.main' }} /> : <LabelImportantOutlinedIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    
+                    <Tooltip title="AI Summarize Thread">
+                      <IconButton 
+                        size="small" 
+                        onClick={handleSummarize} 
+                        disabled={isSummarizing || !isDecrypted}
+                        sx={{ 
+                          color: (summary || isSummarizing) ? 'primary.main' : 'inherit',
+                          animation: isSummarizing ? `${pulse} 1.5s infinite alternate` : 'none'
+                        }}
+                      >
+                        <SparklesIcon />
+                      </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Snooze">
+                      <IconButton size="small" onClick={() => setSnoozeDialogOpen(true)}>
+                        <AccessTimeIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </>
+                )}
+                
+                <Tooltip title={email?.folder === 'spam' ? "Not Spam" : "Report Spam"}>
+                  <IconButton size="small" onClick={async () => {
+                    const action = email?.folder === 'spam' ? 'not-spam' : 'spam';
+                    const success = await onAction(email?.uid || email?.id, action);
+                    if (success) onBack();
+                  }}>
+                    {email?.folder === 'spam' ? <ReportOffIcon /> : <ReportIcon />}
                   </IconButton>
                 </Tooltip>
-              )}
-              
-              <Typography variant="body2" color="text.secondary">
-                {isMobile ? '' : 'Reading email'}
-              </Typography>
-            </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, flex: 1 }}>
-              <Tooltip title={isStarred ? "Unstar" : "Star"}>
-                <IconButton onClick={() => setIsStarred(!isStarred)} size="small">
-                  {isStarred ? <StarIcon sx={{ color: 'warning.main' }} /> : <StarBorderIcon />}
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title={isImportant ? "Mark as not important" : "Mark as important"}>
-                <IconButton onClick={() => setIsImportant(!isImportant)} size="small">
-                  {isImportant ? <LabelImportantIcon sx={{ color: 'warning.main' }} /> : <LabelImportantOutlinedIcon />}
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title="AI Summarize Thread">
-                <IconButton 
-                  size="small" 
-                  onClick={handleSummarize} 
-                  disabled={isSummarizing || !isDecrypted}
-                  sx={{ 
-                    color: (summary || isSummarizing) ? 'primary.main' : 'inherit',
-                    animation: isSummarizing ? `${pulse} 1.5s infinite alternate` : 'none'
-                  }}
-                >
-                  <SparklesIcon />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="Snooze">
-                <IconButton size="small" onClick={() => setSnoozeDialogOpen(true)}>
-                  <AccessTimeIcon />
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title={email?.folder === 'spam' ? "Not Spam" : "Report Spam"}>
-                <IconButton size="small" onClick={async () => {
-                  const action = email?.folder === 'spam' ? 'not-spam' : 'spam';
-                  const success = await onAction(email?.uid || email?.id, action);
-                  if (success) onBack();
-                }}>
-                  {email?.folder === 'spam' ? <ReportOffIcon /> : <ReportIcon />}
-                </IconButton>
-              </Tooltip>
-
-              {(email?.folder === 'trash' || email?.trash) && (
-                <Tooltip title="Restore to Inbox">
+                <Tooltip title="Archive">
                   <IconButton 
                     size="small" 
                     onClick={async () => {
                       if (onAction && email?.uid) {
-                        const success = await onAction(email.uid, 'restore');
+                        const success = await onAction(email.uid, 'archive');
                         if (success) onBack();
                       }
-                    }}
+                    }} 
+                    disabled={isDecrypting}
                   >
-                    <RestoreFromTrashIcon />
+                    <ArchiveIcon />
                   </IconButton>
                 </Tooltip>
-              )}
 
-              <Tooltip title="Archive">
-                <IconButton 
-                  size="small" 
-                  onClick={async () => {
-                    if (onAction && email?.uid) {
-                      const success = await onAction(email.uid, 'archive');
-                      if (success) onBack();
-                    }
-                  }} 
-                  disabled={isDecrypting}
-                >
-                  <ArchiveIcon />
-                </IconButton>
-              </Tooltip>
+                <Tooltip title="Delete">
+                  <IconButton 
+                    size="small" 
+                    onClick={async () => {
+                      if (onAction && email?.uid) {
+                        const success = await onAction(email.uid, 'trash');
+                        if (success) onBack();
+                      }
+                    }} 
+                    disabled={isDecrypting}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </Tooltip>
 
-              <Tooltip title="Delete">
-                <IconButton 
-                  size="small" 
-                  onClick={async () => {
-                    if (onAction && email?.uid) {
-                      const success = await onAction(email.uid, 'trash');
-                      if (success) onBack();
-                    }
-                  }} 
-                  disabled={isDecrypting}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="More options">
-                <IconButton size="small">
-                  <MoreVertIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
-
-          {/* Subject and security badge */}
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 1.5, gap: 1.5 }}>
-            <Typography variant="h5" fontWeight="600" sx={{ flex: 1, mr: 2 }}>
-              {subject}
-            </Typography>
-            
-            <SecurityBadge
-              icon={currentSecurity.icon}
-              label={currentSecurity.label}
-              level={securityLevel.toLowerCase()}
-              size="small"
-            />
-          </Box>
-
-          {/* Sender info and date */}
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2, gap: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Badge
-                overlap="circular"
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                badgeContent={
-                  <Box sx={{ 
-                    width: 14, 
-                    height: 14, 
-                    borderRadius: '50%', 
-                    bgcolor: currentSecurity.badgeColor,
-                    border: '2px solid white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {React.cloneElement(currentSecurity.icon, { sx: { fontSize: 10 } })}
-                  </Box>
-                }
-              >
-                <Avatar
-                  sx={{
-                    width: { xs: 40, sm: 48 },
-                    height: { xs: 40, sm: 48 },
-                    bgcolor: 'primary.main',
-                    fontSize: '1rem',
-                  }}
-                >
-                  {initials}
-                </Avatar>
-              </Badge>
-              
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="subtitle1" fontWeight="600">
-                    {senderName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.7 }}>
-                    &lt;{senderEmail}&gt;
-                  </Typography>
-                  
-                  {/* Quick Action Icons next to name */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 1, gap: 0.5 }}>
-                    <Tooltip title="Reply">
-                      <IconButton size="small" onClick={() => onReply && onReply(email)} disabled={isDecrypting || !isDecrypted}>
-                        <ReplyIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Reply All">
-                      <IconButton size="small" onClick={() => onReplyAll && onReplyAll(email)} disabled={isDecrypting || !isDecrypted}>
-                        <ReplyAllIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Forward">
-                      <IconButton size="small" onClick={() => onForward && onForward(email)} disabled={isDecrypting || !isDecrypted}>
-                        <ForwardIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
-                  to me
-                  <Tooltip title={expanded ? "Hide details" : "Show details"}>
-                    <IconButton 
-                      size="small" 
-                      onClick={handleToggleExpand} 
-                      sx={{ 
-                        ml: 0.5, 
-                        p: 0, 
-                        width: 18, 
-                        height: 18, 
-                        borderRadius: '4px',
-                        bgcolor: expanded ? alpha(theme.palette.primary.main, 0.1) : 'transparent'
-                      }}
-                    >
-                      {expanded ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
-                    </IconButton>
-                  </Tooltip>
-                  <Box component="span" sx={{ mx: 0.8, opacity: 0.5 }}>|</Box> {formattedDate}
-                </Typography>
+                <Tooltip title="More options">
+                  <IconButton size="small" onClick={(e) => setMoreAnchorEl(e.currentTarget)}>
+                    <MoreVertIcon />
+                  </IconButton>
+                </Tooltip>
               </Box>
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              {formattedTime && (
-                <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
-                  <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                  <Typography variant="caption" color="text.secondary">
-                    {formattedTime}
+            {/* Subject and security badge */}
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 1.5, gap: 1.5 }}>
+              <Typography variant="h5" fontWeight="600" sx={{ flex: 1, mr: 2 }}>
+                {subject}
+              </Typography>
+              
+              <SecurityBadge
+                icon={currentSecurity.icon}
+                label={currentSecurity.label}
+                level={securityLevel.toLowerCase()}
+                size="small"
+              />
+            </Box>
+
+            {/* Sender info and date */}
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2, gap: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Badge
+                  overlap="circular"
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  badgeContent={
+                    <Box sx={{ 
+                      width: 14, 
+                      height: 14, 
+                      borderRadius: '50%', 
+                      bgcolor: currentSecurity.badgeColor,
+                      border: '2px solid white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {React.cloneElement(currentSecurity.icon, { sx: { fontSize: 10 } })}
+                    </Box>
+                  }
+                >
+                  <Avatar
+                    sx={{
+                      width: { xs: 40, sm: 48 },
+                      height: { xs: 40, sm: 48 },
+                      bgcolor: 'primary.main',
+                      fontSize: '1rem',
+                    }}
+                  >
+                    {initials}
+                  </Avatar>
+                </Badge>
+                
+                <Box>
+                  <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, gap: { xs: 0, sm: 1 }, flexWrap: 'wrap' }}>
+                    <Typography variant="subtitle1" fontWeight="600" sx={{ fontSize: { xs: '0.95rem', sm: '1rem' }, lineBreak: 'anywhere' }}>
+                      {senderName}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.7, wordBreak: 'break-all' }}>
+                      &lt;{senderEmail}&gt;
+                    </Typography>
+                    
+                    {/* Quick Action Icons next to name */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', ml: 1, gap: 0.5 }}>
+                      <Tooltip title="Reply">
+                        <IconButton size="small" onClick={() => onReply && onReply(email)} disabled={isDecrypting || !isDecrypted}>
+                          <ReplyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Reply All">
+                        <IconButton size="small" onClick={() => onReplyAll && onReplyAll(email)} disabled={isDecrypting || !isDecrypted}>
+                          <ReplyAllIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Forward">
+                        <IconButton size="small" onClick={() => onForward && onForward(email)} disabled={isDecrypting || !isDecrypted}>
+                          <ForwardIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                    to me
+                    <Tooltip title={expanded ? "Hide details" : "Show details"}>
+                      <IconButton 
+                        size="small" 
+                        onClick={handleToggleExpand} 
+                        sx={{ 
+                          ml: 0.5, 
+                          p: 0, 
+                          width: 18, 
+                          height: 18, 
+                          borderRadius: '4px',
+                          bgcolor: expanded ? alpha(theme.palette.primary.main, 0.1) : 'transparent'
+                        }}
+                      >
+                        {expanded ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
+                      </IconButton>
+                    </Tooltip>
+                    <Box component="span" sx={{ mx: 0.8, opacity: 0.5 }}>|</Box> {formattedDate}
                   </Typography>
                 </Box>
-              )}
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {formattedTime && (
+                  <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
+                    <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      {formattedTime}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             </Box>
-          </Box>
 
-          {/* Recipient info (expandable) */}
-          <Collapse in={expanded}>
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
-                <strong>From:</strong> {from}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
-                <strong>To:</strong> {to}
-              </Typography>
-              {Array.isArray(cc) && cc.length > 0 && (
+            {/* Recipient info (expandable) */}
+            <Collapse in={expanded}>
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
-                  <strong>Cc:</strong> {cc.join(', ')}
+                  <strong>From:</strong> {from}
                 </Typography>
-              )}
-              {Array.isArray(bcc) && bcc.length > 0 && (
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
-                  <strong>Bcc:</strong> {bcc.join(', ')}
+                  <strong>To:</strong> {to}
                 </Typography>
-              )}
-              <Divider sx={{ my: 1, opacity: 0.5 }} />
-              <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={1}>
-                <strong>Security:</strong> 
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: currentSecurity.badgeColor }}>
-                  {currentSecurity.icon} {currentSecurity.label}
-                </Box>
-                <span>— {currentSecurity.description}</span>
-              </Typography>
-            </Box>
-          </Collapse>
+                {Array.isArray(cc) && cc.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
+                    <strong>Cc:</strong> {cc.join(', ')}
+                  </Typography>
+                )}
+                {Array.isArray(bcc) && bcc.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-all' }} gutterBottom>
+                    <strong>Bcc:</strong> {bcc.join(', ')}
+                  </Typography>
+                )}
+                <Divider sx={{ my: 1, opacity: 0.5 }} />
+                <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={1}>
+                  <strong>Security:</strong> 
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: currentSecurity.badgeColor }}>
+                    {currentSecurity.icon} {currentSecurity.label}
+                  </Box>
+                  <span>— {currentSecurity.description}</span>
+                </Typography>
+              </Box>
+            </Collapse>
 
-          {/* Encryption notice */}
-          {renderEncryptionNotice()}
-        </HeaderContainer>
+            {/* Encryption notice */}
+            {renderEncryptionNotice()}
+          </HeaderContainer>
 
-        {/* Content area */}
-        <ContentContainer>
-          {/* Email content */}
-          {renderEmailContent()}
+          {/* Content area */}
+          <ContentContainer>
+            {/* Email content */}
+            {renderEmailContent()}
 
-          {/* Attachments */}
-          {renderAttachments()}
-        </ContentContainer>
+            {/* Attachments */}
+            {renderAttachments()}
+          </ContentContainer>
+        </Box>
 
         {/* Bottom action bar - Sticky */}
         <Box sx={{ 
-          p: { xs: 1, sm: 1.25 }, 
+          p: { xs: 1.5, sm: 2 }, 
           borderTop: (theme) => `1px solid ${theme.palette.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           bgcolor: 'background.paper',
+          backgroundImage: theme => theme.palette.mode === 'dark' 
+            ? 'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))' 
+            : 'none',
           flexWrap: 'wrap',
-          gap: 1,
-          mt: 'auto',
-          minHeight: '48px'
+          gap: 1.5,
+          zIndex: 10,
+          boxShadow: '0 -4px 12px rgba(0,0,0,0.03)'
         }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.6rem', opacity: 0.8 }}>
              Quick Actions
@@ -1248,27 +1311,29 @@ const EmailViewer = memo(({
           
           <Stack 
             direction="row" 
-            spacing={1} 
+            spacing={2} 
             sx={{ 
               width: { xs: '100%', sm: 'auto' }, 
-              justifyContent: { xs: 'center', sm: 'flex-end' } 
+              justifyContent: 'center' 
             }}
           >
             <Button 
-              size="small" 
-              variant="outlined" 
+              size="medium" 
+              variant="contained" 
               startIcon={<ReplyIcon />}
-              onClick={() => onAction(email, 'reply')}
-              sx={{ borderRadius: '10px', textTransform: 'none', fontWeight: 700, px: 2 }}
+              onClick={() => onReply && onReply(email)}
+              sx={{ borderRadius: '18px', textTransform: 'none', fontWeight: 800, flex: { xs: 1, sm: 'none' }, minWidth: { sm: 120 } }}
+              disabled={isDecrypting || !isDecrypted}
             >
               Reply
             </Button>
             <Button 
-              size="small" 
+              size="medium" 
               variant="outlined" 
               startIcon={<ForwardIcon />}
-              onClick={() => onAction(email, 'forward')}
-              sx={{ borderRadius: '10px', textTransform: 'none', fontWeight: 700, px: 2 }}
+              onClick={() => onForward && onForward(email)}
+              sx={{ borderRadius: '18px', textTransform: 'none', fontWeight: 800, flex: { xs: 1, sm: 'none' }, minWidth: { sm: 120 } }}
+              disabled={isDecrypting || !isDecrypted}
             >
               Forward
             </Button>
@@ -1338,6 +1403,42 @@ const EmailViewer = memo(({
         onDecrypt={handleDecrypt}
         loading={isDecrypting}
       />
+
+      <Menu
+        anchorEl={moreAnchorEl}
+        open={Boolean(moreAnchorEl)}
+        onClose={() => setMoreAnchorEl(null)}
+      >
+        {isMobile && (
+          <>
+            <MenuItem onClick={() => { handleStarToggle(); setMoreAnchorEl(null); }}>
+              <ListItemIcon>{isStarred ? <StarIcon color="warning" /> : <StarBorderIcon />}</ListItemIcon>
+              <ListItemText primary={isStarred ? "Unstar" : "Star"} />
+            </MenuItem>
+            <MenuItem onClick={() => { handleImportantToggle(); setMoreAnchorEl(null); }}>
+              <ListItemIcon>{isImportant ? <LabelImportantIcon color="warning" /> : <LabelImportantOutlinedIcon />}</ListItemIcon>
+              <ListItemText primary={isImportant ? "Unmark Important" : "Mark Important"} />
+            </MenuItem>
+            <MenuItem onClick={() => { handleSummarize(); setMoreAnchorEl(null); }} disabled={isSummarizing || !isDecrypted}>
+              <ListItemIcon><SparklesIcon color={summary ? "primary" : "inherit"} /></ListItemIcon>
+              <ListItemText primary="AI Summary" />
+            </MenuItem>
+            <MenuItem onClick={() => { setSnoozeDialogOpen(true); setMoreAnchorEl(null); }}>
+              <ListItemIcon><AccessTimeIcon /></ListItemIcon>
+              <ListItemText primary="Snooze" />
+            </MenuItem>
+            <Divider />
+          </>
+        )}
+        <MenuItem onClick={() => { setLabelAnchorEl(moreAnchorEl); setMoreAnchorEl(null); }}>
+          <ListItemIcon><FolderIcon /></ListItemIcon>
+          <ListItemText primary="Move to Label" />
+        </MenuItem>
+        <MenuItem onClick={() => { handlePrint(); setMoreAnchorEl(null); }}>
+          <ListItemIcon><PrintIcon /></ListItemIcon>
+          <ListItemText primary="Print" />
+        </MenuItem>
+      </Menu>
 
       <Menu
         anchorEl={labelAnchorEl}

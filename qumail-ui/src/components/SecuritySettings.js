@@ -346,10 +346,10 @@ export default function SecuritySettings({ user: propUser, onBack, onUserUpdate 
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem' }}>EVENT / STATUS</TableCell>
-                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem' }}>LOCATION</TableCell>
-                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem' }}>DEVICE / BROWSER</TableCell>
-                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem' }}>IP ADDRESS</TableCell>
+                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem' }}>EVENT</TableCell>
+                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem', display: { xs: 'none', sm: 'table-cell' } }}>LOCATION</TableCell>
+                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem', display: { xs: 'none', md: 'table-cell' } }}>DEVICE</TableCell>
+                      <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem', display: { xs: 'none', lg: 'table-cell' } }}>IP ADDRESS</TableCell>
                       <TableCell sx={{ fontWeight: '700', bgcolor: 'background.paper', fontSize: '0.75rem' }} align="right">TIME</TableCell>
                     </TableRow>
                   </TableHead>
@@ -372,13 +372,13 @@ export default function SecuritySettings({ user: propUser, onBack, onUserUpdate 
                               <StatusBadge type={log.type} />
                             </Box>
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <Language sx={{ fontSize: 14, color: 'primary.main' }} />
                               <Typography variant="caption" fontWeight="500">{log.location || 'Unknown'}</Typography>
                             </Box>
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                 <DeviceIcon type={log.deviceType} />
@@ -387,7 +387,7 @@ export default function SecuritySettings({ user: propUser, onBack, onUserUpdate 
                               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>{log.os || 'Unknown OS'}</Typography>
                             </Box>
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                             <Tooltip title={log.deviceInfo || 'No extra info'}>
                               <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
                                 {log.ipAddress || '0.0.0.0'}

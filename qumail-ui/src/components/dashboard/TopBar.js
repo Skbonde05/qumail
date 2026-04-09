@@ -104,7 +104,7 @@ const TopBar = memo(({
     <AppBar 
       position="fixed" 
       sx={{ 
-        zIndex: (theme) => theme.zIndex.drawer + 1,
+        zIndex: (theme) => ({ xs: theme.zIndex.appBar, md: theme.zIndex.drawer + 1 }),
         backgroundColor: 'background.paper',
         color: 'text.primary',
         boxShadow: 'none',
